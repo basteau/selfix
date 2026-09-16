@@ -225,7 +225,7 @@ pnpm --filter playground lint:design
 
 Try adding `class="p-8"` to a `<Button>` in `apps/playground/src/App.vue` to see the component contract report a violation. Remove it to restore a passing check. Change the button's `variant` prop to switch its appearance through its public API.
 
-`pnpm check` also type-checks, lints, and builds the playground. All six selfix rules remain enabled.
+`pnpm check` also tests, type-checks, lints, and builds the playground. Its integration tests run the installed CLI with the real config and theme, verifying valid usage and a violation of each of the six enabled rules. Run them alone with `pnpm --filter playground test`.
 
 ## Development and help
 
