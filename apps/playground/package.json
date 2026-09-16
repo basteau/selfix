@@ -7,7 +7,8 @@
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
     "lint:design": "selfix src",
-    "check": "pnpm typecheck && pnpm lint:design && pnpm build"
+    "check": "pnpm typecheck && pnpm lint:design && pnpm build",
+    "test": "pnpm --filter selfix build && vitest run --root ../.. apps/playground/test"
   },
   "dependencies": {
     "vue": "^3.5.42"
