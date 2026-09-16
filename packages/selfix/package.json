@@ -1,0 +1,32 @@
+{
+  "name": "selfix",
+  "version": "0.1.0",
+  "description": "Design-system lint rules for Vue 3 and Tailwind CSS 4.",
+  "license": "MIT",
+  "bin": {
+    "selfix": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/package.mjs",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "tailwindcss": ">=4.0.0 <5",
+    "vue": ">=3.2.13 <4"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}
