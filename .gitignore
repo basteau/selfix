@@ -1,0 +1,6 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+packages/selfix/README.md
+.selfix-test-*/
