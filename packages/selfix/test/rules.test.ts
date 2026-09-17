@@ -11,6 +11,41 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it("reports shadowed helper calls at their original class attributes", async () => {
+    const linter = await createLinter({ css, config: { rules: only("require-static-classes") } })
+    const source = `<script setup>
+function cn() { throw new Error('never run') }
+</script>
+<template>
+  <div :class="cn('p-2')" />
+  <Box v-slot="{ clsx }">
+    <div :class="clsx('p-4')" />
+  </Box>
+  <div v-for="twMerge in rows" :class="twMerge('p-6')" />
+  <div :class="clsx('m-2')" />
+</template>`
+    expect(linter.lint(source, "Helpers.vue")).toEqual([
+      expect.objectContaining({
+        rule: "require-static-classes",
+        file: "Helpers.vue",
+        line: 5,
+        column: 8,
+      }),
+      expect.objectContaining({
+        rule: "require-static-classes",
+        file: "Helpers.vue",
+        line: 7,
+        column: 10,
+      }),
+      expect.objectContaining({
+        rule: "require-static-classes",
+        file: "Helpers.vue",
+        line: 9,
+        column: 32,
+      }),
+    ])
+  })
+
   it("enforces all six rules on Vue", async () => {
     const linter = await createLinter({ css })
     const result = linter.lint(

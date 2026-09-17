@@ -82,6 +82,7 @@ interface ComponentAliases {
 interface TemplateContext {
   aliases: ComponentAliases
   bindings: Map<string, StaticBinding>
+  helpers: ReadonlySet<string>
   shadowed: ReadonlySet<string>
   errors: ParseIssue[]
   offset: number
@@ -159,6 +160,7 @@ export function collectVue(
     {
       aliases,
       bindings,
+      helpers: collectClassHelpers([script, setup]),
       shadowed: new Set(),
       errors,
       offset: templateAst ? 0 : template.loc.start.offset,
@@ -272,8 +274,8 @@ function shadowScope(
       message: `Invalid or unsupported template scope: ${errorMessage(error)}`,
       offset: context.offset + offset,
     })
-    // Unknown local names must never resolve to setup constants.
-    return { ...context, bindings: new Map() }
+    // Unknown local names must never resolve to setup constants or class helpers.
+    return { ...context, bindings: new Map(), helpers: new Set() }
   }
 }
 
@@ -308,7 +310,10 @@ function bindingNames(content: string): string[] {
 
 type BindingPattern = Extract<ExpressionNode, { type: "ArrowFunctionExpression" }>["params"][number]
 
-function collectBindingNames(node: BindingPattern | ExpressionInput, names: string[]): void {
+function collectBindingNames(
+  node: BindingPattern | ExpressionInput | VariableDeclaratorNode["id"],
+  names: string[],
+): void {
   switch (node.type) {
     case "Identifier":
       names.push(node.name)
@@ -608,7 +613,7 @@ function collectCallExpression(node: CallExpressionNode, context: TemplateContex
   if (node.callee.type !== "Identifier") {
     return { tokens: [], dynamic: true }
   }
-  if (!CLASS_HELPERS.has(node.callee.name)) {
+  if (!context.helpers.has(node.callee.name) || context.shadowed.has(node.callee.name)) {
     return { tokens: [], dynamic: true }
   }
 
@@ -620,6 +625,75 @@ function collectCallExpression(node: CallExpressionNode, context: TemplateContex
       return collectExpression(argument, context)
     }),
   )
+}
+
+function collectClassHelpers(programs: (ProgramNode | undefined)[]): ReadonlySet<string> {
+  const helpers = new Set(CLASS_HELPERS)
+  const visit = (statement: StatementNode, topLevel = false): void => {
+    switch (statement.type) {
+      case "ExportNamedDeclaration":
+        if (statement.declaration) visit(statement.declaration, topLevel)
+        return
+      case "ExportDefaultDeclaration":
+        if (
+          statement.declaration.type === "FunctionDeclaration" ||
+          statement.declaration.type === "ClassDeclaration" ||
+          statement.declaration.type === "TSDeclareFunction"
+        ) {
+          visit(statement.declaration, topLevel)
+        }
+        return
+      case "VariableDeclaration": {
+        if (!topLevel && statement.kind !== "var") return
+        const names: string[] = []
+        for (const variable of statement.declarations) collectBindingNames(variable.id, names)
+        for (const name of names) helpers.delete(name)
+        return
+      }
+      case "FunctionDeclaration":
+      case "ClassDeclaration":
+      case "TSDeclareFunction":
+      case "TSEnumDeclaration":
+        if (topLevel && statement.id) helpers.delete(statement.id.name)
+        return
+      case "BlockStatement":
+        for (const child of statement.body) visit(child)
+        return
+      case "IfStatement":
+        visit(statement.consequent)
+        if (statement.alternate) visit(statement.alternate)
+        return
+      case "ForStatement":
+        if (statement.init?.type === "VariableDeclaration") visit(statement.init)
+        visit(statement.body)
+        return
+      case "ForInStatement":
+      case "ForOfStatement":
+        if (statement.left.type === "VariableDeclaration") visit(statement.left)
+        visit(statement.body)
+        return
+      case "WhileStatement":
+      case "DoWhileStatement":
+      case "LabeledStatement":
+      case "WithStatement":
+        visit(statement.body)
+        return
+      case "SwitchStatement":
+        for (const branch of statement.cases) {
+          for (const child of branch.consequent) visit(child)
+        }
+        return
+      case "TryStatement":
+        visit(statement.block)
+        if (statement.handler) visit(statement.handler.body)
+        if (statement.finalizer) visit(statement.finalizer)
+        return
+    }
+  }
+  for (const program of programs) {
+    for (const statement of program?.body ?? []) visit(statement, true)
+  }
+  return helpers
 }
 
 function collectStaticBindings(program: ProgramNode | undefined): Map<string, StaticBinding> {

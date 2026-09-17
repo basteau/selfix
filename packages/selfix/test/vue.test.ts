@@ -2,6 +2,86 @@ import { describe, expect, it } from "vitest"
 import { collectVue } from "../src/vue.js"
 
 describe("collectVue", () => {
+  it.each([false, true])(
+    "respects helper template scopes (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<template>
+  <Box v-slot="{ cn = (() => { throw new Error('never run') })() }">
+    <div :class="cn('p-2')" />
+    <div :class="clsx('m-2')" />
+  </Box>
+  <div v-for="(twMerge, clsx) in rows" :class="[twMerge('p-2'), clsx('p-4')]" />
+  <Box v-slot="{ clsx: other }"><div :class="clsx('m-4')" /></Box>
+  <div :class="[cn('p-2'), clsx('p-4'), twMerge('p-6')]" />
+</template>`
+      const result = collectVue(source, "helper-scopes.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites.map(({ tokens, dynamic }) => ({ tokens, dynamic }))).toEqual([
+        { tokens: [], dynamic: true },
+        { tokens: ["m-2"], dynamic: false },
+        { tokens: [], dynamic: true },
+        { tokens: ["m-4"], dynamic: false },
+        { tokens: ["p-2", "p-4", "p-6"], dynamic: false },
+      ])
+      expect(result.sites.map(({ offset }) => offset)).toEqual(
+        [...source.matchAll(/:class=/gu)].map((match) => match.index),
+      )
+    },
+  )
+
+  it.each([
+    "const cn = () => { throw new Error('never run') }",
+    "function cn() { throw new Error('never run') }",
+    "let cn = replacement",
+    "var cn",
+    "if (true) { var cn = () => { throw new Error('never run') } }",
+    "for (var cn of helpers) {}",
+    "const { helper: cn = (() => { throw new Error('never run') })() } = helpers",
+    "const [cn] = helpers",
+    "class cn {}",
+  ])("treats a locally declared helper as dynamic: %s", (declaration) => {
+    const source = `<script setup>${declaration}</script>
+<template><div :class="cn('p-2')" /><div :class="clsx('m-2')" /></template>`
+    const result = collectVue(source, "local-helper.vue")
+    expect(result.errors).toEqual([])
+    expect(result.sites).toEqual([
+      { component: "div", tokens: [], dynamic: true, offset: source.indexOf(":class=") },
+      { component: "div", tokens: ["m-2"], dynamic: false, offset: source.lastIndexOf(":class=") },
+    ])
+  })
+
+  it("preserves imported helpers and ignores declarations in unrelated function scopes", () => {
+    const source = `<script setup>
+import { cn } from './helpers';
+import clsx from 'clsx';
+import { twMerge } from 'tailwind-merge';
+function unrelated() { var cn = () => { throw new Error('never run') } }
+if (true) { const cn = () => { throw new Error('never run') } }
+</script>
+<template><div :class="cn('p-2', clsx('m-2'), twMerge('p-4'))" /></template>`
+    const result = collectVue(source, "imported-helpers.vue")
+    expect(result.errors).toEqual([])
+    expect(result.sites).toEqual([
+      {
+        component: "div",
+        tokens: ["p-2", "m-2", "p-4"],
+        dynamic: false,
+        offset: source.indexOf(":class="),
+      },
+    ])
+  })
+
+  it("rejects helper declarations in normal scripts and preserves primitive constants", () => {
+    const source = `<script>export function cn() { throw new Error('never run') }</script>
+<script setup>const clsx = 'm-2'</script>
+<template><div :class="[cn('p-2'), clsx('p-4'), clsx]" /></template>`
+    const result = collectVue(source, "script-helpers.vue")
+    expect(result.errors).toEqual([])
+    expect(result.sites).toEqual([
+      { component: "div", tokens: ["m-2"], dynamic: true, offset: source.indexOf(":class=") },
+    ])
+  })
+
   it("collects static classes, class helpers, component aliases, and style sites", () => {
     const source = `<script setup lang="ts">
 import BaseButton from "./button.vue";
@@ -255,7 +335,7 @@ const fallback = 'default-class';
     "fails closed for invalid or unsupported slot scope %s",
     (pattern) => {
       const source = `<script setup>const local = 'unsafe'; const rest = 'unsafe';</script>
-<template><Box v-slot="${pattern}"><div :class="[local, rest]" /></Box></template>`
+<template><Box v-slot="${pattern}"><div :class="[local, rest, cn('unsafe')]" /></Box></template>`
       for (const forceCompileTemplateAst of [false, true]) {
         const result = collectVue(source, "invalid-scope.vue", { forceCompileTemplateAst })
         expect(result.errors.length).toBeGreaterThan(0)
