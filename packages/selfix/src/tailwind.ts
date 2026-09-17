@@ -5,15 +5,9 @@ import { pathToFileURL } from "node:url"
 import { createRequire } from "node:module"
 import { __unstable__loadDesignSystem } from "tailwindcss"
 
-export type Category =
-  | "layout"
-  | "color"
-  | "typography"
-  | "spacing"
-  | "shape"
-  | "effects"
-  | "motion"
-  | "unknown"
+import { categories, type Category } from "./config.js"
+
+export type { Category } from "./config.js"
 
 type InspectResult = {
   known: boolean
@@ -41,17 +35,6 @@ type LoadOptions = {
     base: string,
   ) => Promise<{ path: string; base: string; content: string }>
 }
-
-const categories: Category[] = [
-  "layout",
-  "color",
-  "typography",
-  "spacing",
-  "shape",
-  "effects",
-  "motion",
-  "unknown",
-]
 
 const markerClasses = new Set(["group", "peer", "dark"])
 const packageRequire = createRequire(import.meta.url)
@@ -286,15 +269,30 @@ function hasArbitraryColorValue(token: string): boolean {
   return rawColorPattern.test(value) || cssNamedColors.has(value.trim().toLowerCase())
 }
 
-function baseCandidate(token: string): string {
+// Adapted from shadcn-ui/lint's bracket-aware class normalization (MIT).
+// Source: https://github.com/shadcn-ui/lint/blob/main/packages/lint/src/grammar/classes.ts
+export function baseCandidate(token: string): string {
   let depth = 0
   let start = 0
+  let quote = ""
 
   for (let index = 0; index < token.length; index += 1) {
     const char = token[index]
-    if (char === "[") depth += 1
-    if (char === "]") depth = Math.max(0, depth - 1)
-    if (char === ":" && depth === 0) start = index + 1
+    if (char === "\\") {
+      index += 1
+      continue
+    }
+    if (quote) {
+      if (char === quote) quote = ""
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      continue
+    }
+    if (char === "[" || char === "(") depth += 1
+    else if (char === "]" || char === ")") depth--
+    else if (char === ":" && depth === 0) start = index + 1
   }
 
   return token.slice(start)
@@ -357,8 +355,8 @@ function categorize(declarations: Declaration[]): Category[] {
   return ordered.length > 0 ? ordered : ["unknown"]
 }
 
-function categoryFor({ property, value }: Declaration): Category {
-  if (isColorDeclaration(property, value)) return "color"
+function categoryFor({ property }: Declaration): Category {
+  if (isColorDeclaration(property)) return "color"
   if (property === "animation" || property.startsWith("transition")) return "motion"
   if (property === "--tw-duration") return "motion"
   if (property === "border-radius") return "shape"
@@ -458,7 +456,7 @@ function categoryFor({ property, value }: Declaration): Category {
   return "unknown"
 }
 
-function isColorDeclaration(property: string, _value: string): boolean {
+function isColorDeclaration(property: string): boolean {
   if (colorNamespaces.some((namespace) => property === namespace)) return true
   if (property === "color" || property.endsWith("-color")) return true
   if (property === "fill" || property === "stroke" || property === "caret-color") {
@@ -473,7 +471,7 @@ function hasRawColor(
   includeDeclarationLiterals: boolean,
 ): boolean {
   return declarations.some(({ property, value }) => {
-    if (!isColorDeclaration(property, value)) return false
+    if (!isColorDeclaration(property)) return false
     if (
       includeDeclarationLiterals &&
       (rawColorPattern.test(value) || cssNamedColors.has(value.trim().toLowerCase()))

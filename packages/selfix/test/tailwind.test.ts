@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { describe, expect, test } from "vitest"
-import { createTailwind } from "../src/tailwind.js"
+import { baseCandidate, createTailwind } from "../src/tailwind.js"
 
 async function tempProject(name: string): Promise<string> {
   const base = join(tmpdir(), `selfix-${name}-${process.pid}-${Date.now()}`)
@@ -10,7 +10,74 @@ async function tempProject(name: string): Promise<string> {
   return base
 }
 
+describe("baseCandidate", () => {
+  test.each([
+    ["hover:focus:!-mt-4", "!-mt-4"],
+    ["[&:not(:hover)]:-mt-4!", "-mt-4!"],
+    ["hover:bg-(color:--color-primary)", "bg-(color:--color-primary)"],
+    ["hover:[color:var(--color-primary)]", "[color:var(--color-primary)]"],
+    ["supports-(--custom:func(a:b)):p-4", "p-4"],
+    ["[&[data-x='(']]:bg-[red]", "bg-[red]"],
+    ['[&[data-x="]):"]]:!-mt-4', "!-mt-4"],
+    ["[&[data-x='[:']]:-mt-4!", "-mt-4!"],
+    [String.raw`[&[data-x='\'(']]:bg-[red]`, "bg-[red]"],
+    [String.raw`[&[data-x='\\']]:bg-[red]`, "bg-[red]"],
+    [String.raw`[&.foo\(]:bg-[red]`, "bg-[red]"],
+    [String.raw`[&.foo\)]:bg-[red]`, "bg-[red]"],
+    [String.raw`[&.foo\[]:bg-[red]`, "bg-[red]"],
+    [String.raw`[&.foo\]]:bg-[red]`, "bg-[red]"],
+    [String.raw`hover:foo\:bar`, String.raw`foo\:bar`],
+    [String.raw`hover:foo\':bar`, "bar"],
+  ])("strips only top-level variants from %s", (token, expected) => {
+    expect(baseCandidate(token)).toBe(expected)
+  })
+})
+
 describe("createTailwind", () => {
+  test("detects raw colors after quoted and escaped variant delimiters", async () => {
+    const tailwind = await createTailwind('@import "tailwindcss";', process.cwd())
+    for (const variant of [
+      "[&[data-x='(']]",
+      '[&[data-x=")"]]',
+      "[&[data-x='[']]",
+      '[&[data-x="]"]]',
+      String.raw`[&[data-x='\'(']]`,
+      String.raw`[&[data-x='\\']]`,
+      String.raw`[&.foo\(]`,
+      String.raw`[&.foo\)]`,
+      String.raw`[&.foo\[]`,
+      String.raw`[&.foo\]]`,
+    ]) {
+      expect(tailwind.inspect(`${variant}:bg-[red]`)).toEqual({
+        known: true,
+        categories: ["color"],
+        rawColor: true,
+      })
+      expect(tailwind.inspect(`${variant}:p-4`)).toEqual({
+        known: true,
+        categories: ["spacing"],
+        rawColor: false,
+      })
+    }
+  })
+  test("inspects parenthesized values and important negative variants", async () => {
+    const tailwind = await createTailwind(
+      '@import "tailwindcss"; @theme { --color-primary: #124578; }',
+      process.cwd(),
+    )
+    for (const token of ["[&:not(:hover)]:!-mt-4", "hover:-mt-4!"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: true,
+        categories: ["layout"],
+        rawColor: false,
+      })
+    }
+    expect(tailwind.inspect("hover:bg-(color:--color-primary)")).toEqual({
+      known: true,
+      categories: ["color"],
+      rawColor: false,
+    })
+  })
   test("inspects Tailwind utilities and variants through the compiler", async () => {
     const base = await tempProject("utilities")
     const tailwind = await createTailwind('@import "tailwindcss";', base)

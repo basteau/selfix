@@ -1,4 +1,4 @@
-import { createTailwind, type Category } from "./tailwind.js"
+import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
 import { collectVue, type ClassSite } from "./vue.js"
 import {
   ruleNames,
@@ -40,18 +40,8 @@ export interface LinterOptions {
   config?: Config
 }
 
-// Adapted from shadcn-ui/lint's bracket-aware class normalization (MIT).
-// Source: https://github.com/shadcn-ui/lint/blob/main/packages/lint/src/grammar/classes.ts
 function baseClass(token: string): string {
-  let depth = 0
-  let start = 0
-  for (let index = 0; index < token.length; index++) {
-    const char = token[index]
-    if (char === "[" || char === "(") depth++
-    else if (char === "]" || char === ")") depth--
-    else if (char === ":" && depth === 0) start = index + 1
-  }
-  return token.slice(start).replace(/^!|!$/g, "").replace(/^-/, "")
+  return baseCandidate(token).replace(/^!|!$/g, "").replace(/^-/, "")
 }
 function matches(entries: string[], token: string, categories: Category[]) {
   return entries.some((entry) => {
@@ -160,8 +150,8 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
           continue
         }
         for (const site of collected.sites) {
-          const selected = policy(options, site.component)
           if (name === "no-restyle" && !isDesignComponent(site)) continue
+          const selected = policy(options, site.component)
           if (name === "require-static-classes") {
             if (site.dynamic)
               report(
@@ -174,21 +164,13 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
           for (const token of new Set(site.tokens)) {
             const info = tailwind.inspect(token)
             const denied = matches(selected.deny ?? [], token, info.categories)
-            const allowed = matches(
-              selected.allow ?? (name === "no-restyle" ? ["layout"] : []),
-              token,
-              info.categories,
-            )
             const category =
               info.categories.find((item) => item !== "layout") ?? info.categories[0] ?? "unknown"
             if (name === "no-restyle") {
               // A utility may affect multiple categories. Opening layout cannot also open color.
-              const allAllowed =
-                allowed &&
-                (info.categories.length < 2 ||
-                  info.categories.every((item) =>
-                    matches(selected.allow ?? ["layout"], token, [item]),
-                  ))
+              const allAllowed = info.categories.every((item) =>
+                matches(selected.allow ?? ["layout"], token, [item]),
+              )
               if (denied || !allAllowed)
                 report(
                   site,
@@ -199,7 +181,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
                 )
               continue
             }
-            if (allowed && !denied) continue
+            if (!denied && matches(selected.allow ?? [], token, info.categories)) continue
             if (denied) {
               report(
                 site,

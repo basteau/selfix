@@ -1,4 +1,15 @@
-import type { Category } from "./tailwind.js"
+export const categories = [
+  "layout",
+  "color",
+  "typography",
+  "spacing",
+  "shape",
+  "effects",
+  "motion",
+  "unknown",
+] as const
+
+export type Category = (typeof categories)[number]
 
 export const ruleNames = [
   "no-restyle",
@@ -47,17 +58,6 @@ export function defineConfig(config: Config): Config {
   return config
 }
 
-const categories = [
-  "default",
-  "layout",
-  "color",
-  "typography",
-  "spacing",
-  "shape",
-  "effects",
-  "motion",
-  "unknown",
-]
 function record(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error(`${label} must be an object.`)
@@ -104,7 +104,7 @@ function options(value: unknown, label: string, contract = false) {
         ? [obj.message]
         : Object.values(record(obj.message, `${label}.message`))
     if (typeof obj.message !== "string")
-      keys(obj.message as Record<string, unknown>, categories, `${label}.message`)
+      keys(obj.message as Record<string, unknown>, ["default", ...categories], `${label}.message`)
     for (const message of messages) {
       if (typeof message !== "string") throw new Error(`${label}.message values must be strings.`)
       for (const match of message.matchAll(/\{\{(.*?)\}\}/g)) {

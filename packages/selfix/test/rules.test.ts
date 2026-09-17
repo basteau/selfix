@@ -24,6 +24,26 @@ describe("design-system rules", () => {
       result.every((item) => item.line === 2 && item.column > 1 && item.file === "Page.vue"),
     ).toBe(true)
   })
+  it("reports raw colors after quoted and escaped variant delimiters", async () => {
+    const linter = await createLinter({ css, config: { rules: only("no-raw-colors") } })
+    const tokens = [
+      "[&[data-x='(']]:bg-[red]",
+      '[&[data-x=")"]]:bg-[red]',
+      "[&[data-x='[']]:bg-[red]",
+      '[&[data-x="]"]]:bg-[red]',
+      String.raw`[&.foo\(]:bg-[red]`,
+      String.raw`[&.foo\)]:bg-[red]`,
+      String.raw`[&.foo\[]:bg-[red]`,
+      String.raw`[&.foo\]]:bg-[red]`,
+    ]
+    const classes = [...tokens, "[&[data-x='(']]:bg-primary"]
+      .join(" ")
+      .replaceAll("&", "&amp;")
+      .replaceAll('"', "&quot;")
+    expect(
+      linter.lint(`<template><div class="${classes}" /></template>`).map((item) => item.className),
+    ).toEqual(tokens)
+  })
   it("allows layout while rejecting component appearance", async () => {
     const linter = await createLinter({ css, config: { rules: only("no-restyle") } })
     expect(linter.lint(button('class="mt-4 w-full"'))).toEqual([])
@@ -31,6 +51,55 @@ describe("design-system rules", () => {
       linter.lint(button('class="p-4 hover:rounded-full"')).map((item) => item.className),
     ).toEqual(["p-4", "hover:rounded-full"])
     expect(linter.lint('<template><div class="p-4" /></template>')).toEqual([])
+  })
+  it.each([
+    [{}, true],
+    [{ allow: [] }, true],
+    [{ allow: ["layout"] }, true],
+    [{ allow: ["color"] }, true],
+    [{ allow: ["layout", "color"] }, false],
+    [{ allow: ["card-title"] }, false],
+    [{ allow: ["card-*"] }, false],
+    [{ allow: ["*"], deny: ["color"] }, true],
+    [{ allow: ["layout", "color"], deny: ["card-*"] }, true],
+  ])("requires every mixed category unless the token is allowed: %j", async (options, rejected) => {
+    const linter = await createLinter({
+      css: `${css} .card-title { color: var(--color-primary); margin: 1rem; }`,
+      config: { rules: only("no-restyle", options) },
+    })
+    const result = linter.lint(button('class="card-title"'))
+    expect(result).toHaveLength(rejected ? 1 : 0)
+    if (rejected) expect(result[0].message).toContain("owns its color")
+  })
+  it("normalizes variants and markers but matches colon patterns against the full token", async () => {
+    const linter = await createLinter({
+      css,
+      config: {
+        rules: only("no-restyle", {
+          allow: ["mt-4", "bg-*", "hover:!p-4", "[color:var(--color-primary)]"],
+          deny: ["focus:bg-*"],
+        }),
+      },
+    })
+    const tokens = [
+      "[&:not(:hover)]:!-mt-4",
+      "hover:-mt-4!",
+      "hover:bg-(color:--color-primary)",
+      "hover:!p-4",
+      "focus:!p-4",
+      "hover:p-4!",
+      "[color:var(--color-primary)]",
+      "hover:[color:var(--color-primary)]",
+      "focus:bg-(color:--color-primary)",
+    ]
+    expect(
+      linter.lint(button(`class="${tokens.join(" ")}"`)).map((item) => item.className),
+    ).toEqual([
+      "focus:!p-4",
+      "hover:p-4!",
+      "hover:[color:var(--color-primary)]",
+      "focus:bg-(color:--color-primary)",
+    ])
   })
   it("supports first matching contracts, inherited options, deny precedence and messages", async () => {
     const config = defineConfig({
