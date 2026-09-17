@@ -32,17 +32,10 @@ Works with your own components and theme. No UI kit, class helper, ESLint, or Ox
 
 Requires **Node.js ≥22.18**, **Vue ≥3.2.13 <4**, and **Tailwind CSS 4**. Vue and Tailwind are the only consumer peer dependencies.
 
-The first alpha is prepared but not published to npm yet. APIs and rules may change during prerelease. From this repository, build a package:
+**Experimental alpha:** APIs and rules may change during prerelease. Install in your Vue/Tailwind project:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm --filter selfix pack --out selfix-0.1.0-alpha.0.tgz
-```
-
-Install it in your Vue/Tailwind project:
-
-```sh
-pnpm add -D /path/to/selfix-0.1.0-alpha.0.tgz
+pnpm add -D selfix@alpha
 ```
 
 Create `selfix.config.ts` in your project root:
@@ -237,6 +230,8 @@ See [AGENTS.md](AGENTS.md) for contribution conventions. Keep documentation in t
 
 Only `packages/selfix` is published. [Changelogen](https://github.com/unjs/changelogen) prepares the package version and root `CHANGELOG.md` from repository-wide Conventional Commits. The commands below only update files; do not pass Changelogen's `--release`, `--push`, or `--publish` flags.
 
+Tag CI creates a [GitHub Release](https://github.com/basteau/selfix/releases) from that version's changelog section after checks and npm publication (or its bootstrap skip). Alpha and beta versions become GitHub prereleases, not Latest. Existing releases are left unchanged on reruns. Each version must have exactly one nonempty `## vVERSION` section.
+
 ### One-time setup
 
 - Keep package repository metadata and the Git remote pointing to `basteau/selfix`.
@@ -290,7 +285,7 @@ Review the version and changelog, commit as `chore(release): v0.1.0-alpha.1`, pu
 
 Release progression: `0.1.0-alpha.0` → `0.1.0-alpha.1` → `0.1.0-beta.0` → `0.1.0`. Use explicit `-r` versions; Changelogen's inferred `0.x` feature bumps are patches.
 
-CI maps validated versions to [npm dist-tags](https://docs.npmjs.com/adding-dist-tags-to-packages/): `X.Y.Z-alpha.N` → `alpha`, `X.Y.Z-beta.N` → `beta`, and stable `X.Y.Z` → `latest`. Git tags add a `v` prefix. Other prereleases and build metadata are rejected. Alpha and beta publications never update `latest`; users opt in with `selfix@alpha` or `selfix@beta`.
+CI maps validated versions to [npm dist-tags](https://docs.npmjs.com/adding-dist-tags-to-packages/): `X.Y.Z-alpha.N` → `alpha`, `X.Y.Z-beta.N` → `beta`, and stable `X.Y.Z` → `latest`. Git tags add a `v` prefix. Other prereleases and build metadata are rejected. Users opt in with `selfix@alpha` or `selfix@beta`. Verify npm dist-tags after bootstrap with `npm view selfix dist-tags --json`; if `latest` points to the prerelease, remove it with `npm dist-tag rm selfix latest`.
 
 For external configuration failures, fix the configuration and rerun the failed job. Never move a published tag or reuse a published version; content changes require a new release.
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { appendFileSync, readFileSync } from "node:fs"
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs"
 
 const pkg = JSON.parse(readFileSync("packages/selfix/package.json", "utf8"))
 const { GITHUB_EVENT_NAME, GITHUB_REF_TYPE, GITHUB_REF_NAME, GITHUB_REPOSITORY } = process.env
@@ -31,11 +31,23 @@ assert.equal(
   "packages/selfix",
   "repository.directory must point to packages/selfix",
 )
-const changelog = readFileSync("CHANGELOG.md", "utf8")
-assert.ok(
-  changelog.split("\n").some((line) => line.trim() === `## v${pkg.version}`),
-  "Prepare CHANGELOG.md for this version before tagging",
+const lines = readFileSync("CHANGELOG.md", "utf8").split(/\r?\n/)
+const headings = lines.flatMap((line, index) =>
+  line.trim() === `## v${pkg.version}` ? [index] : [],
 )
+assert.equal(
+  headings.length,
+  1,
+  "Prepare CHANGELOG.md with exactly one heading for this version before tagging",
+)
+const start = headings[0] + 1
+const end = lines.findIndex((line, index) => index >= start && /^##\s/.test(line.trim()))
+const notes = lines
+  .slice(start, end < 0 ? undefined : end)
+  .join("\n")
+  .trim()
+assert.ok(notes, "Prepare CHANGELOG.md with release notes, not an empty version section")
+if (process.argv[2]) writeFileSync(process.argv[2], `${notes}\n`)
 const npmTag = version[1] ?? "latest"
 if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `npm_tag=${npmTag}\n`)
 console.log(`Release validated: selfix@${pkg.version} (npm tag: ${npmTag})`)

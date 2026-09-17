@@ -40,7 +40,7 @@ jobs:
       - name: Validate release tag and metadata
         id: release
         if: startsWith(github.ref, 'refs/tags/')
-        run: node scripts/check-release.mjs
+        run: node scripts/check-release.mjs "$RUNNER_TEMP/release-notes.md"
       - run: pnpm check
       - name: Pack the checked release
         if: startsWith(github.ref, 'refs/tags/')
@@ -53,7 +53,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           name: selfix-package
-          path: ${{ runner.temp }}/selfix.tgz
+          path: |
+            ${{ runner.temp }}/selfix.tgz
+            ${{ runner.temp }}/release-notes.md
           if-no-files-found: error
 
   publish:
@@ -81,3 +83,37 @@ jobs:
         env:
           NPM_TAG: ${{ needs.check.outputs.npm_tag }}
         run: npm publish "$RUNNER_TEMP/selfix-package/selfix.tgz" --tag "$NPM_TAG" --access public --provenance --ignore-scripts
+
+  github-release:
+    needs: [check, publish]
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.check.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: github-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: selfix-package
+          path: ${{ runner.temp }}/selfix-package
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          NPM_TAG: ${{ needs.check.outputs.npm_tag }}
+        run: |
+          case "$NPM_TAG" in
+            alpha|beta) flags=(--prerelease --latest=false) ;;
+            latest) flags=(--latest) ;;
+            *) echo "Invalid release channel: $NPM_TAG" >&2; exit 1 ;;
+          esac
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "GitHub release already exists: $RELEASE_TAG"
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" \
+              --notes-file "$RUNNER_TEMP/selfix-package/release-notes.md" \
+              "${flags[@]}"
+          fi
