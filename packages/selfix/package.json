@@ -9,9 +9,10 @@
     "directory": "packages/selfix"
   },
   "bin": {
-    "selfix": "./dist/cli.js"
+    "selfix": "./bin/selfix.mjs"
   },
   "files": [
+    "bin",
     "dist",
     "README.md",
     "LICENSE"
