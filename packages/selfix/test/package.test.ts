@@ -5,13 +5,21 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, expect, it } from "vitest"
 
-const cli = fileURLToPath(new URL("../dist/cli.js", import.meta.url))
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
+const cli = fileURLToPath(new URL(`../${pkg.bin.selfix}`, import.meta.url))
 const dirs: string[] = []
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-it("runs the built executable through an npm-style symlink", () => {
+it("keeps the published bin entry available before the first build", () => {
+  // pnpm cannot link workspace commands when their targets only exist after building.
+  expect(pkg.bin.selfix).toBe("./bin/selfix.mjs")
+  expect(pkg.files).toContain("bin")
+  expect(readFileSync(cli, "utf8").startsWith("#!/usr/bin/env node")).toBe(true)
+})
+
+it("runs the declared executable through an npm-style symlink", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "selfix-bin-"))
   dirs.push(dir)
   const bin = path.join(dir, "selfix")
@@ -19,7 +27,6 @@ it("runs the built executable through an npm-style symlink", () => {
   expect(execFileSync(process.execPath, [bin, "--help"], { encoding: "utf8" })).toContain(
     "Usage: selfix",
   )
-  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
   expect(execFileSync(process.execPath, [bin, "--version"], { encoding: "utf8" }).trim()).toBe(
     pkg.version,
   )
@@ -39,8 +46,6 @@ it("runs the built executable through an npm-style symlink", () => {
 })
 
 it("publishes only the two requested consumer peer dependencies", () => {
-  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
   expect(pkg.dependencies).toBeUndefined()
   expect(Object.keys(pkg.peerDependencies).sort()).toEqual(["tailwindcss", "vue"])
-  expect(readFileSync(cli, "utf8").startsWith("#!/usr/bin/env node")).toBe(true)
 })
