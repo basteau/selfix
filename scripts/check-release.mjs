@@ -17,10 +17,7 @@ assert.ok(
   "Only stable X.Y.Z or prerelease X.Y.Z-alpha.N / X.Y.Z-beta.N versions are supported",
 )
 assert.equal(GITHUB_REF_NAME, `v${pkg.version}`, "The Git tag must match the package version")
-assert.ok(
-  GITHUB_REPOSITORY && !GITHUB_REPOSITORY.startsWith("OWNER/"),
-  "Replace the placeholder GitHub repository before releasing",
-)
+assert.ok(GITHUB_REPOSITORY, "GitHub repository is required")
 assert.equal(
   pkg.repository?.url,
   `git+https://github.com/${GITHUB_REPOSITORY}.git`,

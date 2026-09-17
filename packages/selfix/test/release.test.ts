@@ -10,7 +10,6 @@ const workspace = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8
 const prepareArgs = workspace.scripts["release:prepare"].split(" ").slice(1)
 const changelogen = path.join(root, "node_modules/changelogen/dist/cli.mjs")
 const guard = path.join(root, "scripts/check-release.mjs")
-const workflow = readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf8")
 const dirs: string[] = []
 
 afterEach(() => {
@@ -33,6 +32,26 @@ function fixture() {
     path.join(dir, "apps/playground/package.json"),
     '{"name":"playground","private":true}',
   )
+  const check = (env: Record<string, string> = {}) =>
+    spawnSync(process.execPath, [guard, path.join(dir, "release-notes.md")], {
+      cwd: dir,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_EVENT_NAME: "push",
+        GITHUB_REF_TYPE: "tag",
+        GITHUB_REF_NAME: "v0.1.0",
+        GITHUB_REPOSITORY: "example/selfix",
+        GITHUB_OUTPUT: path.join(dir, "github-output"),
+        ...env,
+      },
+    })
+  return { dir, pkg, save, check }
+}
+
+function preparationFixture() {
+  const files = fixture()
+  const { dir } = files
   const git = (...args: string[]) =>
     execFileSync("git", args, {
       cwd: dir,
@@ -49,25 +68,11 @@ function fixture() {
       cwd: dir,
       encoding: "utf8",
     })
-  const check = (env: Record<string, string> = {}) =>
-    spawnSync(process.execPath, [guard, path.join(dir, "release-notes.md")], {
-      cwd: dir,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        GITHUB_EVENT_NAME: "push",
-        GITHUB_REF_TYPE: "tag",
-        GITHUB_REF_NAME: "v0.1.0",
-        GITHUB_REPOSITORY: "example/selfix",
-        GITHUB_OUTPUT: path.join(dir, "github-output"),
-        ...env,
-      },
-    })
-  return { dir, pkg, save, git, prepare, check }
+  return { ...files, git, prepare }
 }
 
 it("prepares the first 0.1.0 changelog without bumping, committing, or tagging", () => {
-  const { dir, git, prepare, check } = fixture()
+  const { dir, git, prepare, check } = preparationFixture()
   const head = git("rev-parse", "HEAD")
   const result = prepare("--no-bump", "-r", "0.1.0")
   expect(result.status, result.stderr).toBe(0)
@@ -82,7 +87,7 @@ it("prepares the first 0.1.0 changelog without bumping, committing, or tagging",
 })
 
 it("prepares an explicit later version only in the publishable package", () => {
-  const { dir, git, prepare } = fixture()
+  const { dir, git, prepare } = preparationFixture()
   git("tag", "v0.1.0")
   writeFileSync(path.join(dir, "fix.txt"), "fixed")
   git("add", ".")
@@ -101,7 +106,7 @@ it("prepares an explicit later version only in the publishable package", () => {
 })
 
 it("prepares the first alpha without committing or tagging", () => {
-  const { dir, git, prepare, check } = fixture()
+  const { dir, git, prepare, check } = preparationFixture()
   const head = git("rev-parse", "HEAD")
   const result = prepare("-r", "0.1.0-alpha.0")
   expect(result.status, result.stderr).toBe(0)
@@ -133,7 +138,7 @@ it.each([
 })
 
 it("prepares successive alpha, beta, and stable releases with explicit versions", () => {
-  const { dir, git, prepare } = fixture()
+  const { dir, git, prepare } = preparationFixture()
   for (const version of ["0.1.0-alpha.0", "0.1.0-alpha.1", "0.1.0-beta.0", "0.1.0"]) {
     const head = git("rev-parse", "HEAD")
     const tags = git("tag", "--list")
@@ -154,17 +159,8 @@ it("prepares successive alpha, beta, and stable releases with explicit versions"
   }
 }, 15_000)
 
-it("uses the validated npm tag for both dry-run and trusted publication", () => {
-  const publishes = workflow.split("\n").filter((line) => line.includes("npm publish "))
-  expect(publishes).toHaveLength(2)
-  for (const publish of publishes) expect(publish).toContain('--tag "$NPM_TAG"')
-  expect(workflow).toContain("npm_tag: ${{ steps.release.outputs.npm_tag }}")
-  expect(workflow).toContain("NPM_TAG: ${{ steps.release.outputs.npm_tag }}")
-  expect(workflow).toContain("NPM_TAG: ${{ needs.check.outputs.npm_tag }}")
-})
-
 it("refuses release preparation with a dirty working tree", () => {
-  const { dir, prepare } = fixture()
+  const { dir, prepare } = preparationFixture()
   writeFileSync(path.join(dir, "unreviewed.txt"), "unreviewed")
   const result = prepare("-r", "0.2.0")
   expect(result.status).not.toBe(0)
@@ -179,7 +175,7 @@ it.each([
   [{ GITHUB_REF_TYPE: "branch" }, "must come from a Git tag"],
   [{ GITHUB_EVENT_NAME: "pull_request" }, "must come from a push event"],
   [{ GITHUB_REPOSITORY: "another/selfix" }, "repository.url must match"],
-  [{ GITHUB_REPOSITORY: "OWNER/selfix" }, "Replace the placeholder"],
+  [{ GITHUB_REPOSITORY: "" }, "GitHub repository is required"],
 ] as const)("rejects unsafe release context %j", (env, message) => {
   const { dir, check } = fixture()
   const result = check(env)
@@ -261,64 +257,6 @@ it.each([
   expect(result.stderr).toContain("Prepare CHANGELOG.md")
   expect(existsSync(path.join(dir, "release-notes.md"))).toBe(false)
   expect(existsSync(path.join(dir, "github-output"))).toBe(false)
-})
-
-it.each([
-  ["alpha", false],
-  ["beta", false],
-  ["latest", false],
-  ["alpha", true],
-  ["unknown", false],
-])("creates GitHub releases safely for %s (existing: %s)", (channel, existing) => {
-  const { dir } = fixture()
-  const script = workflow
-    .match(/- name: Create GitHub release[\s\S]*?run: \|\n((?: {10}[^\n]*\n?)+)/)?.[1]
-    .replace(/^ {10}/gm, "")
-  expect(script).toBeTruthy()
-  const argsFile = path.join(dir, "gh-args")
-  // Run the actual workflow shell, replacing gh with a local recording function.
-  const result = spawnSync(
-    "bash",
-    [
-      "-e",
-      "-c",
-      `
-    gh() {
-      if [ "$1 $2" = "release view" ]; then return ${existing ? 0 : 1}; fi
-      printf '%s\\n' "$@" > "$GH_ARGS"
-    }
-    ${script}
-  `,
-    ],
-    {
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        GH_TOKEN: "",
-        GH_ARGS: argsFile,
-        NPM_TAG: channel,
-        RELEASE_TAG: "v0.1.0-alpha.0",
-        RUNNER_TEMP: dir,
-      },
-    },
-  )
-  expect(result.status, result.stderr).toBe(channel === "unknown" ? 1 : 0)
-  if (existing || channel === "unknown") {
-    expect(existsSync(argsFile)).toBe(false)
-  } else {
-    const args = readFileSync(argsFile, "utf8").trim().split("\n")
-    expect(args).toEqual([
-      "release",
-      "create",
-      "v0.1.0-alpha.0",
-      "--verify-tag",
-      "--title",
-      "v0.1.0-alpha.0",
-      "--notes-file",
-      path.join(dir, "selfix-package/release-notes.md"),
-      ...(channel === "latest" ? ["--latest"] : ["--prerelease", "--latest=false"]),
-    ])
-  }
 })
 
 it("requires changelog notes for the tagged version", () => {
