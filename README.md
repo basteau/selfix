@@ -30,17 +30,17 @@ Works with your own components and theme. No UI kit, class helper, ESLint, or Ox
 
 Requires **Node.js ≥22.18**, **Vue ≥3.2.13 <4**, and **Tailwind CSS 4**. Vue and Tailwind are the only consumer peer dependencies.
 
-selfix is not published to npm yet. From this repository, build a package:
+The first alpha is prepared but not published to npm yet. APIs and rules may change during prerelease. From this repository, build a package:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm --filter selfix pack --out selfix-0.1.0.tgz
+pnpm --filter selfix pack --out selfix-0.1.0-alpha.0.tgz
 ```
 
 Install it in your Vue/Tailwind project:
 
 ```sh
-pnpm add -D /path/to/selfix-0.1.0.tgz
+pnpm add -D /path/to/selfix-0.1.0-alpha.0.tgz
 ```
 
 Create `selfix.config.ts` in your project root:
