@@ -1,6 +1,6 @@
 # 01: Respect helper shadowing
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -47,3 +47,8 @@ Approved from the core-hardening discussion. Start in `packages/selfix/src/vue.t
 - Spec: independent review found missing function-scoped `var` declarations inside control flow. Fixed with focused red/green regressions; re-review confirmed no remaining blockers.
 - Known nonblocking limitation: ticket 04 owns separating slot-content scope from owner attributes. For `<Box v-slot="{ cn }" :class="cn('p-2')"><div :class="cn('p-4')" /></Box>`, the owner currently inherits slot shadowing too. Resolve it with the broader owner/child scope correction in ticket 04.
 - Import-aware helper discovery, configurable helpers, and cross-file tracing remain deferred as specified.
+
+## Completion
+
+- Implementation commit: `717309f12a371a4cf8d1c66873a50a18b5fd0eca` (`fix(vue): respect shadowed class helpers`).
+- Required checks and independent reviews passed before committing. Ticket marked done after the implementation commit succeeded.
