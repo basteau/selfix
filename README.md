@@ -233,31 +233,31 @@ See [AGENTS.md](AGENTS.md) for contribution conventions. Keep documentation in t
 <details>
 <summary>Maintainer setup and release checklist</summary>
 
-Only `packages/selfix` is published. [Changelogen](https://github.com/unjs/changelogen) prepares the package version and root `CHANGELOG.md` from repository-wide Conventional Commits. Preparation never commits, tags, pushes, or publishes.
+Only `packages/selfix` is published. [Changelogen](https://github.com/unjs/changelogen) prepares the package version and root `CHANGELOG.md` from repository-wide Conventional Commits. The commands below only update files; do not pass Changelogen's `--release`, `--push`, or `--publish` flags.
 
 ### One-time setup
 
 - Keep package repository metadata and the Git remote pointing to `basteau/selfix`.
-- Enable squash merging using PR titles, require the `check` job, and preserve relevant Lore trailers in commit bodies. CI validates Conventional Commit PR titles; direct commits must follow the same convention.
-- Protect `main` and `v*` tags against unauthorized changes. Tag only reviewed commits on `main`.
+- Direct pushes to `main` are allowed; run `pnpm check` before pushing and wait for green CI before tagging. Protect `main` against deletion and force pushes, and restrict `v*` tags to admins.
+- Use Conventional Commits and preserve relevant Lore trailers. Optional PRs use squash merging with the PR title as the commit subject; CI validates those titles.
 - Create the `npm` GitHub environment, restrict it to release tags, and require reviewers where available. Leave repository Actions variable `NPM_PUBLISH_ENABLED` unset until bootstrap is complete.
 
-### First release: 0.1.0
+### First release: 0.1.0-alpha.0
 
-Start on `main` with a clean working tree and full Git history. The package is already `0.1.0`:
+Start on `main` with a clean working tree and full Git history, including tags. Prepare each version once. If its version and notes are already committed, skip preparation; if only the version is set, add `--no-bump`:
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm release:prepare --no-bump -r 0.1.0
+pnpm release:prepare -r 0.1.0-alpha.0
 pnpm format
 pnpm check
 ```
 
-Review and commit `CHANGELOG.md` as `chore(release): v0.1.0` (through a PR when required). Tag the reviewed commit on `main`:
+Review the package version and `CHANGELOG.md`, commit as `chore(release): v0.1.0-alpha.0`, and push `main`. After CI passes, tag that commit:
 
 ```sh
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin main refs/tags/v0.1.0
+git tag -a v0.1.0-alpha.0 -m "v0.1.0-alpha.0"
+git push origin refs/tags/v0.1.0-alpha.0
 ```
 
 CI validates metadata and changelog, runs checks, and packs and dry-runs the package. Download `selfix-package` from the successful tag run and extract `selfix.tgz`. Inspect and publish that tarball once locally:
@@ -265,12 +265,12 @@ CI validates metadata and changelog, runs checks, and packs and dry-runs the pac
 ```sh
 tar -tzf selfix.tgz
 npm login
-npm publish ./selfix.tgz --access public --ignore-scripts
+npm publish ./selfix.tgz --access public --tag alpha --ignore-scripts
 ```
 
-Configure the package's [npm trusted publisher](https://docs.npmjs.com/trusted-publishers/): GitHub Actions, `basteau/selfix`, workflow **`ci.yml`**, environment **`npm`**. Permit direct `npm publish`, then set repository variable `NPM_PUBLISH_ENABLED=true`. Do not rerun publication of `v0.1.0`.
+Configure the package's [npm trusted publisher](https://docs.npmjs.com/trusted-publishers/): GitHub Actions, `basteau/selfix`, workflow **`ci.yml`**, environment **`npm`**. Permit direct `npm publish`, then set repository variable `NPM_PUBLISH_ENABLED=true`. Do not rerun publication of `v0.1.0-alpha.0`. Once published, users can install with `pnpm add -D selfix@alpha`.
 
-No npm tokens belong in GitHub secrets. After verifying trusted publishing, disallow token-based publishing in npm settings.
+Use a current npm CLI for bootstrap and trusted publishing. No npm tokens belong in GitHub secrets. After verifying trusted publishing, disallow token-based publishing in npm settings. A publish dry-run does not verify registry permissions or OIDC authentication.
 
 ### Later releases
 
@@ -279,14 +279,16 @@ With a clean working tree and full history:
 ```sh
 git switch main
 git pull --ff-only
-pnpm release:prepare -r 0.2.0
+pnpm release:prepare -r 0.1.0-alpha.1
 pnpm format
 pnpm check
 ```
 
-Review the version and changelog, commit as `chore(release): v0.2.0`, then tag and push as above using `v0.2.0`. After checks and environment approval, CI publishes the exact checked tarball with OIDC and provenance, without checkout, dependency installation, or package scripts in the publish job.
+Review the version and changelog, commit as `chore(release): v0.1.0-alpha.1`, push, and wait for green CI before tagging as above. After tag checks and environment approval, CI publishes the exact checked tarball with OIDC and provenance, without checkout, dependency installation, or package scripts in the publish job.
 
-Only stable `vX.Y.Z` tags are supported. Explicit versions are recommended: omitting `-r` lets the pinned Changelogen infer a version, where a feature at `0.1.0` becomes `0.1.1` and a breaking change becomes `0.2.0`.
+Release progression: `0.1.0-alpha.0` → `0.1.0-alpha.1` → `0.1.0-beta.0` → `0.1.0`. Use explicit `-r` versions; Changelogen's inferred `0.x` feature bumps are patches.
+
+CI maps validated versions to [npm dist-tags](https://docs.npmjs.com/adding-dist-tags-to-packages/): `X.Y.Z-alpha.N` → `alpha`, `X.Y.Z-beta.N` → `beta`, and stable `X.Y.Z` → `latest`. Git tags add a `v` prefix. Other prereleases and build metadata are rejected. Alpha and beta publications never update `latest`; users opt in with `selfix@alpha` or `selfix@beta`.
 
 For external configuration failures, fix the configuration and rerun the failed job. Never move a published tag or reuse a published version; content changes require a new release.
 
