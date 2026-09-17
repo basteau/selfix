@@ -19,8 +19,9 @@ it("runs the built executable through an npm-style symlink", () => {
   expect(execFileSync(process.execPath, [bin, "--help"], { encoding: "utf8" })).toContain(
     "Usage: selfix",
   )
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"))
   expect(execFileSync(process.execPath, [bin, "--version"], { encoding: "utf8" }).trim()).toBe(
-    "0.1.0",
+    pkg.version,
   )
   writeFileSync(path.join(dir, "theme.css"), '@import "tailwindcss";')
   writeFileSync(path.join(dir, "package.json"), '{"type":"module"}')
