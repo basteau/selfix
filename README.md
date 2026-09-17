@@ -271,12 +271,14 @@ Use a current npm CLI for bootstrap and trusted publishing. No npm tokens belong
 
 ### Later releases
 
+For the next release only, use `--from e6f33ce`, the rewritten equivalent of the published alpha commit, to avoid repeating old notes. Leave the published tag unchanged. Once the next release is tagged on `main`, omit `--from`.
+
 With a clean working tree and full history:
 
 ```sh
 git switch main
 git pull --ff-only
-pnpm release:prepare -r 0.1.0-alpha.1
+pnpm release:prepare -r 0.1.0-alpha.1 --from e6f33ce
 pnpm format
 pnpm check
 ```
