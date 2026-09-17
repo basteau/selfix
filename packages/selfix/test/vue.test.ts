@@ -213,6 +213,114 @@ const itemClass = "from-script";
     ])
   })
 
+  it.each([false, true])(
+    "shadows binding patterns without treating keys or defaults as bindings (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>
+const rest = 'from-script';
+const local = 'from-script';
+const index = 'from-script';
+const key = 'key-class';
+const fallback = 'default-class';
+</script>
+<template>
+  <Box v-slot="{ ...rest }"><div :class="rest" /></Box>
+  <Box v-slot="{ key: [local = fallback, ...rest] }">
+    <div :class="[local, rest, key, fallback]" />
+  </Box>
+  <Box v-slot="{ local = (() => { throw new Error('never run') })() }">
+    <div :class="local" />
+  </Box>
+  <div v-for="({ key: local = fallback, ...rest }, index) in rows" :class="[local, rest, index, key, fallback]" />
+  <div v-for="[local, ...rest] of rows" :class="[local, rest]" />
+  <div :class="[rest, local, index]" />
+</template>`
+      const result = collectVue(source, "patterns.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites.map(({ tokens, dynamic }) => ({ tokens, dynamic }))).toEqual([
+        { tokens: [], dynamic: true },
+        { tokens: ["key-class", "default-class"], dynamic: true },
+        { tokens: [], dynamic: true },
+        { tokens: ["key-class", "default-class"], dynamic: true },
+        { tokens: [], dynamic: true },
+        { tokens: ["from-script"], dynamic: false },
+      ])
+      expect(result.sites.map(({ offset }) => offset)).toEqual(
+        [...source.matchAll(/:class=/gu)].map((match) => match.index),
+      )
+    },
+  )
+
+  it.each(["{ ...rest, }", "local.member", "{ local: }"])(
+    "fails closed for invalid or unsupported slot scope %s",
+    (pattern) => {
+      const source = `<script setup>const local = 'unsafe'; const rest = 'unsafe';</script>
+<template><Box v-slot="${pattern}"><div :class="[local, rest]" /></Box></template>`
+      for (const forceCompileTemplateAst of [false, true]) {
+        const result = collectVue(source, "invalid-scope.vue", { forceCompileTemplateAst })
+        expect(result.errors.length).toBeGreaterThan(0)
+        expect(result.sites[0]).toMatchObject({ tokens: [], dynamic: true })
+        expect(result.errors).toContainEqual({
+          message: expect.stringContaining("Invalid or unsupported template scope:"),
+          offset: source.indexOf("v-slot="),
+        })
+      }
+    },
+  )
+
+  it.each(["(local in rows", "local) in rows", "local.member in rows", ""])(
+    "rejects malformed v-for scopes: %s",
+    (scope) => {
+      const source = `<script setup>const local = 'unsafe';</script>
+<template><div v-for="${scope}" :class="local" /></template>`
+      const result = collectVue(source, "invalid-for.vue")
+      expect(result.errors.length).toBeGreaterThan(0)
+      // Older Vue uses the compiler fallback, which may remove invalid directives.
+      // In either path a malformed scope must never yield a clean result.
+    },
+  )
+
+  it("preserves original offsets across normal and transformed template collection", () => {
+    const source = `<script setup>const local = 'outside';</script>
+<template>
+  <div v-if="ok" class="p-2" style="color:red" />
+  <div v-else :class="'m-2'" :style="style" />
+  <div v-for="(local, index) in rows" :class="local" v-bind="{ class: 'p-4', style: null }" />
+  <div v-bind="attrs" :[key]="value" />
+</template>
+<style>.outside {}</style>`
+    const normal = collectVue(source, "offsets.vue")
+    const fallback = collectVue(source, "offsets.vue", { forceCompileTemplateAst: true })
+    expect(fallback).toEqual(normal)
+    expect(normal.styles.map(({ offset }) => offset)).toEqual([
+      source.indexOf('style="'),
+      source.indexOf(':style="'),
+      source.indexOf('v-bind="{'),
+      source.indexOf("<style>"),
+    ])
+    expect(normal.errors.map(({ offset }) => offset)).toEqual([
+      source.indexOf('v-bind="attrs'),
+      source.indexOf(":[key]"),
+    ])
+  })
+
+  it("locates fallback template style compiler diagnostics in the original SFC", () => {
+    const source = `<script setup>const unused = 'prefix';</script>
+<template><div style="color:red" /><style>.bad {}</style></template>`
+    const normal = collectVue(source, "template-style.vue")
+    const fallback = collectVue(source, "template-style.vue", { forceCompileTemplateAst: true })
+    expect(normal.errors).toContainEqual({
+      message: "Template <style> tags are not supported",
+      offset: source.indexOf("<style>"),
+    })
+    // The compiler removes side-effect tags; its diagnostic still reports that site.
+    expect(fallback.errors).toContainEqual({
+      message: expect.stringContaining("side effect"),
+      offset: source.indexOf("<style>"),
+    })
+    expect(fallback.styles).toEqual([{ component: "div", offset: source.indexOf('style="') }])
+  })
+
   it("limits script constants to primitive immutable class shapes", () => {
     const source = `<script setup>
 const one = "one";

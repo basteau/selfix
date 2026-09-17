@@ -84,6 +84,7 @@ interface TemplateContext {
   bindings: Map<string, StaticBinding>
   shadowed: ReadonlySet<string>
   errors: ParseIssue[]
+  offset: number
 }
 
 interface CollectVueOptions {
@@ -153,7 +154,18 @@ export function collectVue(
     return { sites, styles: sortStyles(styles), errors }
   }
 
-  walkTemplate(ast, { aliases, bindings, shadowed: new Set(), errors }, sites, styles)
+  walkTemplate(
+    ast,
+    {
+      aliases,
+      bindings,
+      shadowed: new Set(),
+      errors,
+      offset: templateAst ? 0 : template.loc.start.offset,
+    },
+    sites,
+    styles,
+  )
   return { sites, styles: sortStyles(styles), errors }
 }
 
@@ -176,39 +188,7 @@ function compileTemplateAst(
     errors.push({ message: "Template AST was not produced", offset })
     return undefined
   }
-  shiftTemplateOffsets(result.ast, offset)
   return result.ast
-}
-
-function shiftTemplateOffsets(root: RootNode, offset: number): void {
-  const visit = (node: TemplateNode): void => {
-    node.loc.start.offset += offset
-    if (node.type === VueNode.Element) {
-      for (const prop of node.props) {
-        prop.loc.start.offset += offset
-      }
-      for (const child of node.children) {
-        visit(child)
-      }
-      return
-    }
-    if (node.type === VueNode.If) {
-      for (const branch of node.branches) {
-        for (const child of branch.children) {
-          visit(child)
-        }
-      }
-      return
-    }
-    if (node.type === VueNode.For || node.type === VueNode.IfBranch) {
-      for (const child of node.children) {
-        visit(child)
-      }
-    }
-  }
-  for (const child of root.children) {
-    visit(child)
-  }
 }
 
 function walkTemplate(
@@ -235,7 +215,7 @@ function walkTemplate(
       return
     }
     if (node.type === VueNode.For) {
-      const next = withShadowed(current, forAliases(node))
+      const next = shadowScope(current, forAliases(node), node.loc.start.offset)
       for (const child of node.children) {
         visit(child, next)
       }
@@ -259,82 +239,103 @@ function expressionContent(expression: TemplateExpression | undefined): string |
 }
 
 function shadowElementScope(node: ElementNode, context: TemplateContext): TemplateContext {
-  const names: string[] = []
+  let next = context
   for (const prop of node.props) {
     if (prop.type !== VueNode.Directive) {
       continue
     }
     const content = expressionContent(prop.exp)
     if (prop.name === "slot" && content) {
-      names.push(...bindingNames(content))
+      next = shadowScope(next, [content], prop.loc.start.offset)
     }
-    if (prop.name === "for" && content) {
-      names.push(...bindingNames(content.split(/\s+(?:in|of)\s+/u)[0]))
+    if (prop.name === "for") {
+      const match = content?.match(/^([\s\S]*?)\s+(?:in|of)\s+([\s\S]+)$/u)
+      const aliases = match?.[1].trim() ?? ""
+      const pattern =
+        aliases.startsWith("(") && aliases.endsWith(")") ? aliases.slice(1, -1) : aliases
+      next = shadowScope(next, [pattern], prop.loc.start.offset)
     }
   }
-  return withShadowed(context, names)
+  return next
 }
 
-function withShadowed(context: TemplateContext, names: string[]): TemplateContext {
-  if (names.length === 0) {
-    return context
+function shadowScope(
+  context: TemplateContext,
+  patterns: string[],
+  offset: number,
+): TemplateContext {
+  try {
+    const names = patterns.flatMap(bindingNames)
+    return { ...context, shadowed: new Set([...context.shadowed, ...names]) }
+  } catch (error) {
+    context.errors.push({
+      message: `Invalid or unsupported template scope: ${errorMessage(error)}`,
+      offset: context.offset + offset,
+    })
+    // Unknown local names must never resolve to setup constants.
+    return { ...context, bindings: new Map() }
   }
-  return { ...context, shadowed: new Set([...context.shadowed, ...names]) }
 }
 
 function forAliases(node: ForNode): string[] {
   return [
-    expressionContent(node.valueAlias),
-    expressionContent(node.keyAlias),
-    expressionContent(node.objectIndexAlias),
-    expressionContent(node.parseResult?.value),
-    expressionContent(node.parseResult?.key),
-    expressionContent(node.parseResult?.index),
-  ].flatMap((name) => bindingNames(name))
+    expressionContent(node.valueAlias ?? node.parseResult?.value),
+    expressionContent(node.keyAlias ?? node.parseResult?.key),
+    expressionContent(node.objectIndexAlias ?? node.parseResult?.index),
+  ].filter((name): name is string => name !== undefined)
 }
 
-function bindingNames(content: string | undefined): string[] {
-  if (!content?.trim()) {
-    return []
+function bindingNames(content: string): string[] {
+  const program = babelParse(`(${content}) => {}`, {
+    sourceType: "module",
+    plugins: ["typescript"],
+  }).program
+  const statement = program.body[0]
+  if (
+    program.body.length !== 1 ||
+    statement?.type !== "ExpressionStatement" ||
+    statement.expression.type !== "ArrowFunctionExpression" ||
+    statement.expression.params.length === 0
+  ) {
+    throw new Error("expected binding pattern")
   }
-  try {
-    const expression = parseExpression(content)
-    const names: string[] = []
-    collectBindingNames(expression, names)
-    return names
-  } catch {
-    return splitBindingPattern(content)
+  const names: string[] = []
+  for (const param of statement.expression.params) {
+    collectBindingNames(param, names)
   }
+  return names
 }
 
-function collectBindingNames(node: ExpressionInput, names: string[]): void {
-  if (node.type === "Identifier") {
-    names.push(node.name)
-    return
-  }
-  if (node.type === "ArrayExpression") {
-    for (const element of node.elements) {
-      if (element && element.type !== "SpreadElement") {
-        collectBindingNames(element, names)
+type BindingPattern = Extract<ExpressionNode, { type: "ArrowFunctionExpression" }>["params"][number]
+
+function collectBindingNames(node: BindingPattern | ExpressionInput, names: string[]): void {
+  switch (node.type) {
+    case "Identifier":
+      names.push(node.name)
+      return
+    case "RestElement":
+      collectBindingNames(node.argument, names)
+      return
+    case "AssignmentPattern":
+      collectBindingNames(node.left, names)
+      return
+    case "ArrayPattern":
+      for (const element of node.elements) {
+        if (element) collectBindingNames(element, names)
       }
-    }
-    return
-  }
-  if (node.type === "ObjectExpression") {
-    for (const property of node.properties) {
-      if (property.type === "ObjectProperty") {
-        collectBindingNames(property.value, names)
+      return
+    case "ObjectPattern":
+      for (const property of node.properties) {
+        if (property.type === "RestElement") {
+          collectBindingNames(property.argument, names)
+        } else {
+          collectBindingNames(property.value, names)
+        }
       }
-    }
-    return
+      return
+    default:
+      throw new Error("unsupported binding pattern")
   }
-  if (isTsWrapper(node)) {
-    collectBindingNames(node.expression, names)
-  }
-}
-
-function splitBindingPattern(content: string): string[] {
-  return content.match(/[A-Za-z_$][\w$]*/gu) ?? []
 }
 
 function collectElement(
@@ -349,10 +350,10 @@ function collectElement(
   const importSource = alias?.importSource
 
   if (isTemplateStyleElement(node)) {
-    styles.push({ component: "style", offset: node.loc.start.offset })
+    styles.push({ component: "style", offset: context.offset + node.loc.start.offset })
     context.errors.push({
       message: "Template <style> tags are not supported",
-      offset: node.loc.start.offset,
+      offset: context.offset + node.loc.start.offset,
     })
   }
 
@@ -364,13 +365,13 @@ function collectElement(
             component,
             splitClasses(prop.value.content),
             false,
-            prop.loc.start.offset,
+            context.offset + prop.loc.start.offset,
             importSource,
           ),
         )
       }
       if (prop.name === "style") {
-        styles.push({ component, offset: prop.loc.start.offset })
+        styles.push({ component, offset: context.offset + prop.loc.start.offset })
       }
       continue
     }
@@ -378,15 +379,21 @@ function collectElement(
     if (isBoundAttribute(prop, "class")) {
       const found = collectClassExpression(
         expressionContent(prop.exp),
-        prop.loc.start.offset,
+        context.offset + prop.loc.start.offset,
         context,
       )
       sites.push(
-        classSite(component, found.tokens, found.dynamic, prop.loc.start.offset, importSource),
+        classSite(
+          component,
+          found.tokens,
+          found.dynamic,
+          context.offset + prop.loc.start.offset,
+          importSource,
+        ),
       )
     }
     if (isBoundAttribute(prop, "style")) {
-      styles.push({ component, offset: prop.loc.start.offset })
+      styles.push({ component, offset: context.offset + prop.loc.start.offset })
     }
     if (isFullBind(prop)) {
       collectSpreadAttrs(prop, component, importSource, context, sites, styles)
@@ -394,7 +401,7 @@ function collectElement(
     if (isDynamicBindArg(prop)) {
       context.errors.push({
         message: "Dynamic v-bind argument may be class or style",
-        offset: prop.loc.start.offset,
+        offset: context.offset + prop.loc.start.offset,
       })
     }
   }
@@ -412,9 +419,9 @@ function collectSpreadAttrs(
   if (!content) {
     context.errors.push({
       message: "v-bind is missing an expression",
-      offset: prop.loc.start.offset,
+      offset: context.offset + prop.loc.start.offset,
     })
-    sites.push(classSite(component, [], true, prop.loc.start.offset, importSource))
+    sites.push(classSite(component, [], true, context.offset + prop.loc.start.offset, importSource))
     return
   }
   let expression: ExpressionNode
@@ -423,37 +430,45 @@ function collectSpreadAttrs(
   } catch (error) {
     context.errors.push({
       message: `Invalid v-bind expression: ${errorMessage(error)}`,
-      offset: prop.loc.start.offset,
+      offset: context.offset + prop.loc.start.offset,
     })
-    sites.push(classSite(component, [], true, prop.loc.start.offset, importSource))
+    sites.push(classSite(component, [], true, context.offset + prop.loc.start.offset, importSource))
     return
   }
   if (expression.type !== "ObjectExpression") {
     context.errors.push({
       message: "Dynamic v-bind attrs may contain class or style",
-      offset: prop.loc.start.offset,
+      offset: context.offset + prop.loc.start.offset,
     })
-    sites.push(classSite(component, [], true, prop.loc.start.offset, importSource))
+    sites.push(classSite(component, [], true, context.offset + prop.loc.start.offset, importSource))
     return
   }
   for (const property of expression.properties) {
     if (property.type !== "ObjectProperty" || property.computed) {
       context.errors.push({
         message: "Dynamic v-bind attrs may contain class or style",
-        offset: prop.loc.start.offset,
+        offset: context.offset + prop.loc.start.offset,
       })
-      sites.push(classSite(component, [], true, prop.loc.start.offset, importSource))
+      sites.push(
+        classSite(component, [], true, context.offset + prop.loc.start.offset, importSource),
+      )
       continue
     }
     const key = propertyKey(property)
     if (key === "class") {
       const found = collectExpression(property.value, context)
       sites.push(
-        classSite(component, found.tokens, found.dynamic, prop.loc.start.offset, importSource),
+        classSite(
+          component,
+          found.tokens,
+          found.dynamic,
+          context.offset + prop.loc.start.offset,
+          importSource,
+        ),
       )
     }
     if (key === "style") {
-      styles.push({ component, offset: prop.loc.start.offset })
+      styles.push({ component, offset: context.offset + prop.loc.start.offset })
     }
   }
 }
@@ -785,7 +800,7 @@ function isTsWrapper(node: ExpressionInput): node is Extract<
   )
 }
 
-function issue(error: SyntaxError | unknown, fallbackOffset: number): ParseIssue {
+function issue(error: SyntaxError | unknown, baseOffset: number): ParseIssue {
   if (typeof error === "object" && error && "message" in error) {
     const maybeError = error as {
       message: string
@@ -793,10 +808,10 @@ function issue(error: SyntaxError | unknown, fallbackOffset: number): ParseIssue
     }
     return {
       message: maybeError.message,
-      offset: maybeError.loc?.start?.offset ?? maybeError.loc?.offset ?? fallbackOffset,
+      offset: baseOffset + (maybeError.loc?.start?.offset ?? maybeError.loc?.offset ?? 0),
     }
   }
-  return { message: String(error), offset: fallbackOffset }
+  return { message: String(error), offset: baseOffset }
 }
 
 function errorMessage(error: unknown): string {
