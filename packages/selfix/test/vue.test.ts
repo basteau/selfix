@@ -50,6 +50,99 @@ const panel = ["rounded-md", { "border-red-500": danger }];
     ])
   })
 
+  it("reports a malformed setup script once", () => {
+    const source = `<script setup lang="ts">
+const broken = ;
+</script>
+<template><div class="p-2" /></template>`
+
+    const result = collectVue(source, "invalid-setup.vue")
+
+    expect(result.errors).toEqual([
+      {
+        message: expect.stringContaining("Invalid script:"),
+        offset: source.indexOf(">") + 1,
+      },
+    ])
+    expect(result.sites[0]?.tokens).toEqual(["p-2"])
+  })
+
+  it("lets setup imports override normal script imports", () => {
+    const source = `<script>
+import BaseButton from "./normal.vue";
+</script>
+<script setup>
+import { Button as BaseButton } from "./setup.vue";
+</script>
+<template>
+  <BaseButton class="p-2" />
+  <base-button class="p-2" />
+  <Button class="p-2" />
+</template>`
+
+    const result = collectVue(source, "override.vue")
+
+    expect(result.errors).toEqual([])
+    expect(
+      result.sites.map(({ component, importSource }) => ({ component, importSource })),
+    ).toEqual([
+      { component: "BaseButton", importSource: "./setup.vue" },
+      { component: "BaseButton", importSource: "./setup.vue" },
+      { component: "Button", importSource: undefined },
+    ])
+  })
+
+  it.each([false, true])(
+    "prefers exact aliases over colliding kebab aliases (setup: %s)",
+    (setup) => {
+      const source = `<script>
+import BaseButton from "./exact.vue";
+${setup ? "</script><script setup>" : ""}
+import Base_Button from "./collision.vue";
+</script>
+<template>
+  <BaseButton class="p-2" />
+  <Base_Button class="p-2" />
+  <base-button class="p-2" />
+</template>`
+
+      const result = collectVue(source, "collision.vue")
+
+      expect(result.errors).toEqual([])
+      expect(
+        result.sites.map(({ component, importSource }) => ({ component, importSource })),
+      ).toEqual([
+        { component: "BaseButton", importSource: "./exact.vue" },
+        { component: "Base_Button", importSource: "./collision.vue" },
+        { component: "Base_Button", importSource: "./collision.vue" },
+      ])
+    },
+  )
+
+  it("resolves only local setup constants without following references", () => {
+    const source = `<script>
+const normal = "normal";
+</script>
+<script setup>
+import imported from "./classes";
+const local = "local";
+const reference = local;
+</script>
+<template><div :class="[normal, imported, local, reference]" /></template>`
+
+    const result = collectVue(source, "local-constants.vue")
+
+    expect(result.errors).toEqual([])
+    expect(result.sites).toEqual([
+      {
+        component: "div",
+        tokens: ["local"],
+        dynamic: true,
+        offset: source.indexOf(':class="'),
+      },
+    ])
+  })
+
   it("marks unknown expressions and computed object keys as dynamic without evaluating conditions", () => {
     const source = `<script setup>
 const fromCall = getClasses();

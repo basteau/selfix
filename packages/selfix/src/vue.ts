@@ -233,11 +233,14 @@ interface StaticBinding {
   dynamic: boolean
 }
 
+interface ComponentAlias {
+  local: string
+  importSource: string
+}
+
 interface ComponentAliases {
-  byTemplateName: Map<string, string>
-  byTagName: Map<string, string>
-  localByTemplateName: Map<string, string>
-  localByTagName: Map<string, string>
+  byTemplateName: Map<string, ComponentAlias>
+  byTagName: Map<string, ComponentAlias>
 }
 
 interface TemplateContext {
@@ -264,25 +267,21 @@ export function collectVue(
     errors.push(issue(error, 0))
   }
 
-  const aliases = collectComponentAliases(
+  const script = parseScript(
     parsed.descriptor.script?.content,
     parsed.descriptor.script?.loc.start.offset ?? 0,
     errors,
   )
-  mergeAliases(
-    aliases,
-    collectComponentAliases(
-      parsed.descriptor.scriptSetup?.content,
-      parsed.descriptor.scriptSetup?.loc.start.offset ?? 0,
-      errors,
-    ),
-  )
-
-  const bindings = collectStaticBindings(
+  const setup = parseScript(
     parsed.descriptor.scriptSetup?.content,
     parsed.descriptor.scriptSetup?.loc.start.offset ?? 0,
     errors,
   )
+  const aliases: ComponentAliases = { byTemplateName: new Map(), byTagName: new Map() }
+  collectComponentAliases(script, aliases)
+  collectComponentAliases(setup, aliases)
+
+  const bindings = collectStaticBindings(setup)
   const sites: ClassSite[] = []
   const styles: StyleSite[] = []
 
@@ -504,8 +503,10 @@ function collectElement(
   sites: ClassSite[],
   styles: StyleSite[],
 ): void {
-  const component = componentName(node.tag, context.aliases)
-  const importSource = importSourceForTag(node.tag, context.aliases)
+  const alias =
+    context.aliases.byTemplateName.get(node.tag) ?? context.aliases.byTagName.get(node.tag)
+  const component = alias?.local ?? (/^[A-Z]/u.test(node.tag) ? node.tag : node.tag.toLowerCase())
+  const importSource = alias?.importSource
 
   if (isTemplateStyleElement(node)) {
     styles.push({ component: "style", offset: node.loc.start.offset })
@@ -743,9 +744,6 @@ function collectCallExpression(node: CallExpressionNode, context: TemplateContex
   if (node.callee.type !== "Identifier") {
     return { tokens: [], dynamic: true }
   }
-  if (node.callee.name === "cva") {
-    return { tokens: [], dynamic: true }
-  }
   if (!CLASS_HELPERS.has(node.callee.name)) {
     return { tokens: [], dynamic: true }
   }
@@ -760,16 +758,8 @@ function collectCallExpression(node: CallExpressionNode, context: TemplateContex
   )
 }
 
-function collectStaticBindings(
-  script: string | undefined,
-  offset: number,
-  errors: ParseIssue[],
-): Map<string, StaticBinding> {
+function collectStaticBindings(program: ProgramNode | undefined): Map<string, StaticBinding> {
   const bindings = new Map<string, StaticBinding>()
-  if (!script?.trim()) {
-    return bindings
-  }
-  const program = parseScript(script, offset, errors)
   if (!program) {
     return bindings
   }
@@ -820,17 +810,11 @@ function collectStaticConst(node: ExpressionNode): StaticBinding | undefined {
 }
 
 function collectComponentAliases(
-  script: string | undefined,
-  offset: number,
-  errors: ParseIssue[],
-): ComponentAliases {
-  const aliases = emptyAliases()
-  if (!script?.trim()) {
-    return aliases
-  }
-  const program = parseScript(script, offset, errors)
+  program: ProgramNode | undefined,
+  aliases: ComponentAliases,
+): void {
   if (!program) {
-    return aliases
+    return
   }
 
   for (const statement of program.body) {
@@ -839,7 +823,6 @@ function collectComponentAliases(
     }
     collectImportAliases(statement, aliases)
   }
-  return aliases
 }
 
 function collectImportAliases(statement: ImportDeclarationNode, aliases: ComponentAliases): void {
@@ -848,42 +831,20 @@ function collectImportAliases(statement: ImportDeclarationNode, aliases: Compone
     if (!isLikelyComponent(local)) {
       continue
     }
-    aliases.byTemplateName.set(local, statement.source.value)
-    aliases.byTagName.set(kebabCase(local), statement.source.value)
-    aliases.localByTemplateName.set(local, local)
-    aliases.localByTagName.set(kebabCase(local), local)
-  }
-}
-
-function mergeAliases(target: ComponentAliases, source: ComponentAliases): void {
-  for (const [name, value] of source.byTemplateName) {
-    target.byTemplateName.set(name, value)
-  }
-  for (const [name, value] of source.byTagName) {
-    target.byTagName.set(name, value)
-  }
-  for (const [name, value] of source.localByTemplateName) {
-    target.localByTemplateName.set(name, value)
-  }
-  for (const [name, value] of source.localByTagName) {
-    target.localByTagName.set(name, value)
-  }
-}
-
-function emptyAliases(): ComponentAliases {
-  return {
-    byTemplateName: new Map(),
-    byTagName: new Map(),
-    localByTemplateName: new Map(),
-    localByTagName: new Map(),
+    const alias = { local, importSource: statement.source.value }
+    aliases.byTemplateName.set(local, alias)
+    aliases.byTagName.set(kebabCase(local), alias)
   }
 }
 
 function parseScript(
-  script: string,
+  script: string | undefined,
   offset: number,
   errors: ParseIssue[],
 ): ProgramNode | undefined {
+  if (!script?.trim()) {
+    return undefined
+  }
   try {
     return (
       babelParse(script, {
@@ -920,18 +881,6 @@ function combine(items: StaticBinding[]): StaticBinding {
 
 function splitClasses(value: string): string[] {
   return value.trim().split(/\s+/u).filter(Boolean)
-}
-
-function componentName(tag: string, aliases: ComponentAliases): string {
-  return (
-    aliases.localByTemplateName.get(tag) ??
-    aliases.localByTagName.get(tag) ??
-    (/^[A-Z]/u.test(tag) ? tag : tag.toLowerCase())
-  )
-}
-
-function importSourceForTag(tag: string, aliases: ComponentAliases): string | undefined {
-  return aliases.byTemplateName.get(tag) ?? aliases.byTagName.get(tag)
 }
 
 function kebabCase(value: string): string {
