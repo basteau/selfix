@@ -4,6 +4,8 @@
 
 Define what your components allow. Get diagnostics that tell developers and coding agents what broke and what to use instead—without changing your component API.
 
+Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). Attribution for adapted code is preserved in [LICENSE](LICENSE).
+
 ```vue
 <script setup lang="ts">
 import { Button } from "@/components/ui/button"
@@ -296,4 +298,4 @@ For external configuration failures, fix the configuration and rerun the failed 
 
 ## License
 
-MIT licensed. Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint); attribution for adapted code is preserved in [LICENSE](LICENSE).
+MIT licensed. See [LICENSE](LICENSE).
