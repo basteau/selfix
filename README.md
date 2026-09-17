@@ -1,103 +1,106 @@
 # selfix
 
-Design-system linting for Vue and Tailwind CSS.
+**Design-system linting for Vue 3 and Tailwind CSS 4.**
 
-Define which classes your components allow, keep styling on your theme, and get diagnostics that explain how to fix violations. Run selfix from the command line or use its typed Node API.
+Define what your components allow. Get diagnostics that tell developers and coding agents what broke and what to use instead—without changing your component API.
 
 ```vue
-<!-- Let the page control placement. -->
-<Button size="lg" class="mt-4 w-full">Save</Button>
+<script setup lang="ts">
+import { Button } from "@/components/ui/button"
+</script>
 
-<!-- Report padding that belongs to the component. -->
-<Button class="p-4">Save</Button>
+<template>
+  <!-- Allowed: the component controls size; the page controls placement. -->
+  <Button size="lg" class="mt-4 w-full">Save</Button>
+
+  <!-- Reported: padding belongs to the component. -->
+  <Button class="p-4">Save</Button>
+</template>
 ```
-
-With the default component policy, the second example reports:
 
 ```text
 "p-4" is not allowed on <Button>: the component owns its spacing. Use a component variant; use margin or a parent gap for surrounding space.
 ```
 
-## Requirements
+Works with your own components and theme. No UI kit, class helper, ESLint, or Oxlint required. selfix uses Vue's parser and Tailwind's compiler and never evaluates application expressions.
 
-- Node.js 22.18 or later.
-- Vue 3.2.13 or later within Vue 3.
-- Tailwind CSS 4.
+[Quickstart](#quickstart) · [Rules](#rules) · [Configuration](#configuration) · [CLI](#cli) · [API](#api) · [Development](#development)
 
-Vue and Tailwind are the only peer packages. selfix works with your own components and theme; it runs as a standalone command.
+## Quickstart
 
-## Install
+Requires **Node.js ≥22.18**, **Vue ≥3.2.13 <4**, and **Tailwind CSS 4**. Vue and Tailwind are the only consumer peer dependencies.
 
-selfix is not published to npm yet. Build a package from this repository:
+selfix is not published to npm yet. From this repository, build a package:
 
 ```sh
-pnpm install
+pnpm install --frozen-lockfile
 pnpm --filter selfix pack --out selfix-0.1.0.tgz
 ```
 
-Then install it in your Vue/Tailwind project:
+Install it in your Vue/Tailwind project:
 
 ```sh
 pnpm add -D /path/to/selfix-0.1.0.tgz
 ```
 
-## Quickstart
-
-Create `selfix.config.ts` in your project root. Point `css` at the Tailwind entry your app uses and `ui` at your component import prefix:
+Create `selfix.config.ts` in your project root:
 
 ```ts
 import { defineConfig } from "selfix"
 
 export default defineConfig({
-  css: "src/style.css",
-  ui: ["@/components/ui"],
+  css: "src/style.css", // Your app's Tailwind entry, including imports and theme.
+  ui: ["@/components/ui"], // Import prefixes identifying your UI components.
 })
 ```
 
-The CSS entry must include your Tailwind imports and theme. For example:
-
-```css
-@import "tailwindcss";
-
-@theme {
-  --color-primary: #2563eb;
-}
-```
-
-Run the checks:
+Use `"type": "module"` in your project's `package.json`. The CSS entry should include `@import "tailwindcss";` and your theme definitions.
 
 ```sh
 pnpm exec selfix src
 ```
 
-Add `"lint:design": "selfix src"` to your app's package scripts to run the same checks locally and in CI. selfix reports file positions and leaves your source unchanged.
+Add `"lint:design": "selfix src"` to your package scripts for local and CI checks. Ask coding agents to run it after UI changes. Diagnostics point to the original `.vue` file; selfix leaves source unchanged.
 
-All six rules are enabled by default, including the rule against SFC `<style>` blocks. Customize them below to match your project.
+**All six rules default to `"error"`, including the ban on SFC `<style>` blocks.** Disable or customize rules to fit your project.
 
 ## Rules
 
-| Rule                     | Reports                                                                                      |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| `no-restyle`             | Classes that violate a design-system component's contract. Allows layout classes by default. |
-| `no-raw-colors`          | Palette and literal colors that should use semantic theme tokens.                            |
-| `no-arbitrary-values`    | Arbitrary values such as `p-[13px]`, `[color:red]`, and `text-sm/[17px]`.                    |
-| `no-inline-styles`       | `style`, `:style`, and SFC style blocks, including scoped styles.                            |
-| `no-unknown-classes`     | Classes unrecognized by the configured Tailwind theme or loaded CSS.                         |
-| `require-static-classes` | Class expressions whose possible values cannot be read statically.                           |
+| Rule                     | Reports                                                                   |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `no-restyle`             | Classes that violate a UI component's contract. Allows layout by default. |
+| `no-raw-colors`          | Palette and literal colors instead of semantic theme tokens.              |
+| `no-arbitrary-values`    | Arbitrary values: `p-[13px]`, `[color:red]`, `text-sm/[17px]`.            |
+| `no-inline-styles`       | `style`, `:style`, and SFC `<style>` blocks, including scoped styles.     |
+| `no-unknown-classes`     | Classes unrecognized by the configured Tailwind theme or loaded CSS.      |
+| `require-static-classes` | Class expressions whose possible values cannot be read statically.        |
 
-Only `no-restyle` is limited to recognized design-system components. The other rules also check native elements.
+Only `no-restyle` is limited to recognized UI components. All other rules also check native elements. CSS-variable shorthand such as `p-(--space)` is not an arbitrary value.
 
-Vue class arrays, object keys, and conditional alternatives can contain complete class names. Conditions and object values are not class names. Interpolated names such as `` `bg-${color}` `` are reported as dynamic. CSS-variable shorthand such as `p-(--space)` is allowed by `no-arbitrary-values`.
+### Vue class bindings
+
+Use complete class names in strings, arrays, objects, and conditional branches:
+
+```vue
+<!-- Readable: conditions and object values are not treated as class names. -->
+<Button :class="['w-full', { 'mt-4': needsSpace }]" />
+<Button :class="compact ? 'mt-2' : 'mt-4'" />
+
+<!-- Reported by require-static-classes. -->
+<Button :class="`mt-${spacing}`" />
+```
+
+Local static string constants are supported. Unresolved expressions are reported rather than executed.
 
 ## Configuration
 
-`selfix.config.ts` is the single configuration format. Export a config object with `defineConfig` for editor completion. Node loads the file directly; no TypeScript loader package is needed. Use ESM syntax with `"type": "module"` in your project’s `package.json`. Type annotations, `import type`, and `satisfies` work; Node does not type-check the config or resolve `tsconfig` path aliases, and syntax requiring transformation, such as enums, is unsupported.
+`selfix.config.ts` is the only configuration format. Node loads it natively: type annotations, `import type`, and `satisfies` work, but enums and `tsconfig` path aliases do not. Node does not type-check the file.
 
-Rules accept `"off"`, `"warn"`, `"error"`, or `[severity, options]`. Omitted rules default to `"error"`.
+Rules accept `"off"`, `"warn"`, `"error"`, or `[severity, options]`. Omitted rules remain enabled.
 
 ### Component contracts
 
-Give each component a policy. This example keeps Button's size and shape under component control while allowing CardContent to change spacing:
+Keep Button's size and shape under component control while allowing CardContent to change spacing:
 
 ```ts
 import { defineConfig } from "selfix"
@@ -116,38 +119,43 @@ export default defineConfig({
         ],
       },
     ],
-    "no-inline-styles": "off",
+    "no-inline-styles": "off", // Allow Vue scoped styles if your project uses them.
   },
 })
 ```
 
-The first matching component-name regular expression wins. Omitted contract fields inherit the rule's settings; supplied lists replace them. Imported aliases use their local name, and kebab-case tags resolve to that name.
+The first matching component-name regular expression wins. Omitted fields inherit rule settings; supplied lists replace them. Imported aliases use their local name; kebab-case tags resolve to that name.
 
-`allow` and `deny` accept exact class names, `*` wildcards, or categories: `layout`, `color`, `typography`, `spacing`, `shape`, `effects`, `motion`, and `unknown`. Deny wins.
+<details>
+<summary>Allow/deny matching reference</summary>
 
-- For `no-restyle`, allow defines permitted classes. For color, arbitrary-value, and unknown-class rules, allow exempts classes and deny explicitly bans them.
-- `p-*` matches the base utility, including `hover:p-4`. A pattern containing a colon matches the full class. Base matching removes important markers and negative signs.
-- Categories derive from generated CSS. Margin and sizing are layout; padding and gap are spacing. A utility affecting several categories must have each allowed, unless a class-name pattern permits it.
-- For `no-inline-styles`, `allow: ["style"]` exempts styles in a matching contract.
-- `require-static-classes` supports messages and message contracts, but rejects allow/deny lists: unknown values cannot be matched safely.
+`allow` and `deny` accept exact classes, `*` wildcards, or categories: `layout`, `color`, `typography`, `spacing`, `shape`, `effects`, `motion`, and `unknown`. **Deny wins.**
+
+- `no-restyle`: allow defines permitted classes. For color, arbitrary-value, and unknown-class rules, allow exempts classes; deny explicitly bans them.
+- `p-*` matches base utilities, including `hover:p-4`. Patterns containing a colon match the full class. Base matching removes important markers and negative signs.
+- Categories derive from generated CSS. Margin and sizing are layout; padding and gap are spacing. Multi-category utilities need every category allowed unless a class-name pattern permits them.
+- `no-inline-styles`: `allow: ["style"]` exempts styles in a matching contract.
+- `require-static-classes`: supports messages and message contracts, not allow/deny lists.
+
+</details>
 
 ### Project settings
 
-| Setting            | Purpose                                                                                          |
-| ------------------ | ------------------------------------------------------------------------------------------------ |
-| `css`              | Tailwind CSS entry, relative to the config file. Required by the CLI unless `--css` is supplied. |
-| `ui`               | Component import prefixes; defaults to `["@/components/ui"]`. Matches whole path segments.       |
-| `componentImports` | Additional regular expressions matching component import sources.                                |
-| `ignoreImports`    | Import-source regular expressions excluded from component recognition. Takes precedence.         |
-| `components`       | Name regular expressions for globally registered components.                                     |
-| `exclude`          | Directory names or config-relative path prefixes to skip; not glob patterns.                     |
-| `note`             | Text appended to every diagnostic.                                                               |
+| Setting            | Purpose                                                                        |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `css`              | Tailwind entry, relative to the config. Required unless `--css` is supplied.   |
+| `ui`               | Import prefixes; default `["@/components/ui"]`. Matches whole path segments.   |
+| `componentImports` | Additional import-source regular expressions.                                  |
+| `ignoreImports`    | Import-source regular expressions excluded from recognition; takes precedence. |
+| `components`       | Name regular expressions for globally registered components.                   |
+| `exclude`          | Directory names or config-relative path prefixes to skip, not globs.           |
+| `note`             | Guidance appended to every diagnostic.                                         |
 
-All recognition settings and `exclude` take arrays of strings. `css` and `note` take strings. The CLI always skips `node_modules`, `.git`, `dist`, `coverage`, `.nuxt`, and `.output`.
+`css` and `note` are strings; the other settings are arrays of strings. The CLI always skips `node_modules`, `.git`, `dist`, `coverage`, `.nuxt`, and `.output`.
 
-For a workspace UI package, use its import prefix, such as `ui: ["@workspace/ui/components"]`. Exclude component implementation directories if those files intentionally need unrestricted styling; an excluded file is skipped by every rule.
+For shared UI packages, use an import prefix such as `ui: ["@workspace/ui/components"]`. Use `exclude: ["src/components/ui"]` if component implementations intentionally need unrestricted styling. Excluded files are skipped by **every rule**.
 
-### Diagnostic messages
+### Custom messages
 
 Rule and contract `message` options accept a string or a category map with an optional `default`:
 
@@ -158,7 +166,7 @@ message: {
 }
 ```
 
-Available placeholders: `{{component}}`, `{{className}}`, `{{category}}`, `{{file}}`, and `{{rule}}`. Use the root `note` setting for shared guidance.
+Placeholders: `{{component}}`, `{{className}}`, `{{category}}`, `{{file}}` (the SFC filename), and `{{rule}}`. Use `note` for shared guidance, such as a link to your design-system docs.
 
 ## CLI
 
@@ -170,15 +178,15 @@ pnpm exec selfix src --max-warnings 0
 pnpm exec selfix --help
 ```
 
-Without input paths, selfix scans the current directory. It requires `selfix.config.ts` there, or a TypeScript config supplied with `--config`. Configured CSS paths resolve relative to the config file; command-line paths resolve from the current directory. `--css` overrides the config value.
+Without paths, selfix scans the current directory. It loads `selfix.config.ts` there unless `--config` is supplied. Configured CSS paths resolve from the config directory; CLI paths resolve from the current directory. `--css` overrides the config.
 
-JSON output is an array of diagnostics: `file`, `rule`, `severity`, `message`, `line`, `column`, `offset`, and optional `component` and `className`. Lines and columns are one-based; offsets are zero-based.
+JSON output contains `file`, `rule`, `severity`, `message`, `line`, `column`, `offset`, and optional `component` and `className`. Lines and columns are one-based; offsets are zero-based.
 
-| Exit code | Meaning                                                                  |
-| --------- | ------------------------------------------------------------------------ |
-| `0`       | No errors; warnings are at or below `--max-warnings`, if set.            |
-| `1`       | Rule errors, parse errors, or too many warnings.                         |
-| `2`       | Configuration, theme-loading, or input failure, including an empty scan. |
+| Exit | Meaning                                                                  |
+| ---- | ------------------------------------------------------------------------ |
+| `0`  | No errors; warnings within `--max-warnings`, if set.                     |
+| `1`  | Rule errors, parse errors, or too many warnings.                         |
+| `2`  | Configuration, theme-loading, or input failure, including an empty scan. |
 
 ## API
 
@@ -195,64 +203,48 @@ const linter = await createLinter({
 const diagnostics = linter.lint(await readFile("src/Page.vue", "utf8"), "src/Page.vue")
 ```
 
-`css` is CSS source; `base` is its directory for resolving imports and defaults to the current directory. Reuse the linter across files sharing a theme. Create a new instance after theme changes.
+`css` is source text; `base` is its directory for resolving imports (default: current directory). Reuse the linter for files sharing a theme; recreate it after theme changes. For one file, use `await lintSource(source, { css, base, config, filename })`. Both return the CLI's diagnostic shape.
 
-For one source string, use `await lintSource(source, { css, base, config, filename })`. Both APIs return the same diagnostic shape as the CLI's JSON output.
+## Limitations and trust
 
-## Supported inputs
+- Vue SFC templates only: no JSX/TSX, template preprocessors, external templates, or arbitrary script-only class calls.
+- No cross-file wrapper tracing, automatic variant discovery, or autofixes. Run separately from ESLint or Oxlint.
+- Malformed SFCs produce `parse-error` diagnostics even with rules disabled. Unsupported templates and failed theme loading do not silently pass.
+- **Use trusted configuration:** config files and Tailwind `@plugin`/`@config` modules execute as Node modules. Application expressions do not.
+- Tailwind validation uses `__unstable__loadDesignSystem`; API changes may require a selfix update.
 
-selfix checks Vue SFC templates and local static string constants referenced by their class bindings. Unresolved expressions are reported by `require-static-classes`; application expressions are never evaluated. Malformed SFCs produce `parse-error` diagnostics even when rules are disabled.
+## Development
 
-Template preprocessors and external template sources are unsupported. JSX/TSX, arbitrary script-only class calls, cross-file wrapper tracing, automatic variant discovery, and autofixes are not currently supported. Run selfix separately from ESLint or Oxlint.
-
-Config files and Tailwind `@plugin`/`@config` modules execute as Node modules. Tailwind validation uses its `__unstable__loadDesignSystem` API; changes to that API may require a selfix update.
-
-## Playground
-
-`apps/playground` is a minimal Vue + Vite app using the local `selfix` package, Tailwind 4, and `selfix.config.ts`.
+The workspace contains `packages/selfix` (publishable) and `apps/playground` (private Vue + Vite app).
 
 ```sh
-pnpm install
-pnpm dev
-```
-
-To run its design checks after building selfix:
-
-```sh
-pnpm build
-pnpm --filter playground lint:design
-```
-
-Try adding `class="p-8"` to a `<Button>` in `apps/playground/src/App.vue` to see the component contract report a violation. Remove it to restore a passing check. Change the button's `variant` prop to switch its appearance through its public API.
-
-`pnpm check` also tests, type-checks, lints, and builds the playground. Its integration tests run the installed CLI with the real config and theme, verifying valid usage and a violation of each of the six enabled rules. Run them alone with `pnpm --filter playground test`.
-
-## Development and help
-
-This is a pnpm workspace with one publishable package in `packages/selfix`, a private Vue app in `apps/playground` and a central `AGENTS.md` for contributor guidance. Keep user documentation in this README.
-
-```sh
-pnpm install
-pnpm check        # Type checking, Oxlint, Oxfmt, build, and Vitest
+pnpm install --frozen-lockfile
+pnpm dev          # Build selfix and start the playground
+pnpm check        # Typecheck, lint, format check, test, and build
 pnpm format       # Apply formatting
 ```
 
-For a bug report, include the command, diagnostic, relevant config, a minimal Vue/CSS example, and your Node, Vue, and Tailwind versions. Add focused regression tests when changing rule behavior.
+Try `class="p-8"` on a Button in `apps/playground/src/App.vue`, then run `pnpm --filter playground lint:design`. Remove it to restore a passing check; use the Button's `variant` prop to change appearance. `pnpm check` includes playground integration tests; run them alone after building with `pnpm --filter playground test`.
+
+See [AGENTS.md](AGENTS.md) for contribution conventions. Keep documentation in this README and add regression tests for behavior changes. [Bug reports](https://github.com/basteau/selfix/issues) should include a minimal Vue/CSS example, config, command, diagnostic, and dependency versions.
 
 ## Releases
 
-The npm package is `selfix`; only `packages/selfix` is published. Releases use Conventional Commits, [changelogen](https://github.com/unjs/changelogen), annotated Git tags, and the existing GitHub Actions workflow. Preparation never commits, tags, pushes, or publishes for you.
+<details>
+<summary>Maintainer setup and release checklist</summary>
+
+Only `packages/selfix` is published. [Changelogen](https://github.com/unjs/changelogen) prepares the package version and root `CHANGELOG.md` from repository-wide Conventional Commits. Preparation never commits, tags, pushes, or publishes.
 
 ### One-time setup
 
-- Confirm that `repository.url` in `packages/selfix/package.json` and your Git remote point to `https://github.com/basteau/selfix`. Release CI requires the package metadata to match the publishing GitHub repository.
-- Enable squash merging, use the PR title as the squash commit subject, and require the `check` job. CI checks PR titles such as `feat(rules): add a rule`, `fix(cli): handle invalid input`, and `feat(api)!: change configuration`. Keep relevant Lore trailers in the final commit body. Direct commits must follow the same convention; avoid direct pushes to `main`.
-- Protect `main` and `v*` tags against unauthorized creation, updates, and deletion. Tag only reviewed commits on `main`.
-- Create a GitHub environment named `npm`, restrict it to release tags, and configure required reviewers where available. Leave the **repository Actions variable** `NPM_PUBLISH_ENABLED` unset until the first npm publication and trusted-publisher setup below.
+- Keep package repository metadata and the Git remote pointing to `basteau/selfix`.
+- Enable squash merging using PR titles, require the `check` job, and preserve relevant Lore trailers in commit bodies. CI validates Conventional Commit PR titles; direct commits must follow the same convention.
+- Protect `main` and `v*` tags against unauthorized changes. Tag only reviewed commits on `main`.
+- Create the `npm` GitHub environment, restrict it to release tags, and require reviewers where available. Leave repository Actions variable `NPM_PUBLISH_ENABLED` unset until bootstrap is complete.
 
-### Prepare the first release: 0.1.0
+### First release: 0.1.0
 
-Start on `main` with a clean working tree and complete Git history. Commit the release-flow setup before running this command. The package already has version `0.1.0`, so generate its notes without bumping:
+Start on `main` with a clean working tree and full Git history. The package is already `0.1.0`:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -261,14 +253,14 @@ pnpm format
 pnpm check
 ```
 
-Review `CHANGELOG.md` and commit it as `chore(release): v0.1.0` (through a PR if `main` is protected). Then tag the reviewed release commit on `main`:
+Review and commit `CHANGELOG.md` as `chore(release): v0.1.0` (through a PR when required). Tag the reviewed commit on `main`:
 
 ```sh
 git tag -a v0.1.0 -m "v0.1.0"
 git push origin main refs/tags/v0.1.0
 ```
 
-CI validates the tag, package name, version, repository URL, and changelog; runs `pnpm check`; then packs and dry-runs the package. Download the `selfix-package` artifact from that successful tag run and extract `selfix.tgz`. Inspect its contents before the one-time authenticated bootstrap publication:
+CI validates metadata and changelog, runs checks, and packs and dry-runs the package. Download `selfix-package` from the successful tag run and extract `selfix.tgz`. Inspect and publish that tarball once locally:
 
 ```sh
 tar -tzf selfix.tgz
@@ -276,11 +268,13 @@ npm login
 npm publish ./selfix.tgz --access public --ignore-scripts
 ```
 
-This first publication creates the npm package so you can configure its [trusted publisher](https://docs.npmjs.com/trusted-publishers/). In the npm settings for `selfix`, select GitHub Actions, the real owner/repository, workflow filename **`ci.yml`**, and environment **`npm`**. Permit direct `npm publish`. Then set the GitHub repository variable `NPM_PUBLISH_ENABLED` to `true` for subsequent releases. Do not rerun the already-published `v0.1.0` publish job.
+Configure the package's [npm trusted publisher](https://docs.npmjs.com/trusted-publishers/): GitHub Actions, `basteau/selfix`, workflow **`ci.yml`**, environment **`npm`**. Permit direct `npm publish`, then set repository variable `NPM_PUBLISH_ENABLED=true`. Do not rerun publication of `v0.1.0`.
 
-No npm token belongs in GitHub secrets. After verifying trusted publishing, disallow token-based publishing in npm's package settings. CI uses short-lived OIDC credentials and provenance; the bootstrap publish is the only local publication.
+No npm tokens belong in GitHub secrets. After verifying trusted publishing, disallow token-based publishing in npm settings.
 
-### Subsequent releases
+### Later releases
+
+With a clean working tree and full history:
 
 ```sh
 git switch main
@@ -290,12 +284,14 @@ pnpm format
 pnpm check
 ```
 
-Review the package version and root changelog, commit as `chore(release): v0.2.0`, then tag the reviewed commit and push it as above, substituting `v0.2.0`. The publish job waits for successful checks and any environment approval, then publishes the exact checked tarball without running package scripts. It has no checkout, dependency installation, or persistent npm credentials. Actions are pinned to commit SHAs.
+Review the version and changelog, commit as `chore(release): v0.2.0`, then tag and push as above using `v0.2.0`. After checks and environment approval, CI publishes the exact checked tarball with OIDC and provenance, without checkout, dependency installation, or package scripts in the publish job.
 
-Omit `-r` to let changelogen infer the next version. Its pinned version treats `0.x` specially: a feature at `0.1.0` becomes `0.1.1`, while a breaking change becomes `0.2.0`. Explicit versions avoid surprises. Only stable `vX.Y.Z` tags are supported; prereleases are rejected rather than published as `latest`. History covers the whole repository, including the playground.
+Only stable `vX.Y.Z` tags are supported. Explicit versions are recommended: omitting `-r` lets the pinned Changelogen infer a version, where a feature at `0.1.0` becomes `0.1.1` and a breaking change becomes `0.2.0`.
 
-If publishing fails, fix the external configuration and rerun the failed job for the same tag. Never move a published tag or reuse a published npm version. If package contents need changing, prepare a new version instead.
+For external configuration failures, fix the configuration and rerun the failed job. Never move a published tag or reuse a published version; content changes require a new release.
 
-## Acknowledgment and license
+</details>
 
-Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). MIT licensed; attribution for adapted code is preserved in [LICENSE](LICENSE).
+## License
+
+MIT licensed. Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint); attribution for adapted code is preserved in [LICENSE](LICENSE).
