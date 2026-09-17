@@ -10,10 +10,12 @@
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm --filter playground check",
-    "dev": "pnpm build && pnpm --filter playground dev"
+    "dev": "pnpm build && pnpm --filter playground dev",
+    "release:prepare": "changelogen --dir packages/selfix --output ../../CHANGELOG.md --bump --clean --noAuthors"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "changelogen": "0.6.2",
     "oxfmt": "^0.68.0",
     "oxlint": "^1.83.0",
     "tailwindcss": "^4.3.3",

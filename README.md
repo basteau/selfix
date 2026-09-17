@@ -239,6 +239,63 @@ pnpm format       # Apply formatting
 
 For a bug report, include the command, diagnostic, relevant config, a minimal Vue/CSS example, and your Node, Vue, and Tailwind versions. Add focused regression tests when changing rule behavior.
 
+## Releases
+
+The npm package is `selfix`; only `packages/selfix` is published. Releases use Conventional Commits, [changelogen](https://github.com/unjs/changelogen), annotated Git tags, and the existing GitHub Actions workflow. Preparation never commits, tags, pushes, or publishes for you.
+
+### One-time setup
+
+- Confirm that `repository.url` in `packages/selfix/package.json` and your Git remote point to `https://github.com/basteau/selfix`. Release CI requires the package metadata to match the publishing GitHub repository.
+- Enable squash merging, use the PR title as the squash commit subject, and require the `check` job. CI checks PR titles such as `feat(rules): add a rule`, `fix(cli): handle invalid input`, and `feat(api)!: change configuration`. Keep relevant Lore trailers in the final commit body. Direct commits must follow the same convention; avoid direct pushes to `main`.
+- Protect `main` and `v*` tags against unauthorized creation, updates, and deletion. Tag only reviewed commits on `main`.
+- Create a GitHub environment named `npm`, restrict it to release tags, and configure required reviewers where available. Leave the **repository Actions variable** `NPM_PUBLISH_ENABLED` unset until the first npm publication and trusted-publisher setup below.
+
+### Prepare the first release: 0.1.0
+
+Start on `main` with a clean working tree and complete Git history. Commit the release-flow setup before running this command. The package already has version `0.1.0`, so generate its notes without bumping:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm release:prepare --no-bump -r 0.1.0
+pnpm format
+pnpm check
+```
+
+Review `CHANGELOG.md` and commit it as `chore(release): v0.1.0` (through a PR if `main` is protected). Then tag the reviewed release commit on `main`:
+
+```sh
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin main refs/tags/v0.1.0
+```
+
+CI validates the tag, package name, version, repository URL, and changelog; runs `pnpm check`; then packs and dry-runs the package. Download the `selfix-package` artifact from that successful tag run and extract `selfix.tgz`. Inspect its contents before the one-time authenticated bootstrap publication:
+
+```sh
+tar -tzf selfix.tgz
+npm login
+npm publish ./selfix.tgz --access public --ignore-scripts
+```
+
+This first publication creates the npm package so you can configure its [trusted publisher](https://docs.npmjs.com/trusted-publishers/). In the npm settings for `selfix`, select GitHub Actions, the real owner/repository, workflow filename **`ci.yml`**, and environment **`npm`**. Permit direct `npm publish`. Then set the GitHub repository variable `NPM_PUBLISH_ENABLED` to `true` for subsequent releases. Do not rerun the already-published `v0.1.0` publish job.
+
+No npm token belongs in GitHub secrets. After verifying trusted publishing, disallow token-based publishing in npm's package settings. CI uses short-lived OIDC credentials and provenance; the bootstrap publish is the only local publication.
+
+### Subsequent releases
+
+```sh
+git switch main
+git pull --ff-only
+pnpm release:prepare -r 0.2.0
+pnpm format
+pnpm check
+```
+
+Review the package version and root changelog, commit as `chore(release): v0.2.0`, then tag the reviewed commit and push it as above, substituting `v0.2.0`. The publish job waits for successful checks and any environment approval, then publishes the exact checked tarball without running package scripts. It has no checkout, dependency installation, or persistent npm credentials. Actions are pinned to commit SHAs.
+
+Omit `-r` to let changelogen infer the next version. Its pinned version treats `0.x` specially: a feature at `0.1.0` becomes `0.1.1`, while a breaking change becomes `0.2.0`. Explicit versions avoid surprises. Only stable `vX.Y.Z` tags are supported; prereleases are rejected rather than published as `latest`. History covers the whole repository, including the playground.
+
+If publishing fails, fix the external configuration and rerun the failed job for the same tag. Never move a published tag or reuse a published npm version. If package contents need changing, prepare a new version instead.
+
 ## Acknowledgment and license
 
 Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). MIT licensed; attribution for adapted code is preserved in [LICENSE](LICENSE).
