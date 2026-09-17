@@ -1,6 +1,5 @@
 import { copyFileSync } from "node:fs"
 
-copyFileSync(
-  new URL("../../../README.md", import.meta.url),
-  new URL("../README.md", import.meta.url),
-)
+for (const file of ["README.md", "LICENSE"]) {
+  copyFileSync(new URL(`../../../${file}`, import.meta.url), new URL(`../${file}`, import.meta.url))
+}

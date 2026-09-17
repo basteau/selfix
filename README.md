@@ -4,7 +4,7 @@
 
 Define what your components allow. Get diagnostics that tell developers and coding agents what broke and what to use instead—without changing your component API.
 
-Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). Attribution for adapted code is preserved in [LICENSE](LICENSE).
+Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint), with thanks to shadcn and its contributors. selfix is an independent Vue-focused project; MIT-licensed adaptations retain upstream attribution in [LICENSE](LICENSE).
 
 ```vue
 <script setup lang="ts">

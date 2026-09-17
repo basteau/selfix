@@ -41,6 +41,7 @@ export interface LinterOptions {
 }
 
 // Adapted from shadcn-ui/lint's bracket-aware class normalization (MIT).
+// Source: https://github.com/shadcn-ui/lint/blob/main/packages/lint/src/grammar/classes.ts
 function baseClass(token: string): string {
   let depth = 0
   let start = 0
