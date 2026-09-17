@@ -7,208 +7,44 @@ const {
   parse: parseSfc,
 } = createRequire(import.meta.url)("vue/compiler-sfc") as typeof VueCompilerSfc
 
-const enum VueNode {
-  Root = 0,
-  Element = 1,
-  Text = 2,
-  Attribute = 6,
-  Directive = 7,
-  If = 9,
-  IfBranch = 10,
-  For = 11,
-  SimpleExpression = 4,
-}
+// Numeric node tags also work with older Vue releases without runtime enum exports.
+const VueNode = {
+  Element: 1,
+  Attribute: 6,
+  Directive: 7,
+  If: 9,
+  IfBranch: 10,
+  For: 11,
+  SimpleExpression: 4,
+} as const
 
-type TemplateNode = ElementNode | TextNode | IfNode | IfBranchNode | ForNode
+type SfcDescriptor = ReturnType<typeof parseSfc>["descriptor"]
+type RootNode = NonNullable<ReturnType<typeof compileTemplate>["ast"]>
+type TemplateNode = RootNode["children"][number]
+type ElementNode = Extract<TemplateNode, { type: typeof VueNode.Element }>
+type DirectiveNode = Extract<ElementNode["props"][number], { type: typeof VueNode.Directive }>
+type ForNode = Extract<TemplateNode, { type: typeof VueNode.For }>
+type TemplateExpression = NonNullable<DirectiveNode["exp"]>
 
-interface RootNode {
-  children: TemplateNode[]
-}
-
-interface ElementNode {
-  type: VueNode.Element
-  tag: string
-  props: Array<AttributeNode | DirectiveNode>
-  children: TemplateNode[]
-  loc: { start: { offset: number } }
-}
-
-interface TextNode {
-  type: VueNode.Text
-  content: string
-  loc: { start: { offset: number } }
-}
-
-interface AttributeNode {
-  type: VueNode.Attribute
-  name: string
-  value?: { content: string }
-  loc: { start: { offset: number } }
-}
-
-interface DirectiveNode {
-  type: VueNode.Directive
-  name: string
-  exp?: { content: string }
-  arg?: { type: VueNode.SimpleExpression; isStatic: boolean; content: string }
-  loc: { start: { offset: number } }
-}
-
-interface IfNode {
-  type: VueNode.If
-  branches: Array<{ children: TemplateNode[] }>
-}
-
-interface IfBranchNode {
-  type: VueNode.IfBranch
-  children: TemplateNode[]
-}
-
-interface ForNode {
-  type: VueNode.For
-  children: TemplateNode[]
-  source?: { content: string }
-  valueAlias?: { content: string }
-  keyAlias?: { content: string }
-  objectIndexAlias?: { content: string }
-  parseResult?: {
-    value?: { content: string }
-    key?: { content: string }
-    index?: { content: string }
-    source?: { content: string }
-  }
-}
-
-interface BabelFile {
-  program: ProgramNode
-}
-
-interface ProgramNode {
-  body: StatementNode[]
-}
-
-type StatementNode = ExpressionStatementNode | ImportDeclarationNode | VariableDeclarationNode
-
-interface ExpressionStatementNode {
-  type: "ExpressionStatement"
-  expression: ExpressionNode
-}
-
-interface ImportDeclarationNode {
-  type: "ImportDeclaration"
-  source: { value: string }
-  specifiers: Array<{ local: { name: string } }>
-}
-
-interface VariableDeclarationNode {
-  type: "VariableDeclaration"
-  kind: "const" | "let" | "var"
-  declarations: VariableDeclaratorNode[]
-}
-
-interface VariableDeclaratorNode {
-  id: { type: string; name?: string }
-  init?: ExpressionNode | null
-}
-
-type ExpressionNode =
-  | StringLiteralNode
-  | BooleanLiteralNode
-  | NullLiteralNode
-  | TemplateLiteralNode
-  | ArrayExpressionNode
-  | ObjectExpressionNode
-  | ConditionalExpressionNode
-  | LogicalExpressionNode
-  | CallExpressionNode
-  | IdentifierNode
-  | TSAsExpressionNode
-  | TSSatisfiesExpressionNode
-  | TSNonNullExpressionNode
-
-interface StringLiteralNode {
-  type: "StringLiteral"
-  value: string
-}
-
-interface BooleanLiteralNode {
-  type: "BooleanLiteral"
-  value: boolean
-}
-
-interface NullLiteralNode {
-  type: "NullLiteral"
-}
-
-interface TemplateLiteralNode {
-  type: "TemplateLiteral"
-  expressions: ExpressionNode[]
-  quasis: Array<{ value: { cooked?: string; raw: string } }>
-}
-
-interface ArrayExpressionNode {
-  type: "ArrayExpression"
-  elements: Array<ExpressionNode | SpreadElementNode | null>
-}
-
-interface ObjectExpressionNode {
-  type: "ObjectExpression"
-  properties: Array<ObjectPropertyNode | SpreadElementNode>
-}
-
-interface ObjectPropertyNode {
-  type: "ObjectProperty"
-  computed: boolean
-  key: StringLiteralNode | IdentifierNode
-  value: ExpressionNode
-}
-
-interface ConditionalExpressionNode {
-  type: "ConditionalExpression"
-  consequent: ExpressionNode
-  alternate: ExpressionNode
-}
-
-interface LogicalExpressionNode {
-  type: "LogicalExpression"
-  operator: "&&" | "||" | "??" | string
-  left: ExpressionNode
-  right: ExpressionNode
-}
-
-interface CallExpressionNode {
-  type: "CallExpression"
-  callee: IdentifierNode | MemberExpressionNode
-  arguments: Array<ExpressionNode | SpreadElementNode>
-}
-
-interface IdentifierNode {
-  type: "Identifier"
-  name: string
-}
-
-interface MemberExpressionNode {
-  type: "MemberExpression" | "OptionalMemberExpression"
-}
-
-interface SpreadElementNode {
-  type: "SpreadElement"
-}
-
-interface TSAsExpressionNode {
-  type: "TSAsExpression" | "TSTypeAssertion"
-  expression: ExpressionNode
-}
-
-interface TSSatisfiesExpressionNode {
-  type: "TSSatisfiesExpression"
-  expression: ExpressionNode
-}
-
-interface TSNonNullExpressionNode {
-  type: "TSNonNullExpression"
-  expression: ExpressionNode
-}
+type ProgramNode = ReturnType<typeof babelParse>["program"]
+type StatementNode = ProgramNode["body"][number]
+type ExpressionNode = Extract<StatementNode, { type: "ExpressionStatement" }>["expression"]
+type ImportDeclarationNode = Extract<StatementNode, { type: "ImportDeclaration" }>
+type VariableDeclaratorNode = Extract<
+  StatementNode,
+  { type: "VariableDeclaration" }
+>["declarations"][number]
+type ObjectPropertyNode = Extract<
+  Extract<ExpressionNode, { type: "ObjectExpression" }>["properties"][number],
+  { type: "ObjectProperty" }
+>
+type CallExpressionNode = Extract<ExpressionNode, { type: "CallExpression" }>
+// Babel also permits patterns in property values and non-expression call arguments.
+// They are handled as unsupported rather than assumed to be expressions.
+type ExpressionInput =
+  | ExpressionNode
+  | ObjectPropertyNode["value"]
+  | CallExpressionNode["arguments"][number]
 
 export interface ClassSite {
   component: string
@@ -310,9 +146,7 @@ export function collectVue(
     })
     return { sites, styles: sortStyles(styles), errors }
   }
-  const templateAst = options.forceCompileTemplateAst
-    ? undefined
-    : (template.ast as unknown as RootNode | undefined)
+  const templateAst = options.forceCompileTemplateAst ? undefined : template.ast
   const ast =
     templateAst ?? compileTemplateAst(template.content, filename, template.loc.start.offset, errors)
   if (!ast) {
@@ -342,16 +176,13 @@ function compileTemplateAst(
     errors.push({ message: "Template AST was not produced", offset })
     return undefined
   }
-  shiftTemplateOffsets(result.ast as unknown as RootNode, offset)
-  return result.ast as unknown as RootNode
+  shiftTemplateOffsets(result.ast, offset)
+  return result.ast
 }
 
 function shiftTemplateOffsets(root: RootNode, offset: number): void {
   const visit = (node: TemplateNode): void => {
-    const maybeLoc = node as { loc?: { start?: { offset?: number } } }
-    if (typeof maybeLoc.loc?.start?.offset === "number") {
-      maybeLoc.loc.start.offset += offset
-    }
+    node.loc.start.offset += offset
     if (node.type === VueNode.Element) {
       for (const prop of node.props) {
         prop.loc.start.offset += offset
@@ -422,14 +253,23 @@ function walkTemplate(
   }
 }
 
+function expressionContent(expression: TemplateExpression | undefined): string | undefined {
+  // Transformed compound expressions retain the original, unevaluated source.
+  return expression?.type === VueNode.SimpleExpression ? expression.content : expression?.loc.source
+}
+
 function shadowElementScope(node: ElementNode, context: TemplateContext): TemplateContext {
   const names: string[] = []
   for (const prop of node.props) {
-    if (prop.type === VueNode.Directive && prop.name === "slot" && prop.exp?.content) {
-      names.push(...bindingNames(prop.exp.content))
+    if (prop.type !== VueNode.Directive) {
+      continue
     }
-    if (prop.type === VueNode.Directive && prop.name === "for" && prop.exp?.content) {
-      names.push(...bindingNames(prop.exp.content.split(/\s+(?:in|of)\s+/u)[0]))
+    const content = expressionContent(prop.exp)
+    if (prop.name === "slot" && content) {
+      names.push(...bindingNames(content))
+    }
+    if (prop.name === "for" && content) {
+      names.push(...bindingNames(content.split(/\s+(?:in|of)\s+/u)[0]))
     }
   }
   return withShadowed(context, names)
@@ -444,12 +284,12 @@ function withShadowed(context: TemplateContext, names: string[]): TemplateContex
 
 function forAliases(node: ForNode): string[] {
   return [
-    node.valueAlias?.content,
-    node.keyAlias?.content,
-    node.objectIndexAlias?.content,
-    node.parseResult?.value?.content,
-    node.parseResult?.key?.content,
-    node.parseResult?.index?.content,
+    expressionContent(node.valueAlias),
+    expressionContent(node.keyAlias),
+    expressionContent(node.objectIndexAlias),
+    expressionContent(node.parseResult?.value),
+    expressionContent(node.parseResult?.key),
+    expressionContent(node.parseResult?.index),
   ].flatMap((name) => bindingNames(name))
 }
 
@@ -467,7 +307,7 @@ function bindingNames(content: string | undefined): string[] {
   }
 }
 
-function collectBindingNames(node: ExpressionNode, names: string[]): void {
+function collectBindingNames(node: ExpressionInput, names: string[]): void {
   if (node.type === "Identifier") {
     names.push(node.name)
     return
@@ -536,7 +376,11 @@ function collectElement(
     }
 
     if (isBoundAttribute(prop, "class")) {
-      const found = collectClassExpression(prop.exp?.content, prop.loc.start.offset, context)
+      const found = collectClassExpression(
+        expressionContent(prop.exp),
+        prop.loc.start.offset,
+        context,
+      )
       sites.push(
         classSite(component, found.tokens, found.dynamic, prop.loc.start.offset, importSource),
       )
@@ -564,7 +408,8 @@ function collectSpreadAttrs(
   sites: ClassSite[],
   styles: StyleSite[],
 ): void {
-  if (!prop.exp?.content) {
+  const content = expressionContent(prop.exp)
+  if (!content) {
     context.errors.push({
       message: "v-bind is missing an expression",
       offset: prop.loc.start.offset,
@@ -574,7 +419,7 @@ function collectSpreadAttrs(
   }
   let expression: ExpressionNode
   try {
-    expression = parseExpression(prop.exp.content)
+    expression = parseExpression(content)
   } catch (error) {
     context.errors.push({
       message: `Invalid v-bind expression: ${errorMessage(error)}`,
@@ -592,7 +437,7 @@ function collectSpreadAttrs(
     return
   }
   for (const property of expression.properties) {
-    if (property.type === "SpreadElement" || property.computed) {
+    if (property.type !== "ObjectProperty" || property.computed) {
       context.errors.push({
         message: "Dynamic v-bind attrs may contain class or style",
         offset: prop.loc.start.offset,
@@ -627,7 +472,11 @@ function isFullBind(prop: DirectiveNode): boolean {
 }
 
 function isDynamicBindArg(prop: DirectiveNode): boolean {
-  return prop.name === "bind" && !!prop.arg && !prop.arg.isStatic
+  return (
+    prop.name === "bind" &&
+    !!prop.arg &&
+    (prop.arg.type !== VueNode.SimpleExpression || !prop.arg.isStatic)
+  )
 }
 
 function isTemplateStyleElement(node: ElementNode): boolean {
@@ -656,7 +505,7 @@ function collectClassExpression(
   }
 }
 
-function collectExpression(node: ExpressionNode, context: TemplateContext): StaticBinding {
+function collectExpression(node: ExpressionInput, context: TemplateContext): StaticBinding {
   switch (node.type) {
     case "StringLiteral":
       return { tokens: splitClasses(node.value), dynamic: false }
@@ -688,7 +537,7 @@ function collectExpression(node: ExpressionNode, context: TemplateContext): Stat
     case "ObjectExpression":
       return combine(
         node.properties.map((property) => {
-          if (property.type === "SpreadElement") {
+          if (property.type !== "ObjectProperty") {
             return { tokens: [], dynamic: true }
           }
           return collectObjectProperty(property)
@@ -838,7 +687,7 @@ function collectImportAliases(statement: ImportDeclarationNode, aliases: Compone
 }
 
 function parseScript(
-  script: string | undefined,
+  script: NonNullable<SfcDescriptor["script"]>["content"] | undefined,
   offset: number,
   errors: ParseIssue[],
 ): ProgramNode | undefined {
@@ -846,12 +695,10 @@ function parseScript(
     return undefined
   }
   try {
-    return (
-      babelParse(script, {
-        sourceType: "module",
-        plugins: ["typescript"],
-      }) as BabelFile
-    ).program
+    return babelParse(script, {
+      sourceType: "module",
+      plugins: ["typescript"],
+    }).program
   } catch (error) {
     errors.push({ message: `Invalid script: ${errorMessage(error)}`, offset })
     return undefined
@@ -859,12 +706,10 @@ function parseScript(
 }
 
 function parseExpression(content: string): ExpressionNode {
-  const program = (
-    babelParse(`(${content})`, {
-      sourceType: "module",
-      plugins: ["typescript"],
-    }) as BabelFile
-  ).program
+  const program = babelParse(`(${content})`, {
+    sourceType: "module",
+    plugins: ["typescript"],
+  }).program
   const statement = program.body[0]
   if (statement?.type !== "ExpressionStatement") {
     throw new Error("expected expression")
@@ -926,9 +771,12 @@ function propertyKey(property: ObjectPropertyNode): string | undefined {
   return undefined
 }
 
-function isTsWrapper(
-  node: ExpressionNode,
-): node is TSAsExpressionNode | TSSatisfiesExpressionNode | TSNonNullExpressionNode {
+function isTsWrapper(node: ExpressionInput): node is Extract<
+  ExpressionNode,
+  {
+    type: "TSAsExpression" | "TSTypeAssertion" | "TSSatisfiesExpression" | "TSNonNullExpression"
+  }
+> {
   return (
     node.type === "TSAsExpression" ||
     node.type === "TSTypeAssertion" ||

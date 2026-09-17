@@ -265,6 +265,38 @@ const maybe = { four: ok };
     ])
   })
 
+  it.each([false, true])(
+    "handles object methods and non-literal props conservatively (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<template>
+  <div :class="{ safe: ok, method() { throw new Error('never run') }, get getter() { throw new Error('never run') }, 42: true, [key]: true }" />
+  <div v-bind="{ class() { throw new Error('never run') }, get style() { throw new Error('never run') }, [key]: value, ...attrs, id: 'ignored' }" />
+  <div v-bind="{ class: () => 'not-static', style: null }" />
+</template>`
+      const result = collectVue(source, "object-shapes.vue", { forceCompileTemplateAst })
+      const spreadOffset = source.indexOf('v-bind="{ class()')
+      const literalOffset = source.indexOf('v-bind="{ class:')
+
+      expect(result.sites).toEqual([
+        { component: "div", tokens: ["safe"], dynamic: true, offset: source.indexOf(':class="') },
+        ...Array.from({ length: 4 }, () => ({
+          component: "div",
+          tokens: [],
+          dynamic: true,
+          offset: spreadOffset,
+        })),
+        { component: "div", tokens: [], dynamic: true, offset: literalOffset },
+      ])
+      expect(result.errors).toEqual(
+        Array.from({ length: 4 }, () => ({
+          message: "Dynamic v-bind attrs may contain class or style",
+          offset: spreadOffset,
+        })),
+      )
+      expect(result.styles).toEqual([{ component: "div", offset: literalOffset }])
+    },
+  )
+
   it("treats cva factories as dynamic unless the factory call is resolved", () => {
     const source = `<script setup>
 const button = cva("base", { variants: { tone: { danger: "danger" } } });
