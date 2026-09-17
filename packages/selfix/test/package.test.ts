@@ -19,6 +19,25 @@ it("keeps the published bin entry available before the first build", () => {
   expect(readFileSync(cli, "utf8").startsWith("#!/usr/bin/env node")).toBe(true)
 })
 
+it("imports the compiled CLI with a nonexistent host argv[1]", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfix-import-"))
+  dirs.push(dir)
+  const result = spawnSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      `process.argv[1] = ${JSON.stringify(path.join(dir, "nonexistent-host.mjs"))};
+       const { run } = await import(${JSON.stringify(new URL("../dist/cli.js", import.meta.url).href)});
+       if (typeof run !== "function") throw new Error("Missing run export");`,
+    ],
+    { encoding: "utf8" },
+  )
+  expect(result.stderr).toBe("")
+  expect(result.stdout).toBe("")
+  expect(result.status).toBe(0)
+})
+
 it("runs the declared executable through an npm-style symlink", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "selfix-bin-"))
   dirs.push(dir)

@@ -1,5 +1,4 @@
-#!/usr/bin/env node
-import { readFile, readdir, realpath, stat, glob } from "node:fs/promises"
+import { readFile, readdir, stat, glob } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { createLinter, type Config, type Diagnostic } from "./index.js"
@@ -159,8 +158,4 @@ export async function run(
     io.err(`selfix: ${error instanceof Error ? error.message : String(error)}\n`)
     return 2
   }
-}
-
-if (process.argv[1] && import.meta.url === pathToFileURL(await realpath(process.argv[1])).href) {
-  process.exitCode = await run(process.argv.slice(2))
 }
