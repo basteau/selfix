@@ -29,8 +29,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/package.mjs",
-    "prepack": "pnpm build"
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "pnpm build && node scripts/package.mjs"
   },
   "peerDependencies": {
     "tailwindcss": ">=4.0.0 <5",
