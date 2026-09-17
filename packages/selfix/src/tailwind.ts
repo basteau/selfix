@@ -39,44 +39,41 @@ type LoadOptions = {
 const markerClasses = new Set(["group", "peer", "dark"])
 const packageRequire = createRequire(import.meta.url)
 
-const rawColorPattern =
-  /(?:^|[\s([,:])(?:#[0-9a-f]{3,8}\b|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\()/i
-const cssNamedColors = new Set([
-  "aliceblue",
-  "antiquewhite",
-  "aqua",
-  "aquamarine",
-  "azure",
-  "beige",
-  "bisque",
-  "black",
-  "blue",
-  "brown",
-  "coral",
-  "crimson",
-  "cyan",
-  "fuchsia",
-  "gold",
-  "gray",
-  "green",
-  "grey",
-  "indigo",
-  "lime",
-  "magenta",
-  "maroon",
-  "navy",
-  "olive",
-  "orange",
-  "pink",
-  "purple",
-  "red",
-  "silver",
-  "teal",
-  "transparent",
-  "violet",
-  "white",
-  "yellow",
-])
+// CSS named colors (including gray/grey aliases), plus the existing transparent contract.
+const cssNamedColors = new Set(
+  `aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond
+  blue blueviolet brown burlywood cadetblue chartreuse chocolate coral cornflowerblue
+  cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen darkgrey
+  darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon
+  darkseagreen darkslateblue darkslategray darkslategrey darkturquoise darkviolet
+  deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen
+  fuchsia gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew
+  hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon
+  lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey
+  lightpink lightsalmon lightseagreen lightskyblue lightslategray lightslategrey
+  lightsteelblue lightyellow lime limegreen linen magenta maroon mediumaquamarine
+  mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen
+  mediumturquoise mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite
+  navy oldlace olive olivedrab orange orangered orchid palegoldenrod palegreen
+  paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple
+  rebeccapurple red rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell
+  sienna silver skyblue slateblue slategray slategrey snow springgreen steelblue tan
+  teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen
+  transparent`.split(/\s+/),
+)
+
+function hasLiteralColor(value: string): boolean {
+  if (
+    /(?:^|[\s([,:])(?:#[0-9a-f]{3,8}\b|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\()/i.test(
+      value,
+    )
+  ) {
+    return true
+  }
+  // Accept arbitrary property/type hints and declaration importance, not variable names.
+  const named = /^(?:[\w-]+:)?\s*([a-z]+)\s*(?:!important)?$/i.exec(value.trim())
+  return named !== null && cssNamedColors.has(named[1]!.toLowerCase())
+}
 
 const colorNamespaces = [
   "--color",
@@ -265,8 +262,7 @@ function hasArbitraryColorValue(token: string): boolean {
   if (bracketStart === -1 || bracketEnd <= bracketStart) return false
 
   const value = base.slice(bracketStart + 1, bracketEnd)
-  if (base.startsWith("[") && value.toLowerCase().startsWith("color:")) return true
-  return rawColorPattern.test(value) || cssNamedColors.has(value.trim().toLowerCase())
+  return hasLiteralColor(value)
 }
 
 // Adapted from shadcn-ui/lint's bracket-aware class normalization (MIT).
@@ -472,10 +468,7 @@ function hasRawColor(
 ): boolean {
   return declarations.some(({ property, value }) => {
     if (!isColorDeclaration(property)) return false
-    if (
-      includeDeclarationLiterals &&
-      (rawColorPattern.test(value) || cssNamedColors.has(value.trim().toLowerCase()))
-    ) {
+    if (includeDeclarationLiterals && hasLiteralColor(value)) {
       return true
     }
     return extractColorVariables(value).some((color) => stockColors.has(color))

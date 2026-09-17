@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { describe, expect, test } from "vitest"
 import { baseCandidate, createTailwind } from "../src/tailwind.js"
+import { createLinter } from "../src/index.js"
 
 async function tempProject(name: string): Promise<string> {
   const base = join(tmpdir(), `selfix-${name}-${process.pid}-${Date.now()}`)
@@ -34,6 +35,58 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test.each(["", "tw:"])("recognizes named literals with prefix %s", async (prefix) => {
+    const css = `
+      @import "tailwindcss";
+      @theme inline ${prefix ? "prefix(tw)" : ""} {
+        --color-brand: rebeccapurple;
+        --color-surface: papayawhip;
+      }
+      .named { color: ReBeccAPurple !important; }
+      .paper { background-color: papayawhip; }
+      .variable { color: var(--rebeccapurple); }
+      .current { color: currentColor !important; }
+      .clear { color: transparent; }
+    `
+    const raw = [
+      "bg-[rebeccapurple]",
+      "hover:text-[papayawhip]!",
+      "focus:!bg-[ReBeccAPurple]",
+      "bg-[color:papayawhip]",
+      "[border-color:rebeccapurple]!",
+      "[color:papayawhip]",
+      "bg-[transparent]",
+      "bg-[#123456]!",
+      "text-[rgb(1_2_3)]!",
+    ].map((token) => prefix + token)
+    raw.push("named", "paper", "clear")
+    const semantic = [
+      "bg-brand!",
+      "hover:text-surface",
+      "bg-[var(--rebeccapurple)]",
+      "[color:var(--papayawhip)]!",
+      "bg-[currentColor]!",
+      "[color:currentColor]",
+      "bg-transparent",
+    ].map((token) => prefix + token)
+    semantic.push("variable", "current")
+    const tailwind = await createTailwind(css, process.cwd())
+    for (const token of [...raw, ...semantic]) {
+      expect(tailwind.inspect(token), token).toEqual({
+        known: true,
+        categories: ["color"],
+        rawColor: raw.includes(token),
+      })
+    }
+    const linter = await createLinter({ css })
+    const diagnostics = linter.lint(
+      `<template><div class="${[...raw, ...semantic].join(" ")}" /></template>`,
+    )
+    expect(
+      diagnostics.filter((item) => item.rule === "no-raw-colors").map((item) => item.className),
+    ).toEqual(raw)
+  })
+
   test("detects raw colors after quoted and escaped variant delimiters", async () => {
     const tailwind = await createTailwind('@import "tailwindcss";', process.cwd())
     for (const variant of [
