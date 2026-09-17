@@ -4,4 +4,3 @@ coverage/
 *.tgz
 packages/selfix/README.md
 .selfix-test-*/
-/.agents/tickets/
