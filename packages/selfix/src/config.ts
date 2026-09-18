@@ -40,6 +40,8 @@ export type RuleSetting = Severity | [Severity, RuleOptions]
 export interface Config {
   /** CSS entry relative to the configuration file. Required by the CLI. */
   css?: string
+  /** Exact CSS imports mapped to local files, relative to the config directory (API: base). */
+  cssAliases?: Record<string, string>
   /** Import prefixes identifying design-system components. */
   ui?: string[]
   /** Regexes for additional design-system import sources. */
@@ -123,12 +125,35 @@ export function validateConfig(config: unknown): asserts config is Config {
   const obj = record(config, "config")
   keys(
     obj,
-    ["css", "ui", "componentImports", "ignoreImports", "components", "exclude", "note", "rules"],
+    [
+      "css",
+      "cssAliases",
+      "ui",
+      "componentImports",
+      "ignoreImports",
+      "components",
+      "exclude",
+      "note",
+      "rules",
+    ],
     "config",
   )
   for (const key of ["css", "note"])
     if (obj[key] !== undefined && typeof obj[key] !== "string")
       throw new Error(`${key} must be a string.`)
+  if (obj.cssAliases !== undefined) {
+    for (const [id, target] of Object.entries(record(obj.cssAliases, "cssAliases"))) {
+      if (!id.trim() || id.includes("*"))
+        throw new Error("cssAliases keys must be non-empty exact import names without wildcards.")
+      if (
+        typeof target !== "string" ||
+        !target.endsWith(".css") ||
+        target.includes("*") ||
+        (/^[a-z][a-z\d+.-]*:/i.test(target) && !/^[a-z]:[\\/]/i.test(target))
+      )
+        throw new Error(`cssAliases["${id}"] must be a local .css file path without wildcards.`)
+    }
+  }
   for (const key of ["ui", "componentImports", "ignoreImports", "components", "exclude"]) {
     if (obj[key] === undefined) continue
     strings(obj[key], key)

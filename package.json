@@ -12,6 +12,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm --filter playground check",
     "dev": "pnpm build && pnpm --filter playground dev",
     "smoke:package": "node packages/selfix/scripts/smoke-install.mjs",
+    "smoke:nuxt": "pnpm build && node packages/selfix/scripts/smoke-nuxt.mjs",
     "release:prepare": "changelogen --dir packages/selfix --output ../../CHANGELOG.md --bump --clean --noAuthors"
   },
   "devDependencies": {

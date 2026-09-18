@@ -101,13 +101,14 @@ const colorNamespaces = [
 export async function createTailwind(
   css: string,
   base: string,
+  cssAliases: Record<string, string> = {},
 ): Promise<{
   inspect(token: string): InspectResult
   colors: string[]
 }> {
   const loadedStylesheets: string[] = []
   const resolvedBase = resolve(base)
-  const options = createLoadOptions(resolvedBase, loadedStylesheets)
+  const options = createLoadOptions(resolvedBase, loadedStylesheets, cssAliases)
   const [designSystem, stockColors] = await Promise.all([
     loadDesignSystem(css, options),
     loadStockColors(resolvedBase),
@@ -148,11 +149,28 @@ async function loadDesignSystem(css: string, options: LoadOptions): Promise<Desi
   return designSystem
 }
 
-function createLoadOptions(base: string, loadedStylesheets: string[]): LoadOptions {
+function createLoadOptions(
+  base: string,
+  loadedStylesheets: string[],
+  cssAliases: Record<string, string> = {},
+): LoadOptions {
   return {
     base,
     async loadStylesheet(id, from) {
-      const path = resolveStylesheet(id, from)
+      let path: string
+      if (Object.hasOwn(cssAliases, id)) {
+        const target = resolve(base, cssAliases[id]!)
+        try {
+          path = stylesheetFile(target)
+        } catch (error) {
+          throw new Error(
+            `Unable to load CSS alias "${id}" from "${from}" at "${target}". Check cssAliases and generate the target before running selfix (for Nuxt UI, run nuxt prepare).`,
+            { cause: error },
+          )
+        }
+      } else {
+        path = resolveStylesheet(id, from)
+      }
       const content = await readFile(path, "utf8").catch((error: unknown) => {
         throw new Error(`Unable to read stylesheet import "${id}" from "${from}".`, {
           cause: error,

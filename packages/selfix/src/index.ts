@@ -79,7 +79,7 @@ function prepareOptions(options: RuleOptions, defaultAllow: string[]) {
 
 export async function createLinter({ css, base = process.cwd(), config = {} }: LinterOptions) {
   validateConfig(config)
-  const tailwind = await createTailwind(css, base)
+  const tailwind = await createTailwind(css, base, config.cssAliases)
   const settings = ruleNames.map((name) => {
     const setting = config.rules?.[name] ?? "error"
     const [severity, options] = Array.isArray(setting) ? setting : [setting, {}]

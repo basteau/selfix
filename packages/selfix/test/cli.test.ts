@@ -36,6 +36,38 @@ async function invoke(args: string[], dir: string) {
 }
 
 describe("CLI", () => {
+  it("resolves CSS aliases from the config directory even with --css and a different cwd", async () => {
+    const dir = await project()
+    await mkdir(path.join(dir, "app"))
+    await mkdir(path.join(dir, ".nuxt"))
+    await writeFile(path.join(dir, ".nuxt/ui.css"), "@theme { --color-brand: #123456; }")
+    await writeFile(
+      path.join(dir, "app/main.css"),
+      '@import "tailwindcss"; @import "#build/ui.css";',
+    )
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      'export default { css: "app/main.css", cssAliases: { "#build/ui.css": ".nuxt/ui.css" } }',
+    )
+    await writeFile(path.join(dir, "app/Page.vue"), '<template><div class="bg-brand" /></template>')
+    const args = ["--config", "../selfix.config.ts", "--format", "json"]
+    expect(await invoke(args, path.join(dir, "app"))).toEqual({
+      code: 0,
+      stdout: "[]\n",
+      stderr: "",
+    })
+    expect(await invoke([...args, "--css", "main.css"], path.join(dir, "app"))).toEqual({
+      code: 0,
+      stdout: "[]\n",
+      stderr: "",
+    })
+    await rm(path.join(dir, ".nuxt/ui.css"))
+    const missing = await invoke(args, path.join(dir, "app"))
+    expect(missing.code).toBe(2)
+    expect(missing.stderr).toContain("#build/ui.css")
+    expect(missing.stderr).toContain(path.join(dir, ".nuxt/ui.css"))
+    expect(missing.stderr).toContain("nuxt prepare")
+  })
   it("finds Vue files, prints actionable positions, and exits nonzero", async () => {
     const dir = await project()
     await writeFile(

@@ -136,7 +136,15 @@ export async function run(
     const linter = await createLinter({
       css: await readFile(cssPath, "utf8"),
       base: path.dirname(cssPath),
-      config,
+      config: {
+        ...config,
+        cssAliases: Object.fromEntries(
+          Object.entries(config.cssAliases ?? {}).map(([id, target]) => [
+            id,
+            path.resolve(configDir, target),
+          ]),
+        ),
+      },
     })
     const diagnostics: Diagnostic[] = []
     for (const file of [...files].sort())
