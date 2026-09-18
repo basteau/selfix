@@ -180,6 +180,55 @@ import Ignored from '@policy/ignored'
     }
   })
 
+  it.each([false, true])(
+    "reports external scripts with independent findings (rules disabled: %s)",
+    async (disabled) => {
+      const linter = await createLinter({
+        css,
+        config: {
+          rules: disabled
+            ? Object.fromEntries(ruleNames.map((name) => [name, "off"]))
+            : only("no-arbitrary-values"),
+        },
+      })
+      const source = `<!-- leading comment -->
+<script src="./missing-application.ts"></script>
+<template><Button class="p-4" /><div class="p-[13px]" /></template>`
+      expect(linter.lint(source, "External.vue")).toEqual([
+        expect.objectContaining({
+          file: "External.vue",
+          rule: "parse-error",
+          severity: "error",
+          message: "External script src is not supported; move the script inline in this SFC",
+          line: 2,
+          column: 1,
+          offset: source.indexOf("<script"),
+        }),
+        ...(disabled
+          ? []
+          : [
+              expect.objectContaining({
+                rule: "no-arbitrary-values",
+                className: "p-[13px]",
+                line: 3,
+                column: 38,
+                offset: source.indexOf('class="p-[13px]"'),
+              }),
+            ]),
+      ])
+    },
+  )
+
+  it.each([
+    `<script>import Button from '@/components/ui/button'; export default { components: { Button } }</script>`,
+    `<script setup>import Button from '@/components/ui/button'</script>`,
+  ])("preserves inline component recognition: %s", async (script) => {
+    const linter = await createLinter({ css })
+    expect(linter.lint(`${script}<template><Button class="p-4" /></template>`)).toEqual([
+      expect.objectContaining({ rule: "no-restyle", component: "Button", className: "p-4" }),
+    ])
+  })
+
   it("keeps uncertainty errors when ordinary rules are disabled", async () => {
     const linter = await createLinter({
       css,

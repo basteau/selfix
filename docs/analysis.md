@@ -49,6 +49,8 @@ The fixed helper names are `cn`, `clsx`, and `twMerge`. Imports under those loca
 
 `v-bind="attrs"`, unresolved spreads or computed keys in a `v-bind` object, and dynamic arguments such as `:[key]="value"` can conceal class or style attributes. They produce `parse-error` diagnostics, even with every rule off. These differ from a valid but unresolved `:class="value"`, which produces an ordinary `require-static-classes` finding. Recoverable uncertainty preserves independent readable findings; fatal parser/compiler errors suppress ordinary rule findings for the file. Invalid expressions, external templates, and template preprocessors also produce `parse-error` diagnostics.
 
+External `<script src="./component.ts">` blocks produce a recoverable `parse-error` at the script block, even with every rule off. selfix does not load, import, or execute that application module, so its imports and component registrations are unavailable. Move the script content into an inline `<script>` or `<script setup>` block in the SFC. Independent literal template sites still receive applicable rule findings.
+
 ## Limitations and trust
 
 - Analysis targets Vue SFC templates. JSX/TSX, template preprocessors, external templates, and arbitrary script-only class calls are outside the supported input. Props such as `ui`, `contentClass`, and `overlayClass` are inspected only when explicitly configured through [classProps](configuration.md#configured-class-props).

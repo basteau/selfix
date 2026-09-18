@@ -503,6 +503,38 @@ const fromCall = getClasses();
     ])
   })
 
+  it.each([false, true])(
+    "reports external scripts while retaining literal template sites (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<!-- leading comment -->
+<script src="./missing-application.ts"></script>
+<template><Button class="p-4" /><div class="p-[13px]" /></template>`
+      const result = collectVue(source, "external.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([
+        {
+          message: "External script src is not supported; move the script inline in this SFC",
+          offset: source.indexOf("<script"),
+        },
+      ])
+      expect(result.fatal).toBe(false)
+      expect(result.sites.map(({ component, tokens }) => ({ component, tokens }))).toEqual([
+        { component: "Button", tokens: ["p-4"] },
+        { component: "div", tokens: ["p-[13px]"] },
+      ])
+    },
+  )
+
+  it("locates external script tags containing quoted tag-like attribute text", () => {
+    const source = `<!-- <script -->
+<script src="./external.ts" data-note="<script"></script><template><div /></template>`
+    expect(collectVue(source, "external.vue").errors).toEqual([
+      {
+        message: "External script src is not supported; move the script inline in this SFC",
+        offset: 17,
+      },
+    ])
+  })
+
   it("reports unsupported templates, external templates, and invalid binding expressions", () => {
     const pug = collectVue(`<template lang="pug">div.foo</template>`, "pug.vue")
     const external = collectVue(`<template src="./view.html"></template>`, "external.vue")

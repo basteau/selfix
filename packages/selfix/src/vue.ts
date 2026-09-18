@@ -131,6 +131,18 @@ export function collectVue(
   )
   // Parser failures invalidate the file; later collection issues leave independent sites usable.
   let fatal = errors.length > 0
+  const externalScript = parsed.descriptor.script
+  if (externalScript?.src !== undefined) {
+    // Anchor to Vue's content start so comments and quoted tag-like text cannot
+    // be mistaken for the opening tag.
+    const openingTag = /<script\b(?:[^"'<>]|"[^"]*"|'[^']*')*>$/u.exec(
+      source.slice(0, externalScript.loc.start.offset),
+    )
+    errors.push({
+      message: "External script src is not supported; move the script inline in this SFC",
+      offset: openingTag?.index ?? externalScript.loc.start.offset,
+    })
+  }
   const aliases: ComponentAliases = new Map()
   collectComponentAliases(script, aliases)
   collectComponentAliases(setup, aliases)
