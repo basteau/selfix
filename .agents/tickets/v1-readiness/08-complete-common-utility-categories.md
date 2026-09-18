@@ -1,6 +1,6 @@
 # 08: Complete common utility categories
 
-Status: ready
+Status: done
 Blocked by: none
 
 ## Goal
@@ -9,12 +9,12 @@ Make category allowances usable for common Tailwind utilities without letting un
 
 ## Acceptance criteria
 
-- [ ] tracking-wide is classified through typography, scale-105 through effects, and border-solid through shape without spurious unknown bookkeeping categories.
-- [ ] truncate includes its legitimate layout/typography effects without an unknown category caused by text-overflow.
-- [ ] Appropriate category allowances accept these utilities on recognized components; missing necessary allowances and explicit denies still reject them.
-- [ ] Use generated declaration properties, including narrowly identified Tailwind bookkeeping properties, rather than utility-name heuristics.
-- [ ] Retain unknown for genuinely unmapped properties and unknown --tw-* variables.
-- [ ] Include a bounded representative utility corpus across existing categories and category-appropriate rejection assertions.
+- [x] tracking-wide is classified through typography, scale-105 through effects, and border-solid through shape without spurious unknown bookkeeping categories.
+- [x] truncate includes its legitimate layout/typography effects without an unknown category caused by text-overflow.
+- [x] Appropriate category allowances accept these utilities on recognized components; missing necessary allowances and explicit denies still reject them.
+- [x] Use generated declaration properties, including narrowly identified Tailwind bookkeeping properties, rather than utility-name heuristics.
+- [x] Retain unknown for genuinely unmapped properties and unknown --tw-* variables.
+- [x] Include a bounded representative utility corpus across existing categories and category-appropriate rejection assertions.
 
 ## Verification
 
@@ -23,6 +23,11 @@ Extend table-driven compiler-backed tests and public policy tests. Cover modifie
 Run `pnpm check` before reporting implementation complete. Append commands, outcomes, review findings, and completion evidence during implementation.
 
 ## Notes
+
+- Completed in `d078b1264482199e75711dcbc0aa7cd7a07637b2`. The four compiler-backed regressions initially failed with spurious unknown categories. Inspected emitted Tailwind CSS and added exact tracking/scale/border-style properties plus text-overflow; all four then passed. Added modifier/3D and unknown-property inspection cases plus a bounded public-policy corpus across all categories, checking every necessary allowance and category deny precedence.
+- `node_modules/.bin/vitest run packages/selfix/test/tailwind.test.ts packages/selfix/test/rules.test.ts`: 226 passed. Typecheck passed. `pnpm check`: 389 tests plus typecheck, lint, format, playground checks/build passed. `git diff --check` passed. Independent Standards and Spec reviews: zero findings; no unresolved limitations within this bounded ticket.
+
+- Baseline `ba053ea053c3fa0103d695999aca30cdc6e4631e` on `main`; clean worktree/index. Owned scope: Tailwind property categorization, compiler-backed inspection/public policy tests, this ticket. Use the approved existing test boundaries; narrow property mappings only, preserving unknown declarations and deny precedence. User authorized commits per completed ticket.
 
 The audit reproduced unknown categories for tracking-wide, scale-105, border-solid, and truncate even with relevant categories allowed. Start at categoryFor in packages/selfix/src/tailwind.ts. Completed core-hardening/03-correct-utility-categories.md covered leading/easing/rotation only; preserve its identity and regression coverage.
 
