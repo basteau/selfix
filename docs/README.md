@@ -8,6 +8,7 @@ Start with the tutorial, use adoption for an existing project, and keep the refe
 | ------------------------------------- | ----------------------------------------------------------------------------------- |
 | [Getting started](getting-started.md) | Create a theme and component, reproduce a finding, and correct it.                  |
 | [Adoption](adoption.md)               | Roll out rules with warning limits, local checks, CI, and coding agents.            |
+| [Agent setup](agent-setup.md)         | Configure an existing app with a coding agent and verify enforcement.               |
 | [Rules](rules.md)                     | Look up all six checks, examples, and exceptions.                                   |
 | [Configuration](configuration.md)     | Find authoritative defaults, precedence, component recognition, and contracts.      |
 | [CLI](cli.md)                         | Select files and understand flags, diagnostics, and exit codes.                     |

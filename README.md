@@ -108,6 +108,7 @@ Unsupported input and failed theme loading must not silently pass. Recoverable u
 
 - [Getting started](https://github.com/basteau/selfix/blob/main/docs/getting-started.md): complete theme, Button, failing diagnostic, and correction.
 - [Adoption](https://github.com/basteau/selfix/blob/main/docs/adoption.md): gradual rollout, warning limits, CI, and coding agents.
+- [Agent setup](https://github.com/basteau/selfix/blob/main/docs/agent-setup.md): copyable setup prompt, workspace configuration, and verification.
 - [Configuration](https://github.com/basteau/selfix/blob/main/docs/configuration.md), [CLI](https://github.com/basteau/selfix/blob/main/docs/cli.md), and [API](https://github.com/basteau/selfix/blob/main/docs/api.md): reference material.
 - [Themes](https://github.com/basteau/selfix/blob/main/docs/themes.md): CSS resolution and Nuxt UI theme preparation.
 - [Troubleshooting](https://github.com/basteau/selfix/blob/main/docs/troubleshooting.md): unexpected findings and loading failures.

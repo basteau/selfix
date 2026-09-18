@@ -2,7 +2,7 @@
 
 [Documentation index](README.md)
 
-Start with one rule at warning severity. Replace `selfix.config.ts` with this complete configuration, adjusting the CSS path and import prefixes:
+For a new setup, start with one rule at warning severity using this complete configuration, adjusting the CSS path and import prefixes. If selfix is already configured, preserve its policy and merge only intended changes rather than replacing the file. For a coding agent to handle setup, use the [agent setup guide](agent-setup.md):
 
 ```ts
 import { defineConfig } from "selfix"
