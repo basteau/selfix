@@ -26,6 +26,8 @@ This example assumes Button is recognized through your configuration and provide
 
 Requires **Node.js ≥22.18.0**, **Vue ≥3.2.13 <4**, and **Tailwind CSS ≥4 <5**. Vue and Tailwind are the only consumer peer dependencies; install any missing peers first.
 
+CI covers packed consumers on Linux and macOS using Node 22.18.0 with the minimum Vue/Tailwind peers, and Node 24 with workspace peers. Each run records exact versions; see the [compatibility checks](https://github.com/basteau/selfix/blob/main/docs/maintaining.md) for the matrix and local commands.
+
 **Experimental alpha:** APIs and rules may change during prerelease.
 
 ```sh

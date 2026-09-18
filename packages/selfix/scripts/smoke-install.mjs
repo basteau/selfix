@@ -13,13 +13,12 @@ assert.ok(
 )
 const archive = realpathSync(process.argv[2])
 const require = createRequire(import.meta.url)
-const versions = Object.fromEntries(
-  ["vue", "tailwindcss"].map((name) => [name, require(`${name}/package.json`).version]),
-)
-if (process.argv.length === 5) {
-  versions.vue = process.argv[3]
-  versions.tailwindcss = process.argv[4]
-}
+const versions =
+  process.argv.length === 5
+    ? { vue: process.argv[3], tailwindcss: process.argv[4] }
+    : Object.fromEntries(
+        ["vue", "tailwindcss"].map((name) => [name, require(`${name}/package.json`).version]),
+      )
 // Canonicalize parent aliases (for example macOS /var → /private/var) while
 // retaining the later check against an actual linked package.
 const consumer = realpathSync(mkdtempSync(path.join(tmpdir(), "selfix-smoke-")))

@@ -99,49 +99,53 @@ it("reports a missing Vue compiler capability with upgrade guidance", () => {
   expect(result.stderr).toContain("Reinstall a supported Vue version (>=3.2.13 <4)")
 })
 
-it.each([false, true])(
-  "smoke accepts an aliased temporary parent but rejects a package link: %s",
-  (linked) => {
-    const dir = mkdtempSync(path.join(os.tmpdir(), "selfix-smoke-path-"))
-    dirs.push(dir)
-    const parent = path.join(dir, "real")
-    mkdirSync(parent)
-    const alias = path.join(dir, "alias")
-    symlinkSync(parent, alias)
-    const external = path.join(dir, "external-package")
-    mkdirSync(external)
-    const bin = path.join(dir, "bin")
-    mkdirSync(bin)
-    // Replace only npm's network/install boundary. A sentinel package error proves
-    // the real smoke script passed its filesystem isolation check.
-    writeFileSync(
-      path.join(bin, "npm"),
-      `#!${process.execPath}
+it.each([
+  { linked: false, standalone: false },
+  { linked: true, standalone: false },
+  { linked: false, standalone: true },
+])("smoke verifies installation paths and cleanup: %j", ({ linked, standalone }) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfix-smoke-path-"))
+  dirs.push(dir)
+  const parent = path.join(dir, "real")
+  mkdirSync(parent)
+  const alias = path.join(dir, "alias")
+  symlinkSync(parent, alias)
+  const external = path.join(dir, "external-package")
+  mkdirSync(external)
+  const bin = path.join(dir, "bin")
+  mkdirSync(bin)
+  // Replace only npm's network/install boundary. A sentinel package error proves
+  // the real smoke script passed its filesystem isolation check.
+  writeFileSync(
+    path.join(bin, "npm"),
+    `#!${process.execPath}
 const fs = require('node:fs');
 fs.mkdirSync('node_modules', {recursive:true});
 ${linked ? `fs.symlinkSync(${JSON.stringify(external)}, 'node_modules/selfix');` : "fs.mkdirSync('node_modules/selfix');"}
 fs.writeFileSync('node_modules/selfix/package.json', JSON.stringify({peerDependencies:{sentinel:'1'}}));
 `,
-      { mode: 0o755 },
-    )
-    const archive = path.join(dir, "fixture.tgz")
-    writeFileSync(archive, "network boundary replaced")
-    const result = spawnSync(
-      process.execPath,
-      [fileURLToPath(new URL("../scripts/smoke-install.mjs", import.meta.url)), archive],
-      {
-        encoding: "utf8",
-        env: { ...process.env, TMPDIR: alias, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
-      },
-    )
-    expect(result.status).toBe(1)
-    if (linked) expect(result.stderr).toContain("selfix must be installed, not workspace-linked")
-    else {
-      expect(result.stderr).not.toContain("selfix must be installed, not workspace-linked")
-      expect(result.stderr).toContain("sentinel")
-    }
-    const consumer = result.stdout.match(/Consumer: (.*?); Node/)?.[1]
-    expect(consumer).toBeDefined()
-    expect(existsSync(consumer!)).toBe(false)
-  },
-)
+    { mode: 0o755 },
+  )
+  const archive = path.join(dir, "fixture.tgz")
+  writeFileSync(archive, "network boundary replaced")
+  const originalScript = fileURLToPath(new URL("../scripts/smoke-install.mjs", import.meta.url))
+  const script = standalone ? path.join(dir, "smoke-install.mjs") : originalScript
+  if (standalone) cpSync(originalScript, script)
+  const result = spawnSync(
+    process.execPath,
+    [script, archive, ...(standalone ? ["3.2.13", "4.0.0"] : [])],
+    {
+      encoding: "utf8",
+      env: { ...process.env, TMPDIR: alias, PATH: `${bin}${path.delimiter}${process.env.PATH}` },
+    },
+  )
+  expect(result.status).toBe(1)
+  if (linked) expect(result.stderr).toContain("selfix must be installed, not workspace-linked")
+  else {
+    expect(result.stderr).not.toContain("selfix must be installed, not workspace-linked")
+    expect(result.stderr).toContain("sentinel")
+  }
+  const consumer = result.stdout.match(/Consumer: (.*?); Node/)?.[1]
+  expect(consumer).toBeDefined()
+  expect(existsSync(consumer!)).toBe(false)
+})
