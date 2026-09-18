@@ -29,3 +29,5 @@ The existing default no-restyle message in packages/selfix/src/index.ts always s
 Scope and dependencies approved for implementation.
 
 Created from the approved v1-readiness audit discussion; no separate spec was supplied. Audit baseline: selfix 1ba8a7e99339b43eb91b503face00ec0e72f63c0; upstream comparison: shadcn-ui/lint bf89dcb7f66a306c7ac4943065298902afdbd969. Follow AGENTS.md: one standalone runner/config, Vue and Tailwind as the only consumer peers, no application-expression evaluation, deterministic original-SFC diagnostics, and no new runtime packages. Preserve attribution if adapting upstream code.
+
+- The user selected this existing scope as recommendation 1 in the agent-support comparison with shadcn-ui/lint. Preserve its identity and existing dependency on ticket 08; no duplicate ticket or automatic variant discovery is needed.

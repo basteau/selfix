@@ -27,3 +27,5 @@ After API agreement, add inspection/rule/API or CLI tests covering utility versu
 ## Notes
 
 Draft scope approved for retention, not implementation-ready. Resolve diagnostic shape and policy-checking semantics before changing status to ready. Upstream reference: https://github.com/shadcn-ui/lint/blob/53de86f0e7dcc341a9cb45c383a9f2c454d1e958/packages/lint/src/tailwind/oracle.ts#L279-L340 . Preserve attribution for adapted code. Keep suggestions separate from source-edit ranges and ownership/provenance tracking. Completion requires review and passing checks.
+
+- The user selected this existing scope as recommendation 2 in the agent-support comparison with shadcn-ui/lint. Preserve its identity and draft status: the diagnostic suggestion shape and exact policy-checking semantics still need agreement. The agreed direction is advisory text/JSON suggestions validated by the loaded compiler and applicable enabled policies; no source edits, approximate color matching, or scale conversion.
