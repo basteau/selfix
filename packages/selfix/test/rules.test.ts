@@ -12,6 +12,47 @@ const button = (attrs: string) =>
 
 describe("design-system rules", () => {
   it.each([
+    ["bg-primary", "color"],
+    ["tracking-wide", "typography"],
+    ["border-solid", "shape"],
+    ["scale-105", "effects"],
+    ["duration-200", "motion"],
+  ])("gives category-specific correction guidance for %s", async (token, category) => {
+    const linter = await createLinter({ css, config: { rules: only("no-restyle") } })
+    const findings = linter.lint(button(`class="${token}"`))
+    expect(findings).toHaveLength(1)
+    expect(findings[0].message).toContain(category)
+    expect(findings[0].message).toMatch(/remove/i)
+    expect(findings[0].message).toMatch(/documented.*props/)
+    expect(findings[0].message).not.toMatch(/margin|parent gap|variant=/)
+  })
+
+  it.each(["p-4", "mt-4", "truncate"])(
+    "does not promise layout permissions for a closed contract: %s",
+    async (token) => {
+      const linter = await createLinter({
+        css,
+        config: { rules: only("no-restyle", { contracts: [{ pattern: "^Button$", allow: [] }] }) },
+      })
+      const [finding] = linter.lint(button(`class="${token}"`))
+      expect(finding.message).toMatch(/contract/)
+      expect(finding.message).toMatch(/remove/i)
+      expect(finding.message).not.toMatch(/use margin|use.*parent gap|Use a component variant/)
+    },
+  )
+
+  it("makes explicit bans distinct without promising an allowed theme replacement", async () => {
+    const linter = await createLinter({
+      css,
+      config: { rules: only("no-restyle", { allow: ["layout"], deny: ["mt-*"] }) },
+    })
+    const [finding] = linter.lint(button('class="mt-4"'))
+    expect(finding.message).toContain("denied")
+    expect(finding.message).toMatch(/contract permits/)
+    expect(finding.message).not.toContain("Use an approved theme utility")
+  })
+
+  it.each([
     ["mt-4", ["layout"]],
     ["bg-primary", ["color"]],
     ["tracking-wide", ["typography"]],
@@ -427,7 +468,7 @@ import Ignored from '@policy/ignored'
     ])
   })
 
-  it("names the disallowed category in the default rejection message", async () => {
+  it("explains unknown CSS effects without inventing component ownership", async () => {
     const linter = await createLinter({
       css: `${css} .mixed { line-height: 1.5; --tw-unrecognized: 1; }`,
       config: { rules: only("no-restyle", { allow: ["typography"] }) },
@@ -435,7 +476,7 @@ import Ignored from '@policy/ignored'
     expect(linter.lint(button('class="mixed"'))).toEqual([
       expect.objectContaining({
         className: "mixed",
-        message: expect.stringContaining("owns its unknown"),
+        message: expect.stringContaining("could not classify"),
       }),
     ])
   })

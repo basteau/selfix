@@ -69,7 +69,7 @@ pnpm exec selfix src
 
 Diagnostics point to the original `.vue` file. Errors fail the command; warnings fail only when they exceed a configured `--max-warnings` limit. Configuration, theme-loading, and empty-scan failures also fail the command. See [CLI output and exit codes](https://github.com/basteau/selfix/blob/main/docs/cli.md#discovery-and-output).
 
-selfix leaves source unchanged and provides no autofix. Correct findings using component props, theme tokens, and configured contracts, then rerun the check.
+Default restyling messages explain the rejected category and point to the component's documented props or contract, without inventing available variants. selfix leaves source unchanged and provides no autofix. Correct findings using component props, theme tokens, and configured contracts, then rerun the check.
 
 For a repeatable local and CI check, add this script to your existing `package.json`:
 

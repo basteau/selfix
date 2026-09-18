@@ -91,7 +91,7 @@ pnpm exec selfix src/Example.vue
 The command exits with code `1` and reports the class at line 6, column 31:
 
 ```text
-src/Example.vue:6:31 error no-restyle "p-4" is not allowed on <Button>: the component owns its spacing. Use a component variant; use margin or a parent gap for surrounding space.
+src/Example.vue:6:31 error no-restyle "p-4" is not allowed on <Button>: spacing changes are outside the component's contract. Remove this override. Check the component's documented spacing props and its contract before changing surrounding layout.
 Checked 1 Vue file: 1 error, 0 warnings.
 ```
 

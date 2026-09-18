@@ -80,6 +80,35 @@ function prepareOptions(options: RuleOptions, defaultAllow: string[]) {
     contracts.find(({ regex }) => regex.test(component))?.selected ?? fallback
 }
 
+function restyleMessage(
+  token: string,
+  component: string,
+  category: Category,
+  denied: boolean,
+): string {
+  if (denied)
+    return `"${token}" is denied by the design-system policy for <${component}>. Remove this class; choose a replacement only if the component's contract permits it.`
+  const reason =
+    category === "unknown"
+      ? "selfix could not classify all of its CSS effects"
+      : `${category} changes are outside the component's contract`
+  const guidance: Record<Category, string> = {
+    layout:
+      "Remove this override. Check the component's layout contract before changing placement or sizing.",
+    spacing:
+      "Remove this override. Check the component's documented spacing props and its contract before changing surrounding layout.",
+    color: "Remove this override. Check the component's documented props for color choices.",
+    typography: "Remove this override. Check the component's documented props for text styling.",
+    shape: "Remove this override. Check the component's documented props for borders and shape.",
+    effects: "Remove this override. Check the component's documented props for visual effects.",
+    motion:
+      "Remove this override. Check the component's documented props for animation and transitions.",
+    unknown:
+      "Remove this class or inspect its CSS declarations and the component's contract before choosing a replacement.",
+  }
+  return `"${token}" is not allowed on <${component}>: ${reason}. ${guidance[category]}`
+}
+
 export async function createLinter({ css, base = process.cwd(), config = {} }: LinterOptions) {
   validateConfig(config)
   const tailwind = await createTailwind(css, base, config.cssAliases)
@@ -217,9 +246,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
                 report(
                   site,
                   selected,
-                  denied
-                    ? `"${token}" is denied by the design-system policy for <${site.component}>. Use an approved theme utility.`
-                    : `"${token}" is not allowed on <${site.component}>: the component owns its ${rejectedCategory}. Use a component variant; use margin or a parent gap for surrounding space.`,
+                  restyleMessage(token, site.component, rejectedCategory, denied),
                   token,
                   rejectedCategory,
                 )

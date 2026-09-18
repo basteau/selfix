@@ -41,6 +41,8 @@ Contracts can allow more categories or particular classes. A utility that affect
 
 `allow: ["layout"]` reports `<Button class="card-title" />`. Both `allow: ["layout", "color"]` and `allow: ["card-title"]` pass this rule. `deny: ["card-title"]` reports it even with either allowance.
 
+Built-in messages name the rejected category and point to the component's documented API or contract. They do not assume a particular variant exists or promise that margin, gap, or a replacement utility is allowed. An explicit ban is reported as `denied`; unknown effects ask you to inspect the CSS and contract. Removing the rejected class avoids that override; check any alternative against all enabled rules.
+
 The rule inspects classes at the call site. It does not discover component variants, validate prop values, or trace wrappers across files. See the [worked policy](configuration.md#choose-a-variant-or-a-contract) for contract ordering and replacement examples.
 
 ### no-raw-colors
