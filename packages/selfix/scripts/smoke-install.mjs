@@ -20,7 +20,9 @@ if (process.argv.length === 5) {
   versions.vue = process.argv[3]
   versions.tailwindcss = process.argv[4]
 }
-const consumer = mkdtempSync(path.join(tmpdir(), "selfix-smoke-"))
+// Canonicalize parent aliases (for example macOS /var → /private/var) while
+// retaining the later check against an actual linked package.
+const consumer = realpathSync(mkdtempSync(path.join(tmpdir(), "selfix-smoke-")))
 // Do not inherit loaders or global module lookup paths from the development environment.
 const env = { ...process.env }
 delete env.NODE_PATH
