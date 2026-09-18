@@ -1,6 +1,6 @@
 # 03: Correct utility categories and rejection messages
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -44,4 +44,9 @@ Approved from the core-hardening discussion. Relevant boundaries are `categoryFo
 - Standards: independent read-only review found no actionable findings and independently passed all 74 focused compiler/rule tests.
 - Spec: independent read-only review confirmed all six acceptance criteria with no findings.
 - Unknown declarations remain conservative; only the evidenced leading, easing, and rotation properties were added. No remaining limitations specific to this ticket.
-- Implementation and review are complete; ticket remains in-progress until the requested commit succeeds.
+- Implementation and review completed before the requested commit.
+
+## Completion
+
+- Implementation commit: `decc2bd0280d7c5e9898542e16dea232aa32841b` (`fix(tailwind): correct utility categories and rejection messages`).
+- Ticket marked done after the implementation commit succeeded; required checks and independent reviews passed.
