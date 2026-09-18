@@ -11,6 +11,7 @@ import {
 
 export { defineConfig, ruleNames } from "./config.js"
 export type {
+  ClassProps,
   Config,
   Contract,
   Message,
@@ -31,6 +32,8 @@ export interface Diagnostic {
   offset: number
   component?: string
   className?: string
+  prop?: string
+  slot?: string
 }
 export interface LinterOptions {
   /** Full CSS source including imports and @theme. */
@@ -107,7 +110,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
 
   return {
     lint(source: string, filename = "component.vue"): Diagnostic[] {
-      const collected = collectVue(source, filename)
+      const collected = collectVue(source, filename, { classProps: config.classProps })
       const diagnostics: Diagnostic[] = []
       const emit = (
         rule: Diagnostic["rule"],
@@ -116,6 +119,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
         message: string,
         component?: string,
         className?: string,
+        location: Pick<Diagnostic, "prop" | "slot"> = {},
       ) => {
         const position = source.slice(0, offset).split("\n")
         diagnostics.push({
@@ -128,6 +132,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
           offset,
           ...(component ? { component } : {}),
           ...(className ? { className } : {}),
+          ...location,
         })
       }
       for (const error of collected.errors)
@@ -137,7 +142,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
       for (const { name, severity, policy } of settings) {
         if (severity === "off") continue
         const report = (
-          site: { component: string; offset: number },
+          site: { component: string; offset: number; prop?: string; slot?: string },
           selected: ReturnType<typeof preparePolicy>,
           fallback: string,
           token = "",
@@ -153,12 +158,21 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
             category,
             file: filename,
             rule: name,
+            prop: site.prop ?? "",
+            slot: site.slot ?? "",
           }
           const message = (custom ?? fallback).replace(
             /\{\{(.*?)\}\}/g,
             (_, key: string) => fields[key] ?? "",
           )
-          emit(name, severity, site.offset, message, site.component, token || undefined)
+          const context =
+            site.prop === undefined
+              ? ""
+              : ` [prop ${JSON.stringify(site.prop)}${site.slot === undefined ? "" : `, slot ${JSON.stringify(site.slot)}`}]`
+          emit(name, severity, site.offset, message + context, site.component, token || undefined, {
+            ...(site.prop === undefined ? {} : { prop: site.prop }),
+            ...(site.slot === undefined ? {} : { slot: site.slot }),
+          })
         }
         if (name === "no-inline-styles") {
           for (const site of collected.styles) {

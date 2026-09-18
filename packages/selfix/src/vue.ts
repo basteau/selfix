@@ -1,5 +1,6 @@
 import { createRequire } from "node:module"
 import type * as VueCompilerSfc from "vue/compiler-sfc"
+import { normalizePropName, type ClassProps } from "./config.js"
 
 const {
   babelParse,
@@ -53,6 +54,8 @@ export interface ClassSite {
   dynamic: boolean
   offset: number
   importSource?: string
+  prop?: string
+  slot?: string
 }
 
 export interface StyleSite {
@@ -81,6 +84,7 @@ interface ComponentAliases {
 }
 
 interface TemplateContext {
+  classProps: { pattern: RegExp; props: Map<string, "class" | "slot-map"> }[]
   aliases: ComponentAliases
   bindings: Map<string, StaticBinding>
   helpers: ReadonlySet<string>
@@ -91,6 +95,7 @@ interface TemplateContext {
 
 interface CollectVueOptions {
   forceCompileTemplateAst?: boolean
+  classProps?: ClassProps[]
 }
 
 // Vue introduced same-name v-bind shorthand in 3.4. Older compilers must
@@ -167,6 +172,12 @@ export function collectVue(
   walkTemplate(
     ast,
     {
+      classProps: (options.classProps ?? []).map((entry) => ({
+        pattern: new RegExp(entry.pattern),
+        props: new Map(
+          Object.entries(entry.props).map(([name, mode]) => [normalizePropName(name), mode]),
+        ),
+      })),
       aliases,
       bindings,
       helpers: collectClassHelpers([script, setup]),
@@ -373,6 +384,7 @@ function collectElement(
     context.aliases.byTemplateName.get(node.tag) ?? context.aliases.byTagName.get(node.tag)
   const component = alias?.local ?? (/^[A-Z]/u.test(node.tag) ? node.tag : node.tag.toLowerCase())
   const importSource = alias?.importSource
+  const configured = context.classProps.find(({ pattern }) => pattern.test(component))?.props
 
   if (isTemplateStyleElement(node)) {
     styles.push({ component: "style", offset: context.offset + node.loc.start.offset })
@@ -384,6 +396,20 @@ function collectElement(
 
   for (const prop of node.props) {
     if (prop.type === VueNode.Attribute) {
+      const name = normalizePropName(prop.name)
+      const mode = configured?.get(name)
+      if (mode) {
+        sites.push({
+          ...classSite(
+            component,
+            mode === "class" && prop.value ? splitClasses(prop.value.content) : [],
+            mode === "slot-map",
+            context.offset + prop.loc.start.offset,
+            importSource,
+          ),
+          prop: name,
+        })
+      }
       if (prop.name === "class" && prop.value) {
         sites.push(
           classSite(
@@ -399,6 +425,37 @@ function collectElement(
         styles.push({ component, offset: context.offset + prop.loc.start.offset })
       }
       continue
+    }
+
+    if (prop.name === "bind" && prop.arg?.type === VueNode.SimpleExpression && prop.arg.isStatic) {
+      // The compiled AST prefixes .prop/.attr arguments; retain the original prop name.
+      let name = normalizePropName(prop.arg.content)
+      if (!configured?.has(name)) name = normalizePropName(prop.arg.loc.source)
+      const mode = configured?.get(name)
+      if (mode) {
+        const offset = context.offset + prop.loc.start.offset
+        let expression: ExpressionNode | undefined
+        const content =
+          expressionContent(prop.exp) ??
+          (supportsSameNameBinding
+            ? prop.arg.content.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())
+            : undefined)
+        try {
+          if (content) expression = parseExpression(content)
+        } catch (error) {
+          context.errors.push({
+            message: `Invalid class prop expression: ${errorMessage(error)}`,
+            offset,
+          })
+        }
+        collectPropValue(
+          expression,
+          mode,
+          { ...classSite(component, [], true, offset, importSource), prop: name },
+          context,
+          sites,
+        )
+      }
     }
 
     if (isBoundAttribute(prop, "class")) {
@@ -428,14 +485,49 @@ function collectElement(
       styles.push({ component, offset: context.offset + prop.loc.start.offset })
     }
     if (isFullBind(prop)) {
-      collectSpreadAttrs(prop, component, importSource, context, sites, styles)
+      collectSpreadAttrs(prop, component, importSource, context, sites, styles, configured)
     }
     if (isDynamicBindArg(prop)) {
       context.errors.push({
-        message: "Dynamic v-bind argument may be class or style",
+        message: configured?.size
+          ? "Dynamic v-bind argument may be class, style, or a configured class prop"
+          : "Dynamic v-bind argument may be class or style",
         offset: context.offset + prop.loc.start.offset,
       })
     }
+  }
+}
+
+function collectPropValue(
+  expression: ExpressionInput | undefined,
+  mode: "class" | "slot-map",
+  site: ClassSite,
+  context: TemplateContext,
+  sites: ClassSite[],
+): void {
+  if (!expression) {
+    sites.push(site)
+    return
+  }
+  if (mode === "class") {
+    sites.push({ ...site, ...collectExpression(expression, context) })
+    return
+  }
+  while (isTsWrapper(expression)) expression = expression.expression
+  if (expression.type !== "ObjectExpression") {
+    sites.push(site)
+    return
+  }
+  let uncertain = false
+  for (const property of expression.properties) {
+    const slot =
+      property.type === "ObjectProperty" && !property.computed ? propertyKey(property) : undefined
+    if (slot === undefined || property.type !== "ObjectProperty") {
+      if (!uncertain) sites.push(site)
+      uncertain = true
+      continue
+    }
+    sites.push({ ...site, slot, ...collectExpression(property.value, context) })
   }
 }
 
@@ -446,6 +538,7 @@ function collectSpreadAttrs(
   context: TemplateContext,
   sites: ClassSite[],
   styles: StyleSite[],
+  configured: Map<string, "class" | "slot-map"> | undefined,
 ): void {
   const content = expressionContent(prop.exp)
   if (!content) {
@@ -490,6 +583,20 @@ function collectSpreadAttrs(
       continue
     }
     const key = propertyKey(property)
+    const name = key === undefined ? undefined : normalizePropName(key)
+    const mode = name === undefined ? undefined : configured?.get(name)
+    if (mode) {
+      collectPropValue(
+        property.value,
+        mode,
+        {
+          ...classSite(component, [], true, context.offset + prop.loc.start.offset, importSource),
+          prop: name,
+        },
+        context,
+        sites,
+      )
+    }
     if (key === "class") {
       const found = collectExpression(property.value, context)
       sites.push(

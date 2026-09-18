@@ -37,7 +37,19 @@ export interface RuleOptions {
   message?: Message
 }
 export type RuleSetting = Severity | [Severity, RuleOptions]
+export interface ClassProps {
+  /** Regular expression matching the collected component name. First match wins. */
+  pattern: string
+  props: Record<string, "class" | "slot-map">
+}
+
+export function normalizePropName(name: string): string {
+  return name.replace(/\B([A-Z])/g, "-$1").toLowerCase()
+}
+
 export interface Config {
+  /** Additional props containing classes, scoped by component name. */
+  classProps?: ClassProps[]
   /** CSS entry relative to the configuration file. Required by the CLI. */
   css?: string
   /** Exact CSS imports mapped to local files, relative to the config directory (API: base). */
@@ -110,7 +122,9 @@ function options(value: unknown, label: string, contract = false) {
     for (const message of messages) {
       if (typeof message !== "string") throw new Error(`${label}.message values must be strings.`)
       for (const match of message.matchAll(/\{\{(.*?)\}\}/g)) {
-        if (!["component", "className", "category", "file", "rule"].includes(match[1]))
+        if (
+          !["component", "className", "category", "file", "rule", "prop", "slot"].includes(match[1])
+        )
           throw new Error(`Unknown message placeholder: ${match[1]}.`)
       }
     }
@@ -127,6 +141,7 @@ export function validateConfig(config: unknown): asserts config is Config {
     obj,
     [
       "css",
+      "classProps",
       "cssAliases",
       "ui",
       "componentImports",
@@ -141,6 +156,26 @@ export function validateConfig(config: unknown): asserts config is Config {
   for (const key of ["css", "note"])
     if (obj[key] !== undefined && typeof obj[key] !== "string")
       throw new Error(`${key} must be a string.`)
+  if (obj.classProps !== undefined) {
+    if (!Array.isArray(obj.classProps)) throw new Error("classProps must be an array.")
+    obj.classProps.forEach((value, index) => {
+      const label = `classProps[${index}]`
+      const entry = record(value, label)
+      keys(entry, ["pattern", "props"], label)
+      pattern(entry.pattern, `${label}.pattern`)
+      const names = new Set<string>()
+      for (const [name, mode] of Object.entries(record(entry.props, `${label}.props`))) {
+        const normalized = normalizePropName(name)
+        if (!/^[a-zA-Z][\w-]*$/.test(name) || ["class", "style"].includes(normalized))
+          throw new Error(`${label}.props: ${name} must name an additional component prop.`)
+        if (names.has(normalized))
+          throw new Error(`${label}.props contains duplicate prop: ${normalized}.`)
+        names.add(normalized)
+        if (mode !== "class" && mode !== "slot-map")
+          throw new Error(`${label}.props.${name} must be class or slot-map.`)
+      }
+    })
+  }
   if (obj.cssAliases !== undefined) {
     for (const [id, target] of Object.entries(record(obj.cssAliases, "cssAliases"))) {
       if (!id.trim() || id.includes("*"))
