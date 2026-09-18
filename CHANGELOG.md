@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.0.0
+
+First stable release of selfix: design-system linting for Vue 3 and Tailwind CSS 4, with six rules, a standalone CLI, and a typed Node API. Install with `pnpm add -D selfix`.
+
+Requires Node.js ≥22.18.0, Vue ≥3.2.13 <4, and Tailwind CSS ≥4 <5. Vue and Tailwind are the only consumer peer dependencies; no UI kit or lint framework is required.
+
+[Compare changes since the previous alpha](https://github.com/basteau/selfix/compare/v0.1.0-alpha.1...v1.0.0)
+
+### Highlights
+
+- Per-file rule overrides let component authors relax selected checks without excluding their files from the remaining rules. Matching entries apply in order, with later settings winning per rule. ([8e9457b](https://github.com/basteau/selfix/commit/8e9457b))
+- Component discovery enriches diagnostics with source definitions and verified literal size/variant choices. It supports configured project aliases, explicit barrel re-exports, and supported prepared Nuxt component declarations. ([bbe8d41](https://github.com/basteau/selfix/commit/bbe8d41))
+- Restyling diagnostics give category-specific guidance, and common Tailwind utilities receive more accurate classifications. ([6eae1a6](https://github.com/basteau/selfix/commit/6eae1a6), [d078b12](https://github.com/basteau/selfix/commit/d078b12))
+- Improved custom CSS inspection covers marker classes, selector attribution, nested ownership, and declarations expanded by `@apply`, while preserving raw-color provenance.
+- Vue component recognition follows runtime identities, minimum supported compiler compatibility is restored, and unsupported external scripts report actionable parse errors.
+- A concise quickstart, agent setup guide, and tested author/consumer adoption workflow help teams configure selfix. Packed-consumer CI checks Linux and macOS with minimum and workspace dependency versions before publication.
+
+### Upgrading from alpha
+
+Install `selfix` without a prerelease dist-tag. The standalone `selfix.config.ts` integration remains the same. All six rules still default to errors; omitted rules remain enabled. Component discovery is enabled by default in the CLI and opt-in for API callers. Set `project: false` to disable it. CLI users may now encounter actionable project-metadata or missing Nuxt preparation errors; prepare the project, correct the configuration, or disable discovery.
+
+Corrected CSS inspection and component recognition may report violations that alpha versions missed. Review those findings and use component contracts or per-file overrides for intentional exceptions. Parse errors cannot be disabled through rule overrides.
+
+The documented [analysis boundaries](https://github.com/basteau/selfix/blob/v1.0.0/docs/analysis.md) still apply. selfix does not evaluate application expressions or guarantee coverage of every runtime styling path; dynamic and namespace component recognition remains outside the supported scope.
+
 ## v0.1.0-alpha.1
 
 This alpha adds explicit application CSS aliases and component-scoped class props, including literal slot maps such as Nuxt UI `ui`. Vue scope handling, CSS inspection, and recoverable diagnostics are more reliable, and the README now includes a runnable quickstart and adoption guide.
