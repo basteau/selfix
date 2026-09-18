@@ -418,6 +418,83 @@ describe("createTailwind", () => {
     })
   })
 
+  test.each(["group", "peer", "dark"])(
+    "inspects custom declarations on marker %s",
+    async (marker) => {
+      const tailwind = await createTailwind(
+        `@import "tailwindcss"; .${marker} { padding: 1rem; color: red; }`,
+        process.cwd(),
+      )
+      const expected = { known: true, categories: ["layout", "color", "spacing"], rawColor: true }
+      expect(tailwind.inspect(marker)).toEqual(expected)
+      expect(tailwind.inspect(marker)).toEqual(expected)
+    },
+  )
+
+  test("inspects imported marker CSS while preserving semantic color provenance", async () => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-marker-"))
+    try {
+      await writeFile(
+        join(base, "custom.css"),
+        `
+        .group { padding: 1rem; color: red; }
+        .peer { color: var(--color-brand); }
+        .dark { color: var(--color-red-500); }
+      `,
+      )
+      const tailwind = await createTailwind(
+        '@import "tailwindcss"; @import "./custom.css"; @theme inline { --color-brand: rebeccapurple; }',
+        base,
+      )
+      for (let repeat = 0; repeat < 2; repeat++) {
+        expect(tailwind.inspect("group")).toEqual({
+          known: true,
+          categories: ["layout", "color", "spacing"],
+          rawColor: true,
+        })
+        expect(tailwind.inspect("peer")).toEqual({
+          known: true,
+          categories: ["layout", "color"],
+          rawColor: false,
+        })
+        expect(tailwind.inspect("dark")).toEqual({
+          known: true,
+          categories: ["layout", "color"],
+          rawColor: true,
+        })
+        expect(tailwind.inspect("text-brand")).toEqual({
+          known: true,
+          categories: ["color"],
+          rawColor: false,
+        })
+      }
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  test("keeps named and prefixed markers distinct from plain custom classes", async () => {
+    const tailwind = await createTailwind(
+      '@import "tailwindcss" prefix(tw); .group, .peer, .dark { padding: 1rem; color: red; }',
+      process.cwd(),
+    )
+    for (const marker of ["group", "peer", "dark"]) {
+      expect(tailwind.inspect(marker)).toEqual({
+        known: true,
+        categories: ["layout", "color", "spacing"],
+        rawColor: true,
+      })
+      for (const token of [`${marker}/menu`, `tw:${marker}`, `tw:${marker}/menu`]) {
+        expect(tailwind.inspect(token)).toEqual({
+          known: true,
+          categories: ["layout"],
+          rawColor: false,
+        })
+      }
+      expect(tailwind.inspect(`other:${marker}`).known).toBe(false)
+    }
+  })
+
   test("combines generated and custom declarations for the same class", async () => {
     const tailwind = await createTailwind(
       '@import "tailwindcss"; .mt-4 { color: red; }',

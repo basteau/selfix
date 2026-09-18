@@ -327,22 +327,24 @@ function inspectToken(
   customClasses: Map<string, Declaration[]>,
   stockColors: Set<string>,
 ): InspectResult {
-  if (isMarker(token, designSystem.theme.prefix)) {
-    return { known: true, categories: ["layout"], rawColor: false }
-  }
-
+  const marker = isMarker(token, designSystem.theme.prefix)
   const generated = designSystem.candidatesToCss([token])[0]
   const generatedDeclarations = generated ? parseDeclarations(generated) : []
   const customDeclarations = customClasses.get(token) ?? []
   const declarations = [...generatedDeclarations, ...customDeclarations]
 
   if (declarations.length === 0) {
-    return { known: false, categories: ["unknown"], rawColor: false }
+    return { known: marker, categories: [marker ? "layout" : "unknown"], rawColor: false }
   }
 
+  const declarationCategories = categorize(declarations)
   return {
     known: true,
-    categories: categorize(declarations),
+    categories: marker
+      ? categories.filter(
+          (category) => category === "layout" || declarationCategories.includes(category),
+        )
+      : declarationCategories,
     // Semantic theme utilities can compile to literals; custom CSS literals are always checked.
     rawColor:
       hasRawColor(generatedDeclarations, stockColors, hasArbitraryColorValue(token)) ||

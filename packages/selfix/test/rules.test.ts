@@ -402,6 +402,30 @@ import Ignored from '@policy/ignored'
     },
   )
 
+  it.each(["no-restyle", "no-raw-colors"] as const)(
+    "%s independently inspects custom CSS on marker classes",
+    async (rule) => {
+      const plain = await createLinter({ css, config: { rules: only(rule) } })
+      const custom = await createLinter({
+        css: `${css} .group, .peer, .dark { padding: 1rem; color: red; }`,
+        config: { rules: only(rule) },
+      })
+      for (const marker of ["group", "peer", "dark"]) {
+        const source = button(`class="${marker}"`)
+        expect(plain.lint(source, "Marker.vue")).toEqual([])
+        expect(custom.lint(source, "Marker.vue")).toEqual([
+          expect.objectContaining({
+            rule,
+            className: marker,
+            file: "Marker.vue",
+            line: 2,
+            column: 19,
+          }),
+        ])
+      }
+    },
+  )
+
   it("reports unknown slot classes only within slot content", async () => {
     const linter = await createLinter({ css, config: { rules: only("require-static-classes") } })
     const source = `<script setup>const local = 'p-2';</script>
