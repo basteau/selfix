@@ -384,6 +384,79 @@ import Ignored from '@policy/ignored'
   })
 
   it.each(["no-restyle", "no-raw-colors"] as const)(
+    "%s independently inspects applied declarations at the original SFC class",
+    async (rule) => {
+      const linter = await createLinter({
+        css: `${css} .card { margin: 1rem; color: red; @apply p-4 bg-red-500; }`,
+        config: { rules: only(rule) },
+      })
+      expect(linter.lint(button('class="card"'), "Applied.vue")).toEqual([
+        expect.objectContaining({
+          rule,
+          className: "card",
+          file: "Applied.vue",
+          line: 2,
+          column: 19,
+        }),
+      ])
+    },
+  )
+
+  it("reports both rules once for direct and applied effects", async () => {
+    const linter = await createLinter({
+      css: `${css} .card { margin: 1rem; @apply p-4 bg-red-500; }`,
+    })
+    expect(
+      linter
+        .lint(button('class="card"'))
+        .map(({ rule }) => rule)
+        .sort(),
+    ).toEqual(["no-raw-colors", "no-restyle"])
+  })
+
+  it("accepts applied semantic colors and rejects applied literals", async () => {
+    const linter = await createLinter({
+      css: `${css} @theme inline { --color-brand: #123456; }
+        .semantic { @apply bg-brand; } .literal { @apply bg-[#123456]; }`,
+      config: { rules: only("no-raw-colors") },
+    })
+    expect(linter.lint(button('class="semantic"'))).toEqual([])
+    expect(linter.lint(button('class="literal"'))).toEqual([
+      expect.objectContaining({ rule: "no-raw-colors", className: "literal" }),
+    ])
+  })
+
+  it.each([
+    ["@utility raw { color: red; }", "raw"],
+    ["@theme inline { --color-red-500: #ff0000; }", "bg-red-500"],
+  ])("reports raw provenance for ordinary and applied %s", async (theme, utility) => {
+    const linter = await createLinter({
+      css: `${css} ${theme} .card { @apply ${utility}; }`,
+      config: { rules: only("no-raw-colors") },
+    })
+    for (const token of [utility, "card"]) {
+      expect(linter.lint(button(`class="${token}"`), "Colors.vue")).toEqual([
+        expect.objectContaining({
+          rule: "no-raw-colors",
+          className: token,
+          file: "Colors.vue",
+          line: 2,
+          column: 19,
+        }),
+      ])
+    }
+  })
+
+  it("rejects invalid applied utilities even with every rule disabled", async () => {
+    await expect(
+      createLinter({
+        css: `${css} .card { @apply missing-utility; }`,
+        config: { rules: Object.fromEntries(ruleNames.map((rule) => [rule, "off"])) },
+      }),
+    ).rejects.toThrow(/Cannot apply unknown utility class `missing-utility`/)
+  })
+
+  it.each(["no-restyle", "no-raw-colors"] as const)(
     "%s independently inspects nested custom declarations at the original SFC class",
     async (rule) => {
       const linter = await createLinter({

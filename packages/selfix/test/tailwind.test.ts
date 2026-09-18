@@ -35,6 +35,193 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test("inspects direct and applied declarations together", async () => {
+    const tailwind = await createTailwind(
+      '@import "tailwindcss"; .card { margin: 1rem; @apply p-4 bg-red-500; }',
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card")).toEqual({
+      known: true,
+      categories: ["layout", "color", "spacing"],
+      rawColor: true,
+    })
+  })
+
+  test.each([
+    ["bg-primary", false],
+    ["bg-red-500", true],
+    ["bg-[#123456]", true],
+    ["hover:bg-primary", false],
+    ["bg-primary/50", false],
+    ["bg-transparent", false],
+  ])("preserves applied color provenance for %s", async (utility, rawColor) => {
+    const tailwind = await createTailwind(
+      `@import "tailwindcss";
+       @theme inline { --color-primary: #123456; }
+       .card { @apply ${utility}; }`,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card")).toEqual({
+      known: true,
+      categories: ["color"],
+      rawColor,
+    })
+  })
+
+  test("retains direct literals beside semantic applied colors", async () => {
+    const tailwind = await createTailwind(
+      `@import "tailwindcss";
+       @theme inline { --color-primary: #123456; }
+       .card { color: red; @apply bg-primary; }`,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card").rawColor).toBe(true)
+  })
+
+  test.each([
+    [".card { @apply missing-utility; }", /Cannot apply unknown utility class `missing-utility`/],
+    [".card { @apply; }", /Cannot apply unknown utility class/],
+    ["@apply p-4;", /unsupported @apply context/],
+  ])("rejects unsupported applied declarations: %s", async (css, error) => {
+    await expect(createTailwind(`@import "tailwindcss"; ${css}`, process.cwd())).rejects.toThrow(
+      error,
+    )
+  })
+
+  test("inspects imported applied declarations with nested ownership and the entry theme", async () => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-apply-"))
+    try {
+      await writeFile(
+        join(base, "cards.css"),
+        `
+        .card { margin: 1rem; &:hover { @apply p-4 bg-primary; } }
+        .raw { @media (width > 10px) { @apply bg-red-500; } }
+      `,
+      )
+      const tailwind = await createTailwind(
+        '@import "tailwindcss"; @import "./cards.css"; @theme inline { --color-primary: #123456; }',
+        base,
+      )
+      expect(tailwind.inspect("card")).toEqual({
+        known: true,
+        categories: ["layout", "color", "spacing"],
+        rawColor: false,
+      })
+      expect(tailwind.inspect("raw")).toEqual({
+        known: true,
+        categories: ["color"],
+        rawColor: true,
+      })
+      const linter = await createLinter({
+        css: '@import "tailwindcss"; @import "./cards.css"; @theme inline { --color-primary: #123456; }',
+        base,
+      })
+      expect(
+        linter
+          .lint('<template><div class="card raw" /></template>')
+          .map(({ rule, className }) => ({ rule, className })),
+      ).toEqual([{ rule: "no-raw-colors", className: "raw" }])
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  test.each([
+    [
+      "@theme inline { --color-red-500: var(--brand); } @utility raw { color: --theme(--color-red-500); }",
+      "raw",
+      true,
+    ],
+    [
+      '@theme inline { --color-brand: red; } @utility paint-* { color: --alpha(--value("red", --color-*) / 50%); }',
+      "paint-brand",
+      false,
+    ],
+    [
+      "@theme { --color-brand: red; } @utility paint-* { color: --value(--color-*); border-color: --alpha(var(--color-red-500) / --modifier(integer)); }",
+      "paint-brand",
+      false,
+    ],
+    [
+      '@theme inline { --color-red: #123456; } @utility paint-* { color: --alpha(--value(--color-*, "red") / 50%); }',
+      "paint-red",
+      false,
+    ],
+    [
+      "@theme { --color-brand: red; } @utility paint-* { color: --value(--color-*); color: --alpha(--theme(--color-red-500) / --modifier(integer)); }",
+      "paint-brand",
+      false,
+    ],
+    ["@utility raw { color: red; }", "raw", true],
+    ['@utility painted-* { color: --value("red", "blue"); }', "painted-red", true],
+    [
+      "@theme inline { --color-red-500: red; } @utility raw { color: --theme(--color-red-500); }",
+      "raw",
+      true,
+    ],
+    [
+      "@theme inline { --color-brand: red; } @utility brand { color: --theme(--color-brand); }",
+      "brand",
+      false,
+    ],
+    ["@utility\nraw { color: transparent; }", "raw", true],
+    ["@utility painted-* { color: red; padding: --value(integer); }", "painted-2", true],
+    ["@theme inline { --color-red-500: #ff0000; }", "bg-red-500", true],
+    ["@theme inline { --color-brand: #ff0000; }", "bg-brand", false],
+    ["@theme reference { --color-brand: #ff0000; }", "bg-brand", false],
+  ])(
+    "shares color provenance between ordinary and applied %s",
+    async (theme, utility, rawColor) => {
+      const tailwind = await createTailwind(
+        `@import "tailwindcss"; ${theme} .card { @apply ${utility}; }`,
+        process.cwd(),
+      )
+      for (const token of [utility, "card"]) {
+        expect(tailwind.inspect(token)).toEqual({
+          known: true,
+          categories: utility === "painted-2" ? ["color", "spacing"] : ["color"],
+          rawColor,
+        })
+      }
+    },
+  )
+
+  test("keeps theme lookup text in strings, URLs, and comments opaque", async () => {
+    const tailwind = await createTailwind(
+      `
+      @import "tailwindcss";
+      /* --theme(--color-missing) */
+      .card { content: "--theme(--color-missing)"; background-image: url("--theme(--color-missing)"); }
+    `,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card").rawColor).toBe(false)
+  })
+
+  test.each([
+    ["--theme(--color-missing)", /unknown color "missing"/],
+    ["--theme(--color-red-500 inline)", /single color variable in --theme/],
+  ])("rejects unsupported theme color lookup %s", async (value, error) => {
+    await expect(
+      createTailwind(
+        `@import "tailwindcss"; @utility raw { color: ${value}; } .card { @apply raw; }`,
+        process.cwd(),
+      ),
+    ).rejects.toThrow(error)
+  })
+
+  test.each([
+    "color: --alpha(--value(--color-*) / 50%); border-color: --alpha(transparent / --modifier(integer));",
+    'color: --alpha(--value("transparent", --color-*) / 50%);',
+  ])("rejects ambiguous functional transparency instead of guessing: %s", async (declarations) => {
+    await expect(
+      createTailwind(
+        `@import "tailwindcss"; @theme { --color-brand: red; } @utility paint-* { ${declarations} } .card { @apply paint-brand; }`,
+        process.cwd(),
+      ),
+    ).rejects.toThrow(/functional transparency.*transparent.*--value.*--modifier/)
+  })
+
   test("retains declarations from parent-reference pseudo selectors", async () => {
     const tailwind = await createTailwind(
       ".card { margin: 1rem; &:hover { color: red; } }",

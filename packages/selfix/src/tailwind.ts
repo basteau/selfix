@@ -18,8 +18,14 @@ type InspectResult = {
 type DesignSystem = {
   theme: {
     prefix: string | null
+    entries(): Iterable<[string, { options: number }]>
     keysInNamespaces(themeKeys: Iterable<`--${string}`>): string[]
   }
+  parseCandidate(candidate: string): {
+    root?: string
+    value?: { kind: string; value: string } | string | null
+    modifier?: { kind: string; value: string } | null
+  }[]
   candidatesToCss(classes: string[]): (string | null)[]
 }
 
@@ -78,10 +84,11 @@ function colorValueTokens(value: string, arbitrary = false): string[] {
     : tokens
 }
 
-function hasLiteralColor(value: string, arbitrary = false): boolean {
+function hasLiteralColor(value: string, arbitrary = false, includeTransparent = true): boolean {
   return colorValueTokens(value, arbitrary).some(
     (token) =>
-      cssNamedColors.has(token.toLowerCase()) ||
+      (cssNamedColors.has(token.toLowerCase()) &&
+        (includeTransparent || token.toLowerCase() !== "transparent")) ||
       /^#[0-9a-f]{3,8}$/i.test(token) ||
       /^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\($/i.test(token),
   )
@@ -108,16 +115,102 @@ export async function createTailwind(
 }> {
   const loadedStylesheets: string[] = []
   const resolvedBase = resolve(base)
-  const options = createLoadOptions(resolvedBase, loadedStylesheets, cssAliases)
+  const colorReferences = new Set<string>()
+  const options = createLoadOptions(resolvedBase, loadedStylesheets, cssAliases, colorReferences)
   const [designSystem, stockColors] = await Promise.all([
-    loadDesignSystem(css, options),
+    loadDesignSystem(preserveThemeReferences(css, colorReferences), options),
     loadStockColors(resolvedBase),
   ])
-  const colors = designSystem.theme
-    .keysInNamespaces(["--color"])
-    .filter((color) => !stockColors.has(color))
-    .sort()
-  const customClasses = collectCustomClasses([css, ...loadedStylesheets])
+  // Inspection needs token identity, not the final inlined color. Tailwind's
+  // INLINE (1) and REFERENCE (2) options otherwise replace references with literals
+  // or literal fallbacks, making semantic tokens indistinguishable from authored colors.
+  // This design system is used only for inspection; application CSS is never emitted.
+  for (const [key, value] of designSystem.theme.entries()) {
+    if (/^--(?:[a-z]+-)?color-/.test(key)) value.options &= ~(1 | 2)
+  }
+  const themeColors = designSystem.theme.keysInNamespaces(["--color"])
+  for (const name of colorReferences) {
+    if (!themeColors.includes(name)) {
+      throw new Error(
+        `Unable to inspect CSS: --theme() references unknown color "${name}". Check the loaded Tailwind theme.`,
+      )
+    }
+  }
+  const colors = themeColors.filter((color) => !stockColors.has(color)).sort()
+  const chunks = [css, ...loadedStylesheets]
+  // Named CSS utilities can author raw literals too. Keep that evidence separate
+  // from compiler-generated defaults (for example transparent in opacity modifiers).
+  const literalUtilities = new Set<string>()
+  const transparentUtilities = new Set<string>()
+  const literalArguments = new Map<string, Set<string>>()
+  for (const chunk of chunks) {
+    scanDeclarations(chunk, (declaration, _selector, _classes, utility) => {
+      if (!utility) return
+      if (
+        /--(?:value|modifier)\(/.test(declaration.value) &&
+        colorValueTokens(declaration.value).some((token) =>
+          /^(?:transparent|["']transparent["'])$/i.test(token),
+        )
+      ) {
+        throw new Error(
+          `Unable to inspect CSS: unsupported functional transparency in @utility "${utility}". Keep authored transparent values separate from --value() and --modifier() declarations.`,
+        )
+      }
+      if (hasRawColor([declaration], stockColors, true)) literalUtilities.add(utility)
+      if (
+        colorValueTokens(declaration.value).some((token) => token.toLowerCase() === "transparent")
+      ) {
+        transparentUtilities.add(utility)
+      }
+      // Quoted --value()/--modifier() alternatives become bare values only when
+      // that argument is selected. Do not contaminate a semantic alternative.
+      if (
+        /--(?:value|modifier)\(/.test(declaration.value) &&
+        (isColorDeclaration(declaration.property) ||
+          isCompositeColorDeclaration(declaration.property))
+      ) {
+        for (const token of colorValueTokens(declaration.value)) {
+          if (!/^["']/.test(token)) continue
+          const value = token.slice(1, -1)
+          if (!hasLiteralColor(value)) continue
+          const values = literalArguments.get(utility) ?? new Set<string>()
+          values.add(value)
+          literalArguments.set(utility, values)
+        }
+      }
+    })
+  }
+  const inspectGenerated = (token: string): Declaration[] => {
+    const generated = designSystem.candidatesToCss([token])[0]
+    if (!generated) return []
+    const candidates = designSystem.parseCandidate(token)
+    const checkLiterals =
+      hasArbitraryColorValue(token) ||
+      candidates.some(({ root, value, modifier }) => {
+        if (!root) return false
+        if (literalUtilities.has(root)) return true
+        const arguments_ = literalArguments.get(root)
+        return [value, modifier].some(
+          (argument) =>
+            argument &&
+            typeof argument === "object" &&
+            argument.kind === "named" &&
+            arguments_?.has(argument.value),
+        )
+      })
+    const checkTransparent =
+      hasArbitraryColorValue(token) ||
+      candidates.some(({ root }) => root && transparentUtilities.has(root))
+    return parseDeclarations(generated).map((declaration) => ({
+      ...declaration,
+      checkLiterals,
+      // Tailwind inserts transparent into color-mix() for opacity modifiers.
+      // A standalone transparent value or an authored literal still counts.
+      checkTransparent:
+        checkTransparent || /^transparent(?:\s*!important)?$/i.test(declaration.value),
+    }))
+  }
+  const customClasses = collectCustomClasses(chunks, inspectGenerated)
   const cache = new Map<string, InspectResult>()
 
   return {
@@ -126,7 +219,7 @@ export async function createTailwind(
       const cached = cache.get(token)
       if (cached) return cached
 
-      const result = inspectToken(token, designSystem, customClasses, stockColors)
+      const result = inspectToken(token, designSystem, customClasses, stockColors, inspectGenerated)
       cache.set(token, result)
       return result
     },
@@ -140,19 +233,46 @@ async function loadDesignSystem(css: string, options: LoadOptions): Promise<Desi
   ) => Promise<DesignSystem>
   const designSystem = await api(css, options)
 
-  if (typeof designSystem.candidatesToCss !== "function") {
+  if (
+    typeof designSystem.candidatesToCss !== "function" ||
+    typeof designSystem.theme?.entries !== "function" ||
+    typeof designSystem.parseCandidate !== "function"
+  ) {
     throw new Error(
-      "Tailwind CSS design-system API is missing candidatesToCss; selfix requires Tailwind CSS 4's compiler inspection API.",
+      "Tailwind CSS design-system API is missing candidatesToCss, theme.entries, or parseCandidate; selfix requires Tailwind CSS 4's compiler inspection API.",
     )
   }
 
   return designSystem
 }
 
+// Keep eager color lookups symbolic in inspection CSS, so Tailwind itself can
+// drop unresolved functional declarations without losing surviving palette identity.
+// Strings, comments, URLs, and escapes are opaque. Other color lookup forms fail
+// explicitly rather than guessing their resolved provenance.
+function preserveThemeReferences(css: string, references: Set<string>): string {
+  return css.replace(
+    /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\*[\s\S]*?\*\/|[uU][rR][lL]\((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|[^)"'\\])*\)|\\.|(?<![\w-])--theme\(\s*(--(?:[a-z]+-)?color-([\w-]+))\s*\)|(?<![\w-])--theme\(\s*--(?:[a-z]+-)?color-/g,
+    (match, variable: string | undefined, name: string | undefined) => {
+      if (variable && name) {
+        references.add(name)
+        return `var(${variable})`
+      }
+      if (match.startsWith("--theme(")) {
+        throw new Error(
+          "Unable to inspect CSS: use a single color variable in --theme(), without additional arguments.",
+        )
+      }
+      return match
+    },
+  )
+}
+
 function createLoadOptions(
   base: string,
   loadedStylesheets: string[],
   cssAliases: Record<string, string> = {},
+  colorReferences = new Set<string>(),
 ): LoadOptions {
   return {
     base,
@@ -177,7 +297,11 @@ function createLoadOptions(
         })
       })
       loadedStylesheets.push(content)
-      return { path, base: dirname(path), content }
+      return {
+        path,
+        base: dirname(path),
+        content: preserveThemeReferences(content, colorReferences),
+      }
     },
     async loadModule(id, from) {
       const path = resolveModule(id, from)
@@ -326,10 +450,10 @@ function inspectToken(
   designSystem: DesignSystem,
   customClasses: Map<string, Declaration[]>,
   stockColors: Set<string>,
+  inspectGenerated: (token: string) => Declaration[],
 ): InspectResult {
   const marker = isMarker(token, designSystem.theme.prefix)
-  const generated = designSystem.candidatesToCss([token])[0]
-  const generatedDeclarations = generated ? parseDeclarations(generated) : []
+  const generatedDeclarations = inspectGenerated(token)
   const customDeclarations = customClasses.get(token) ?? []
   const declarations = [...generatedDeclarations, ...customDeclarations]
 
@@ -345,10 +469,9 @@ function inspectToken(
           (category) => category === "layout" || declarationCategories.includes(category),
         )
       : declarationCategories,
-    // Semantic theme utilities can compile to literals; custom CSS literals are always checked.
-    rawColor:
-      hasRawColor(generatedDeclarations, stockColors, hasArbitraryColorValue(token)) ||
-      hasRawColor(customDeclarations, stockColors, true),
+    rawColor: declarations.some((declaration) =>
+      hasRawColor([declaration], stockColors, declaration.checkLiterals ?? true),
+    ),
   }
 }
 
@@ -363,9 +486,7 @@ function hasArbitraryColorValue(token: string): boolean {
   const bracketStart = base.indexOf("[")
   const bracketEnd = base.lastIndexOf("]")
   if (bracketStart === -1 || bracketEnd <= bracketStart) return false
-
-  const value = base.slice(bracketStart + 1, bracketEnd)
-  return hasLiteralColor(value, true)
+  return hasLiteralColor(base.slice(bracketStart + 1, bracketEnd), true)
 }
 
 // Adapted from shadcn-ui/lint's bracket-aware class normalization (MIT).
@@ -400,9 +521,14 @@ export function baseCandidate(token: string): string {
 type Declaration = {
   property: string
   value: string
+  checkLiterals?: boolean
+  checkTransparent?: boolean
 }
 
-function collectCustomClasses(chunks: string[]): Map<string, Declaration[]> {
+function collectCustomClasses(
+  chunks: string[],
+  inspectGenerated: (token: string) => Declaration[],
+): Map<string, Declaration[]> {
   const customClasses = new Map<string, Declaration[]>()
   for (const css of chunks) {
     scanDeclarations(
@@ -416,6 +542,21 @@ function collectCustomClasses(chunks: string[]): Map<string, Declaration[]> {
       },
       (selector, parentSelector, parentClasses) =>
         selectorClasses(selector, parentSelector ? parentClasses : undefined),
+      (statement) => {
+        const candidates = statement.slice("@apply".length).trim().split(/\s+/).filter(Boolean)
+        if (!candidates.length) {
+          throw new Error("Unable to inspect CSS: @apply requires at least one utility.")
+        }
+        return candidates.flatMap((candidate) => {
+          const declarations = inspectGenerated(candidate)
+          if (!declarations.length) {
+            throw new Error(
+              `Unable to inspect CSS: @apply utility "${candidate}" is invalid or unsupported. Check the utility and the loaded Tailwind theme.`,
+            )
+          }
+          return declarations
+        })
+      },
     )
   }
   return customClasses
@@ -501,10 +642,11 @@ function parseDeclarations(css: string): Declaration[] {
 // declaration syntax fails explicitly instead of disappearing from inspection.
 function scanDeclarations(
   css: string,
-  visit: (declaration: Declaration, selector: string, classes: string[]) => void,
+  visit: (declaration: Declaration, selector: string, classes: string[], utility?: string) => void,
   inspectSelector?: (selector: string, parentSelector: string, parentClasses: string[]) => string[],
+  inspectApply?: (statement: string) => Declaration[],
 ): void {
-  const blocks: { selector: string; classes: string[]; ignored: boolean }[] = []
+  const blocks: { selector: string; classes: string[]; ignored: boolean; utility?: string }[] = []
   const delimiters: string[] = []
   let text = ""
   let quote = ""
@@ -516,13 +658,28 @@ function scanDeclarations(
   function flush(): void {
     const statement = text.trim()
     text = ""
+    if (inspectApply && /^@apply(?:\s|$)/.test(statement)) {
+      const block = blocks.at(-1)
+      if (!block?.selector || block.ignored) {
+        fail(`unsupported @apply context for "${statement}"`)
+      }
+      for (const declaration of inspectApply(statement)) {
+        visit(declaration, block.selector, block.classes)
+      }
+      return
+    }
     if (!statement || statement.startsWith("@")) return
     const match = /^([_a-zA-Z-][\w-]*)\s*:\s*([\s\S]+)$/.exec(statement)
     if (!match) fail("unsupported or malformed declaration")
     const block = blocks.at(-1)
     if (!block) fail("declaration outside a rule")
     if (!block.ignored) {
-      visit({ property: match[1]!, value: match[2]!.trim() }, block.selector, block.classes)
+      visit(
+        { property: match[1]!, value: match[2]!.trim() },
+        block.selector,
+        block.classes,
+        block.utility,
+      )
     }
   }
 
@@ -574,6 +731,9 @@ function scanDeclarations(
             : (parent?.classes ?? [])
         blocks.push({
           classes,
+          utility: /^@utility\s/.test(header)
+            ? header.slice("@utility".length).trim().replace(/-\*$/, "")
+            : parent?.utility,
           selector: header.startsWith("@") ? (parent?.selector ?? "") : header,
           ignored: (parent?.ignored ?? false) || /^@property(?:\s|$)/i.test(header),
         })
@@ -732,9 +892,9 @@ function hasRawColor(
   stockColors: Set<string>,
   includeDeclarationLiterals: boolean,
 ): boolean {
-  return declarations.some(({ property, value }) => {
+  return declarations.some(({ property, value, checkTransparent }) => {
     if (!isColorDeclaration(property) && !isCompositeColorDeclaration(property)) return false
-    if (includeDeclarationLiterals && hasLiteralColor(value)) {
+    if (includeDeclarationLiterals && hasLiteralColor(value, false, checkTransparent ?? true)) {
       return true
     }
     return extractColorVariables(value).some((color) => stockColors.has(color))
@@ -744,8 +904,9 @@ function hasRawColor(
 function extractColorVariables(value: string): string[] {
   const tokens = colorValueTokens(value)
   return tokens.flatMap((token, index) => {
-    if (token.toLowerCase() !== "var(") return []
-    const match = /^--(?:[a-z]+-)?color-(.+)$/.exec(tokens[index + 1] ?? "")
+    const offset = token === "--theme" && tokens[index + 1] === "(" ? 2 : 1
+    if (token.toLowerCase() !== "var(" && offset !== 2) return []
+    const match = /^--(?:[a-z]+-)?color-(.+)$/.exec(tokens[index + offset] ?? "")
     return match ? [match[1]!] : []
   })
 }
