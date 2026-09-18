@@ -1,6 +1,6 @@
 # 13: Prepare policy matchers once
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -41,4 +41,8 @@ Approved from the core-hardening discussion. Start in `packages/selfix/src/index
 - Probe: temporarily proxy the native RegExp constructor, delegate to the real implementation, capture pattern strings, and restore the global in finally. Only policy patterns constructed after linter creation are asserted absent; real Vue/Tailwind parsing and compilation remain in use. No timing thresholds.
 - `pnpm check`: initial sandbox run hit subprocess EPERM errors; rerun with execution permission passed all 224 tests, typecheck, Oxlint, Oxfmt, package build, and playground typecheck/design lint/build.
 - Independent Standards review: no findings. Independent Spec review: no findings. Reviewers inspected the working-tree diff against the starting revision; test execution evidence supplied by implementer.
-- Final diff and index reviewed; unrelated documentation tickets excluded. No remaining nonblocking limitations. Awaiting requested implementation commit before marking done.
+- Final diff and index reviewed; unrelated documentation tickets excluded. No remaining nonblocking limitations.
+
+## Completion
+
+Implementation committed as `965166b` (`refactor(policy): prepare matchers once per linter`). All acceptance criteria and required checks passed.
