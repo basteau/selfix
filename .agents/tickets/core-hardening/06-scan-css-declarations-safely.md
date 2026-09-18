@@ -1,6 +1,6 @@
 # 06: Parse CSS declaration boundaries safely
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -38,4 +38,4 @@ Approved from the core-hardening discussion. Relevant functions in `packages/sel
 - Full verification: initial sandboxed `pnpm check` failed on subprocess EPERM restrictions. Approved unsandboxed `pnpm check` passed: typecheck, lint, formatting, 192 tests, playground typecheck/design lint/build.
 - Independent code review against fca050f491c7aa4aad9c7bcfd41514eec8621201: Standards 0 findings; Spec 0 findings. Both reviewed current owned changes with a clean baseline.
 - Bounded behavior: malformed declaration boundaries and block-valued custom properties fail explicitly. This structural scanner is not a complete CSS validator or selector/cascade engine; existing selector matching remains bounded.
-- Implementation and verification complete; requested commit pending.
+- Implementation committed successfully as 7220480 (fix(css): scan declaration boundaries safely). Ticket complete.
