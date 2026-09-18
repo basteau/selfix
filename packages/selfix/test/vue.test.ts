@@ -1,7 +1,98 @@
 import { describe, expect, it } from "vitest"
+import { compileScript, compileTemplate, parse } from "vue/compiler-sfc"
 import { collectVue } from "../src/vue.js"
 
 describe("collectVue", () => {
+  it.each([false, true])(
+    "excludes type imports from runtime component identity (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup lang="ts">
+import type DefaultType from './types';
+import type { WholeType } from './types';
+import { type SpecifierType, Button as RuntimeButton } from './mixed';
+</script><template><DefaultType class="p-2" /><whole-type class="p-2" />
+<SpecifierType class="p-2" /><runtime-button class="p-2" /></template>`
+      const { descriptor } = parse(source)
+      const script = compileScript(descriptor, { id: "types" })
+      expect(script.bindings).not.toHaveProperty("DefaultType")
+      expect(script.bindings).not.toHaveProperty("WholeType")
+      expect(script.bindings).not.toHaveProperty("SpecifierType")
+      expect(script.bindings).toHaveProperty("RuntimeButton")
+      const result = collectVue(source, "types.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites.map(({ component, importSource }) => [component, importSource])).toEqual([
+        ["DefaultType", undefined],
+        ["whole-type", undefined],
+        ["SpecifierType", undefined],
+        ["RuntimeButton", "./mixed"],
+      ])
+    },
+  )
+  it.each([false, true])(
+    "resolves exact, camelized, and acronym identities like Vue (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>
+import UIButton from './acronym.vue';
+import { Button as BaseButton } from './renamed.vue';
+import Base_Button from './underscore.vue';
+</script><template>
+<UIButton class="p-2" /><u-i-button class="p-2" /><ui-button class="p-2" />
+<BaseButton class="p-2" /><baseButton class="p-2" /><base-button class="p-2" />
+<Base_Button class="p-2" /><base_button class="p-2" />
+</template>`
+      const { descriptor } = parse(source)
+      const script = compileScript(descriptor, { id: "identity" })
+      const compiled = compileTemplate({
+        source: descriptor.template!.content,
+        filename: "identity.vue",
+        id: "identity",
+        compilerOptions: { bindingMetadata: script.bindings },
+      })
+      expect(compiled.errors).toEqual([])
+      expect(compiled.code.match(/\$setup\["UIButton"\]/gu)).toHaveLength(2)
+      expect(compiled.code.match(/\$setup\["BaseButton"\]/gu)).toHaveLength(3)
+      expect(compiled.code.match(/\$setup\["Base_Button"\]/gu)).toHaveLength(1)
+      expect(compiled.code).toContain('resolveComponent("ui-button")')
+      const result = collectVue(source, "identity.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites.map(({ component, importSource }) => [component, importSource])).toEqual([
+        ["UIButton", "./acronym.vue"],
+        ["UIButton", "./acronym.vue"],
+        ["ui-button", undefined],
+        ["BaseButton", "./renamed.vue"],
+        ["BaseButton", "./renamed.vue"],
+        ["BaseButton", "./renamed.vue"],
+        ["Base_Button", "./underscore.vue"],
+        ["base_button", undefined],
+      ])
+    },
+  )
+  it.each([false, true])(
+    "keeps native and v-pre elements separate from imports (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>import Button from './ui/Button.vue'</script>
+<template><Button class="p-2" content-class="p-4" /><button class="p-2" content-class="p-4" />
+<Button v-pre class="p-2" content-class="p-4" /><div v-pre><Button class="p-2" content-class="p-4" /></div></template>`
+      const result = collectVue(source, "identity.vue", {
+        forceCompileTemplateAst,
+        classProps: [{ pattern: "^Button$", props: { contentClass: "class" } }],
+      })
+      expect(result.errors).toEqual([])
+      expect(
+        result.sites.map(({ component, importSource, prop }) => ({
+          component,
+          importSource,
+          prop,
+        })),
+      ).toEqual([
+        { component: "Button", importSource: "./ui/Button.vue", prop: undefined },
+        { component: "Button", importSource: "./ui/Button.vue", prop: "content-class" },
+        { component: "button", importSource: undefined, prop: undefined },
+        { component: "button", importSource: undefined, prop: undefined },
+        { component: "button", importSource: undefined, prop: undefined },
+      ])
+    },
+  )
   it.each([false, true])(
     "keeps independent sites and separate uncertainty locations (fallback: %s)",
     (forceCompileTemplateAst) => {
@@ -343,10 +434,8 @@ import { Button as BaseButton } from "./setup.vue";
     ])
   })
 
-  it.each([false, true])(
-    "prefers exact aliases over colliding kebab aliases (setup: %s)",
-    (setup) => {
-      const source = `<script>
+  it.each([false, true])("does not invent hyphen aliases for underscores (setup: %s)", (setup) => {
+    const source = `<script>
 import BaseButton from "./exact.vue";
 ${setup ? "</script><script setup>" : ""}
 import Base_Button from "./collision.vue";
@@ -357,18 +446,17 @@ import Base_Button from "./collision.vue";
   <base-button class="p-2" />
 </template>`
 
-      const result = collectVue(source, "collision.vue")
+    const result = collectVue(source, "collision.vue")
 
-      expect(result.errors).toEqual([])
-      expect(
-        result.sites.map(({ component, importSource }) => ({ component, importSource })),
-      ).toEqual([
-        { component: "BaseButton", importSource: "./exact.vue" },
-        { component: "Base_Button", importSource: "./collision.vue" },
-        { component: "Base_Button", importSource: "./collision.vue" },
-      ])
-    },
-  )
+    expect(result.errors).toEqual([])
+    expect(
+      result.sites.map(({ component, importSource }) => ({ component, importSource })),
+    ).toEqual([
+      { component: "BaseButton", importSource: "./exact.vue" },
+      { component: "Base_Button", importSource: "./collision.vue" },
+      { component: "BaseButton", importSource: "./exact.vue" },
+    ])
+  })
 
   it("resolves only local setup constants without following references", () => {
     const source = `<script>

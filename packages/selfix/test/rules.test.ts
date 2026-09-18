@@ -11,6 +11,96 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it("applies recognition, contracts, and class props only to resolved component identities", async () => {
+    const source = `<script setup lang="ts">
+import { Button, Button as BaseButton, UIButton, Base_Button, type SpecifierType } from '@/components/ui/button';
+import type DefaultType from '@/components/ui/types';
+import type { WholeType } from '@/components/ui/types';
+</script>
+<template>
+<Button class="flex" content-class="flex" />
+<button class="flex" content-class="flex" />
+<Button v-pre class="flex" content-class="flex" />
+<div v-pre><Button class="flex" content-class="flex" /></div>
+<base-button class="flex" />
+<u-i-button class="flex" />
+<ui-button class="flex" />
+<basebutton class="flex" />
+<base_button class="flex" />
+<DefaultType class="flex" />
+<whole-type class="flex" />
+<SpecifierType class="flex" />
+<GlobalButton class="flex" />
+</template>`
+    const linter = await createLinter({
+      css,
+      config: {
+        components: ["^GlobalButton$"],
+        classProps: [{ pattern: "^Button$", props: { contentClass: "class" } }],
+        rules: only("no-restyle", {
+          contracts: [{ pattern: "^(Button|BaseButton|UIButton|GlobalButton)$", deny: ["flex"] }],
+        }),
+      },
+    })
+    const diagnostics = linter.lint(source, "identity.vue")
+    expect(
+      diagnostics.map(({ rule, component, className, prop, line, column, offset }) => ({
+        rule,
+        component,
+        className,
+        prop,
+        line,
+        column,
+        offset,
+      })),
+    ).toEqual([
+      {
+        rule: "no-restyle",
+        component: "Button",
+        className: "flex",
+        prop: undefined,
+        line: 7,
+        column: 9,
+        offset: source.indexOf('class="flex"'),
+      },
+      {
+        rule: "no-restyle",
+        component: "Button",
+        className: "flex",
+        prop: "content-class",
+        line: 7,
+        column: 22,
+        offset: source.indexOf('content-class="flex"'),
+      },
+      {
+        rule: "no-restyle",
+        component: "BaseButton",
+        className: "flex",
+        prop: undefined,
+        line: 11,
+        column: 14,
+        offset: source.indexOf('class="flex"', source.indexOf("<base-button")),
+      },
+      {
+        rule: "no-restyle",
+        component: "UIButton",
+        className: "flex",
+        prop: undefined,
+        line: 12,
+        column: 13,
+        offset: source.indexOf('class="flex"', source.indexOf("<u-i-button")),
+      },
+      {
+        rule: "no-restyle",
+        component: "GlobalButton",
+        className: "flex",
+        prop: undefined,
+        line: 19,
+        column: 15,
+        offset: source.indexOf('class="flex"', source.indexOf("<GlobalButton")),
+      },
+    ])
+  })
   it("prepares policy regexes before linting and reuses them across files", async () => {
     const patterns: string[] = []
     vi.stubGlobal(

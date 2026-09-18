@@ -85,10 +85,7 @@ interface ComponentAlias {
   importSource: string
 }
 
-interface ComponentAliases {
-  byTemplateName: Map<string, ComponentAlias>
-  byTagName: Map<string, ComponentAlias>
-}
+type ComponentAliases = Map<string, ComponentAlias>
 
 interface TemplateContext {
   classProps: { pattern: RegExp; props: Map<string, "class" | "slot-map"> }[]
@@ -134,7 +131,7 @@ export function collectVue(
   )
   // Parser failures invalidate the file; later collection issues leave independent sites usable.
   let fatal = errors.length > 0
-  const aliases: ComponentAliases = { byTemplateName: new Map(), byTagName: new Map() }
+  const aliases: ComponentAliases = new Map()
   collectComponentAliases(script, aliases)
   collectComponentAliases(setup, aliases)
 
@@ -387,9 +384,10 @@ function collectElement(
   sites: ClassSite[],
   styles: StyleSite[],
 ): void {
-  const alias =
-    context.aliases.byTemplateName.get(node.tag) ?? context.aliases.byTagName.get(node.tag)
-  const component = alias?.local ?? (/^[A-Z]/u.test(node.tag) ? node.tag : node.tag.toLowerCase())
+  // Vue classifies native tags and literal v-pre content as elements, not components.
+  const isComponent = node.tagType === 1
+  const alias = isComponent ? resolveComponentAlias(node.tag, context.aliases) : undefined
+  const component = alias?.local ?? (isComponent ? node.tag : node.tag.toLowerCase())
   const importSource = alias?.importSource
   const configured = context.classProps.find(({ pattern }) => pattern.test(component))?.props
 
@@ -908,14 +906,15 @@ function collectComponentAliases(
 }
 
 function collectImportAliases(statement: ImportDeclarationNode, aliases: ComponentAliases): void {
+  if (statement.importKind === "type") return
   for (const specifier of statement.specifiers) {
+    if (specifier.type === "ImportSpecifier" && specifier.importKind === "type") continue
     const local = specifier.local.name
     if (!isLikelyComponent(local)) {
       continue
     }
     const alias = { local, importSource: statement.source.value }
-    aliases.byTemplateName.set(local, alias)
-    aliases.byTagName.set(kebabCase(local), alias)
+    aliases.set(local, alias)
   }
 }
 
@@ -961,11 +960,11 @@ function splitClasses(value: string): string[] {
   return value.trim().split(/\s+/u).filter(Boolean)
 }
 
-function kebabCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/gu, "$1-$2")
-    .replace(/_/gu, "-")
-    .toLowerCase()
+function resolveComponentAlias(tag: string, aliases: ComponentAliases): ComponentAlias | undefined {
+  // Match Vue's exact, camelized, then PascalCase binding lookup.
+  const camelName = tag.replace(/-(\w)/gu, (_, letter: string) => letter.toUpperCase())
+  const pascalName = camelName.charAt(0).toUpperCase() + camelName.slice(1)
+  return aliases.get(tag) ?? aliases.get(camelName) ?? aliases.get(pascalName)
 }
 
 function isLikelyComponent(value: string): boolean {
