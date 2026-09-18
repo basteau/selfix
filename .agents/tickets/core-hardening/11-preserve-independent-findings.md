@@ -1,6 +1,6 @@
 # 11: Preserve independent findings after recoverable collection issues
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -41,4 +41,4 @@ Approved from the core-hardening discussion. Relevant code: error collection in 
 - Initial sandboxed `pnpm check` hit child-process `EPERM` in package/release/playground tests. The permitted rerun passed: 223 tests, typechecking, lint, formatting, package build, and playground typecheck/design lint/build.
 - Independent Standards review: zero findings. Independent Spec review: zero findings. Scope: owned working-tree changes against the recorded starting revision; unrelated documentation tickets excluded.
 - Final cleanup simplified singleton expectations and made the disabled-rules malformed-input assertion non-vacuous. No design changes or unresolved nonblocking findings.
-- Acceptance criteria are met; status remains in-progress until the requested implementation commit succeeds. Commit hash will be recorded afterward.
+- Completed implementation commit: `547c4ff5821e689c73206e1760d87641e62f6453`. Final `pnpm check` passed after cleanup (223 tests and all playground checks); both reviewers rechecked the final changes with zero findings.
