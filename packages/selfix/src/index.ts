@@ -165,19 +165,25 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
             const info = tailwind.inspect(token)
             const denied = matches(selected.deny ?? [], token, info.categories)
             const category =
-              info.categories.find((item) => item !== "layout") ?? info.categories[0] ?? "unknown"
+              info.categories.find((item) => selected.deny?.includes(item)) ??
+              info.categories.find((item) => item !== "layout") ??
+              info.categories[0] ??
+              "unknown"
             if (name === "no-restyle") {
               // A utility may affect multiple categories. Opening layout cannot also open color.
-              const allAllowed = info.categories.every((item) =>
-                matches(selected.allow ?? ["layout"], token, [item]),
+              const disallowedCategory = info.categories.find(
+                (item) => !matches(selected.allow ?? ["layout"], token, [item]),
               )
-              if (denied || !allAllowed)
+              const rejectedCategory = denied ? category : (disallowedCategory ?? category)
+              if (denied || disallowedCategory)
                 report(
                   site,
                   selected,
-                  `"${token}" is not allowed on <${site.component}>: the component owns its ${category}. Use a component variant; use margin or a parent gap for surrounding space.`,
+                  denied
+                    ? `"${token}" is denied by the design-system policy for <${site.component}>. Use an approved theme utility.`
+                    : `"${token}" is not allowed on <${site.component}>: the component owns its ${rejectedCategory}. Use a component variant; use margin or a parent gap for surrounding space.`,
                   token,
-                  category,
+                  rejectedCategory,
                 )
               continue
             }

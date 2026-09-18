@@ -11,6 +11,67 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it.each([
+    ["leading-6", "typography"],
+    ["ease-in", "motion"],
+    ["rotate-45", "effects"],
+  ])("allows %s through its category permission", async (token, category) => {
+    const linter = await createLinter({
+      css,
+      config: { rules: only("no-restyle", { allow: [category] }) },
+    })
+    expect(linter.lint(button(`class="${token}"`))).toEqual([])
+  })
+
+  it.each([
+    { allow: ["typography"], expected: "unknown" },
+    { allow: [], expected: "typography" },
+    { allow: ["*"], deny: ["unknown"], expected: "unknown" },
+    { allow: [], deny: ["unknown", "typography"], expected: "typography" },
+  ])("reports the blocked category for a mixed utility: %j", async ({ expected, ...options }) => {
+    const linter = await createLinter({
+      css: `${css} .mixed { tab-size: 4; line-height: 1.5; }`,
+      config: {
+        rules: only("no-restyle", {
+          ...options,
+          message: { typography: "blocked {{category}}", unknown: "unclassified {{category}}" },
+        }),
+      },
+    })
+    expect(linter.lint(button('class="mixed"'))).toEqual([
+      expect.objectContaining({
+        className: "mixed",
+        message: expected === "unknown" ? "unclassified unknown" : "blocked typography",
+      }),
+    ])
+  })
+
+  it("names the disallowed category in the default rejection message", async () => {
+    const linter = await createLinter({
+      css: `${css} .mixed { line-height: 1.5; --tw-unrecognized: 1; }`,
+      config: { rules: only("no-restyle", { allow: ["typography"] }) },
+    })
+    expect(linter.lint(button('class="mixed"'))).toEqual([
+      expect.objectContaining({
+        className: "mixed",
+        message: expect.stringContaining("owns its unknown"),
+      }),
+    ])
+  })
+
+  it("keeps token deny precedence over category permissions", async () => {
+    const linter = await createLinter({
+      css,
+      config: { rules: only("no-restyle", { allow: ["typography"], deny: ["leading-*"] }) },
+    })
+    expect(linter.lint(button('class="leading-6"'))).toEqual([
+      expect.objectContaining({
+        className: "leading-6",
+        message: expect.stringContaining("denied"),
+      }),
+    ])
+  })
+
   it.each(["no-restyle", "no-raw-colors"] as const)(
     "%s independently rejects custom colors overlapping a layout utility",
     async (rule) => {
@@ -107,23 +168,23 @@ function cn() { throw new Error('never run') }
     expect(linter.lint('<template><div class="p-4" /></template>')).toEqual([])
   })
   it.each([
-    [{}, true],
-    [{ allow: [] }, true],
-    [{ allow: ["layout"] }, true],
-    [{ allow: ["color"] }, true],
+    [{}, "color"],
+    [{ allow: [] }, "layout"],
+    [{ allow: ["layout"] }, "color"],
+    [{ allow: ["color"] }, "layout"],
     [{ allow: ["layout", "color"] }, false],
     [{ allow: ["card-title"] }, false],
     [{ allow: ["card-*"] }, false],
-    [{ allow: ["*"], deny: ["color"] }, true],
-    [{ allow: ["layout", "color"], deny: ["card-*"] }, true],
+    [{ allow: ["*"], deny: ["color"] }, "color"],
+    [{ allow: ["layout", "color"], deny: ["card-*"] }, "color"],
   ])("requires every mixed category unless the token is allowed: %j", async (options, rejected) => {
     const linter = await createLinter({
       css: `${css} .card-title { color: var(--color-primary); margin: 1rem; }`,
-      config: { rules: only("no-restyle", options) },
+      config: { rules: only("no-restyle", { ...options, message: "blocked {{category}}" }) },
     })
     const result = linter.lint(button('class="card-title"'))
     expect(result).toHaveLength(rejected ? 1 : 0)
-    if (rejected) expect(result[0].message).toContain("owns its color")
+    if (rejected) expect(result[0].message).toBe(`blocked ${rejected}`)
   })
   it("normalizes variants and markers but matches colon patterns against the full token", async () => {
     const linter = await createLinter({

@@ -35,6 +35,24 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test.each([
+    ["leading-6", "typography"],
+    ["ease-in", "motion"],
+    ["rotate-45", "effects"],
+    ["-rotate-45", "effects"],
+    ["rotate-x-45", "effects"],
+    ["hover:rotate-z-45", "effects"],
+    ["[--custom:1]", "unknown"],
+    ["[--tw-unrecognized:1]", "unknown"],
+  ])("classifies %s from its generated declarations", async (token, category) => {
+    const tailwind = await createTailwind('@import "tailwindcss";', process.cwd())
+    expect(tailwind.inspect(token)).toEqual({
+      known: true,
+      categories: [category],
+      rawColor: false,
+    })
+  })
+
   test("combines generated and custom declarations for the same class", async () => {
     const tailwind = await createTailwind(
       '@import "tailwindcss"; .mt-4 { color: red; }',

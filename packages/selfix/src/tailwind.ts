@@ -355,7 +355,7 @@ function categorize(declarations: Declaration[]): Category[] {
 function categoryFor({ property }: Declaration): Category {
   if (isColorDeclaration(property)) return "color"
   if (property === "animation" || property.startsWith("transition")) return "motion"
-  if (property === "--tw-duration") return "motion"
+  if (property === "--tw-duration" || property === "--tw-ease") return "motion"
   if (property === "border-radius") return "shape"
   if (
     property.startsWith("--tw-space-") ||
@@ -376,7 +376,7 @@ function categoryFor({ property }: Declaration): Category {
   ) {
     return "spacing"
   }
-  if (property === "--tw-font-weight") return "typography"
+  if (property === "--tw-font-weight" || property === "--tw-leading") return "typography"
   if (
     property.startsWith("font") ||
     property === "line-height" ||
@@ -397,6 +397,10 @@ function categoryFor({ property }: Declaration): Category {
     property.startsWith("--tw-shadow") ||
     property.startsWith("--tw-inset-shadow") ||
     property.startsWith("--tw-translate-") ||
+    property === "--tw-rotate-x" ||
+    property === "--tw-rotate-y" ||
+    property === "--tw-rotate-z" ||
+    property === "rotate" ||
     property === "translate"
   ) {
     return "effects"
