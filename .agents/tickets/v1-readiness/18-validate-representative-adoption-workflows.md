@@ -1,6 +1,6 @@
 # 18: Validate representative adoption workflows
 
-Status: in-progress
+Status: done
 Blocked by: 14-add-per-file-rule-overrides.md
 
 ## Goal
@@ -23,6 +23,8 @@ After fixture and execution-scope approval, run the chosen integration paths aga
 Run `pnpm check` before reporting implementation complete. Append commands, outcomes, review findings, and completion evidence during implementation.
 
 ## Notes
+
+- Completed in `92d6982` (`test(playground): verify component author adoption workflow`). All criteria and required checks passed; no unresolved review findings.
 
 - Independent Standards and Spec reviews: zero findings. Both reviewed the four-file scope, fixture isolation, corrected cases, and pinned upstream policy evidence. Full checks and Nuxt execution were performed by the implementing agent, not the reviewers.
 
