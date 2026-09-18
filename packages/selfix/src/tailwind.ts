@@ -232,7 +232,9 @@ function inspectToken(
   }
 
   const generated = designSystem.candidatesToCss([token])[0]
-  const declarations = generated ? parseDeclarations(generated) : (customClasses.get(token) ?? [])
+  const generatedDeclarations = generated ? parseDeclarations(generated) : []
+  const customDeclarations = customClasses.get(token) ?? []
+  const declarations = [...generatedDeclarations, ...customDeclarations]
 
   if (declarations.length === 0) {
     return { known: false, categories: ["unknown"], rawColor: false }
@@ -241,11 +243,10 @@ function inspectToken(
   return {
     known: true,
     categories: categorize(declarations),
-    rawColor: hasRawColor(
-      declarations,
-      stockColors,
-      generated === null || hasArbitraryColorValue(token),
-    ),
+    // Semantic theme utilities can compile to literals; custom CSS literals are always checked.
+    rawColor:
+      hasRawColor(generatedDeclarations, stockColors, hasArbitraryColorValue(token)) ||
+      hasRawColor(customDeclarations, stockColors, true),
   }
 }
 

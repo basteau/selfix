@@ -11,6 +11,25 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it.each(["no-restyle", "no-raw-colors"] as const)(
+    "%s independently rejects custom colors overlapping a layout utility",
+    async (rule) => {
+      const linter = await createLinter({
+        css: `${css} .mt-4 { color: red; }`,
+        config: { rules: only(rule) },
+      })
+      expect(linter.lint(button('class="mt-4"'), "Overlap.vue")).toEqual([
+        expect.objectContaining({
+          rule,
+          className: "mt-4",
+          file: "Overlap.vue",
+          line: 2,
+          column: 19,
+        }),
+      ])
+    },
+  )
+
   it("reports shadowed helper calls at their original class attributes", async () => {
     const linter = await createLinter({ css, config: { rules: only("require-static-classes") } })
     const source = `<script setup>

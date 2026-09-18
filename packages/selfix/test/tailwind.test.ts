@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { describe, expect, test } from "vitest"
@@ -35,6 +35,51 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test("combines generated and custom declarations for the same class", async () => {
+    const tailwind = await createTailwind(
+      '@import "tailwindcss"; .mt-4 { color: red; }',
+      process.cwd(),
+    )
+    const expected = { known: true, categories: ["layout", "color"], rawColor: true }
+    expect(tailwind.inspect("mt-4")).toEqual(expected)
+    expect(tailwind.inspect("mt-4")).toEqual(expected)
+  })
+
+  test("preserves literal provenance when semantic utilities overlap custom CSS", async () => {
+    const tailwind = await createTailwind(
+      `@import "tailwindcss";
+       @theme inline { --color-brand: rebeccapurple; }
+       .text-brand { margin-top: 1rem; }
+       .bg-brand { color: red; }`,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("text-brand")).toEqual({
+      known: true,
+      categories: ["layout", "color"],
+      rawColor: false,
+    })
+    expect(tailwind.inspect("bg-brand")).toEqual({
+      known: true,
+      categories: ["color"],
+      rawColor: true,
+    })
+  })
+
+  test("includes overlapping declarations from imported stylesheets", async () => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-overlap-"))
+    try {
+      await writeFile(join(base, "custom.css"), ".mt-4 { color: red; }")
+      const tailwind = await createTailwind('@import "tailwindcss"; @import "./custom.css";', base)
+      expect(tailwind.inspect("mt-4")).toEqual({
+        known: true,
+        categories: ["layout", "color"],
+        rawColor: true,
+      })
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
   test.each(["", "tw:"])("recognizes named literals with prefix %s", async (prefix) => {
     const css = `
       @import "tailwindcss";
