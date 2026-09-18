@@ -302,42 +302,106 @@ type Declaration = {
 
 function collectCustomClasses(chunks: string[]): Map<string, Declaration[]> {
   const customClasses = new Map<string, Declaration[]>()
-  const cssWithoutProperties = stripIgnoredCss(chunks.join("\n"))
-  const rulePattern = /([^{}@]+)\{([^{}]*)\}/g
-  let match: RegExpExecArray | null
-
-  while ((match = rulePattern.exec(cssWithoutProperties))) {
-    const selector = match[1] ?? ""
-    const declarations = parseDeclarations(match[2] ?? "")
-    if (declarations.length === 0) continue
-
-    for (const className of selector.matchAll(/\.([_a-zA-Z][\w-]*)/g)) {
-      const existing = customClasses.get(className[1] ?? "") ?? []
-      customClasses.set(className[1] ?? "", [...existing, ...declarations])
-    }
+  for (const css of chunks) {
+    scanDeclarations(css, (declaration, selector) => {
+      for (const className of selector.matchAll(/\.([_a-zA-Z][\w-]*)/g)) {
+        const name = className[1]!
+        const existing = customClasses.get(name) ?? []
+        existing.push(declaration)
+        customClasses.set(name, existing)
+      }
+    })
   }
-
   return customClasses
 }
 
 function parseDeclarations(css: string): Declaration[] {
-  const cssWithoutProperties = stripIgnoredCss(css)
   const declarations: Declaration[] = []
-  const declarationPattern = /([_a-zA-Z-][\w-]*)\s*:\s*([^;{}]+)(?:;|$)/g
-  let match: RegExpExecArray | null
-
-  while ((match = declarationPattern.exec(cssWithoutProperties))) {
-    const property = match[1]
-    const value = match[2]
-    if (!property || !value) continue
-    declarations.push({ property, value: value.trim() })
-  }
-
+  scanDeclarations(css, (declaration) => declarations.push(declaration))
   return declarations
 }
 
-function stripIgnoredCss(css: string): string {
-  return css.replace(/\/\*[\s\S]*?\*\//g, "").replace(/@property\s+[^{]+\{[^{}]*\}/g, "")
+// Scan structural boundaries only; Tailwind still owns CSS compilation. Unsupported
+// declaration syntax fails explicitly instead of disappearing from inspection.
+function scanDeclarations(
+  css: string,
+  visit: (declaration: Declaration, selector: string) => void,
+): void {
+  const blocks: { selector: string; ignored: boolean }[] = []
+  const delimiters: string[] = []
+  let text = ""
+  let quote = ""
+
+  function fail(reason: string): never {
+    throw new Error(`Unable to inspect CSS: ${reason}.`)
+  }
+
+  function flush(): void {
+    const statement = text.trim()
+    text = ""
+    if (!statement || statement.startsWith("@")) return
+    const match = /^([_a-zA-Z-][\w-]*)\s*:\s*([\s\S]+)$/.exec(statement)
+    if (!match) fail("unsupported or malformed declaration")
+    const block = blocks.at(-1)
+    if (!block) fail("declaration outside a rule")
+    if (!block.ignored) {
+      visit({ property: match[1]!, value: match[2]!.trim() }, block.selector)
+    }
+  }
+
+  for (let index = 0; index < css.length; index += 1) {
+    const char = css[index]!
+    if (char === "\\") {
+      if (index + 1 === css.length) fail("unterminated escape")
+      text += char + css[++index]!
+      continue
+    }
+    if (quote) {
+      text += char
+      if (char === quote) quote = ""
+      continue
+    }
+    if (char === "'" || char === '"') {
+      quote = char
+      text += char
+      continue
+    }
+    if (char === "/" && css[index + 1] === "*") {
+      const end = css.indexOf("*/", index + 2)
+      if (end === -1) fail("unterminated comment")
+      index = end + 1
+      continue
+    }
+    if (char === "(" || char === "[") {
+      delimiters.push(char === "(" ? ")" : "]")
+    } else if (char === ")" || char === "]") {
+      if (delimiters.pop() !== char) fail("unmatched value delimiter")
+    } else if (delimiters.length === 0) {
+      if (char === "{") {
+        const header = text.trim()
+        if (!header) fail("missing rule header")
+        if (/^--[\w-]*\s*:/.test(header)) fail("block-valued custom properties are unsupported")
+        const parent = blocks.at(-1)
+        blocks.push({
+          selector: header.startsWith("@") ? (parent?.selector ?? "") : header,
+          ignored: (parent?.ignored ?? false) || /^@property(?:\s|$)/i.test(header),
+        })
+        text = ""
+        continue
+      }
+      if (char === ";" || char === "}") {
+        flush()
+        if (char === "}" && !blocks.pop()) fail("unmatched closing brace")
+        continue
+      }
+    }
+    text += char
+  }
+
+  if (quote) fail("unterminated string")
+  if (delimiters.length) fail("unclosed value delimiter")
+  if (blocks.length) fail("unclosed rule")
+  flush()
 }
 
 function categorize(declarations: Declaration[]): Category[] {

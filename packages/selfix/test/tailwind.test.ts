@@ -35,6 +35,102 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test("does not treat quoted content as color declarations", async () => {
+    const css = '.label { content: "literal;color:red;"; } .actual { color: red; }'
+    const tailwind = await createTailwind(css, process.cwd())
+    expect(tailwind.inspect("label")).toEqual({
+      known: true,
+      categories: ["unknown"],
+      rawColor: false,
+    })
+    const linter = await createLinter({ css })
+    expect(
+      linter
+        .lint('<template><div class="label actual" /></template>')
+        .filter((item) => item.rule === "no-raw-colors")
+        .map((item) => item.className),
+    ).toEqual(["actual"])
+  })
+  test("preserves escaped quotes and comment-like strings without inventing rules", async () => {
+    const tailwind = await createTailwind(
+      String.raw`
+      .label { content: "escaped \"; } .fake { color:red; } /*"; margin: 1rem; }
+      .actual { content: "/*"; color: red; --text: "*/"; }
+      /* .commented { color: red; } */
+      @property --registered {
+        syntax: "<color>";
+        inherits: false;
+        initial-value: red;
+      }
+    `,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("label")).toEqual({
+      known: true,
+      categories: ["layout", "unknown"],
+      rawColor: false,
+    })
+    expect(tailwind.inspect("actual")).toEqual({
+      known: true,
+      categories: ["color", "unknown"],
+      rawColor: true,
+    })
+    for (const token of ["fake", "commented"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: false,
+        categories: ["unknown"],
+        rawColor: false,
+      })
+    }
+  })
+
+  test("preserves nested values and ignores property registrations in generated CSS", async () => {
+    const tailwind = await createTailwind(
+      `
+      @import "tailwindcss";
+      .nested { --color: var(--fallback, fn(a;b), #123456); }
+      @utility registered {
+        margin: 1rem;
+        @property --color {
+          syntax: "<color>";
+          inherits: false;
+          initial-value: red;
+        }
+      }
+      @media (width > 10px) { .responsive, .other:hover { padding: 1rem } }
+    `,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("nested")).toEqual({
+      known: true,
+      categories: ["color"],
+      rawColor: true,
+    })
+    expect(tailwind.inspect("registered")).toEqual({
+      known: true,
+      categories: ["layout"],
+      rawColor: false,
+    })
+    for (const token of ["responsive", "other"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: true,
+        categories: ["spacing"],
+        rawColor: false,
+      })
+    }
+  })
+
+  test.each([
+    '.broken { content: "unterminated; }',
+    ".broken { color: red; /* unterminated",
+    ".broken { color: var(--brand; }",
+    ".broken { color: red;",
+    ".broken { color: red; invalid; }",
+    ".broken { --value: { color: red; }; }",
+  ])("rejects malformed or unsupported CSS instead of silently inspecting it: %s", async (css) => {
+    await expect(createTailwind(css, process.cwd())).rejects.toThrow()
+  })
+
   test.each([
     ["leading-6", "typography"],
     ["ease-in", "motion"],
