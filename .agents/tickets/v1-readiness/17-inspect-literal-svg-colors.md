@@ -14,7 +14,7 @@ Extend semantic-color policy to explicitly supported literal SVG presentation at
 - [ ] Define and test treatment of currentColor, none, semantic CSS variables, paint-server URLs, and palette references.
 - [ ] Decide opaque-expression behavior and interaction with component props without scanning arbitrary unconfigured data.
 - [ ] Preserve original SFC locations and existing class-associated color checks.
-- [ ] Document the agreed coverage and limits in the root README with focused collector/rule tests.
+- [ ] Document the agreed coverage and limits in the [rule reference](../../../docs/rules.md) and [analysis limits](../../../docs/analysis.md) with focused collector/rule tests.
 
 ## Verification
 
@@ -24,7 +24,7 @@ Run `pnpm check` before reporting implementation complete. Append commands, outc
 
 ## Notes
 
-The README explicitly excludes fill/stroke attributes today; this is an approved draft feature, not a regression fix. Upstream static SVG color checks are a comparison point. Reuse proven color-value semantics where appropriate without inventing runtime color evaluation.
+The rule reference explicitly excludes fill/stroke attributes today; this is an approved draft feature, not a regression fix. Upstream static SVG color checks are a comparison point. Reuse proven color-value semantics where appropriate without inventing runtime color evaluation.
 
 Approved for retention as draft work, not implementation-ready; resolve the listed design/testing decisions before promotion to ready.
 

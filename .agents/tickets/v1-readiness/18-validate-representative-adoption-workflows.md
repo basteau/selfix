@@ -12,7 +12,7 @@ Demonstrate realistic consumer and component-author adoption with bounded runnab
 - [ ] Agree on a small conventional Vue fixture, a Nuxt UI fixture, and a component-author workflow, including their execution and dependency-version scope.
 - [ ] Verify component-author overrides relax only selected rules while consumer policy and vocabulary checks remain active.
 - [ ] Reuse or extend existing playground and Nuxt smoke infrastructure; do not add another permanent application or publishable package.
-- [ ] Capture representative intentional policy differences from the pinned upstream reference through tests and root README guidance.
+- [ ] Capture representative intentional policy differences from the pinned upstream reference through tests and [adoption guidance](../../../docs/adoption.md).
 - [ ] Define which checks run routinely and which require network preparation, with clear failure reporting and bounded CI cost.
 - [ ] Record commands, versions, outcomes, and remaining limits; do not equate successful fixtures with complete upstream parity.
 

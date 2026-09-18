@@ -14,7 +14,7 @@ Make built-in no-restyle diagnostics explain the rejected category and a correct
 - [ ] Unknown-category findings explain the analysis/policy limitation without the phrase 'the component owns its unknown'.
 - [ ] Explicit deny findings remain clearly distinguishable from missing allowances.
 - [ ] Do not invent available component sizes, variants, theme tokens, or source definitions.
-- [ ] Custom messages, placeholders, notes, prop/slot context, locations, and ordering retain their documented behavior; update root README examples as needed.
+- [ ] Custom messages, placeholders, notes, prop/slot context, locations, and ordering retain their documented behavior; update the root README and [rule examples](../../../docs/rules.md) as needed.
 
 ## Verification
 

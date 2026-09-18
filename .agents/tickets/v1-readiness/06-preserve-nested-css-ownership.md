@@ -14,7 +14,7 @@ Ensure supported nested CSS declarations remain associated with the classes they
 - [ ] Cover nested selector combinations within the selector subset established by ticket 05; unsupported combinations fail explicitly.
 - [ ] Do not assign unrelated descendant declarations to an owner without a defined supported interpretation.
 - [ ] Imported nested stylesheets and repeated inspection behave consistently.
-- [ ] Document supported nesting and explicit failure boundaries in the root README.
+- [ ] Document supported nesting and explicit failure boundaries in [theme documentation](../../../docs/themes.md) and [analysis limits](../../../docs/analysis.md).
 
 ## Verification
 

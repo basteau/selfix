@@ -14,7 +14,7 @@ Include Tailwind-applied declarations in custom-class inspection so @apply canno
 - [ ] Preserve the distinction between semantic theme values and raw palette/literal values when incorporating applied declarations.
 - [ ] Imported stylesheets and mixtures of direct and applied declarations retain all relevant effects without duplicate diagnostics.
 - [ ] Invalid or unsupported @apply analysis produces an actionable failure rather than silently skipping the directive.
-- [ ] Document the supported @apply boundary in the root README.
+- [ ] Document the supported @apply boundary in [theme documentation](../../../docs/themes.md).
 
 ## Verification
 

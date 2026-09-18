@@ -13,7 +13,7 @@ Report unsupported external SFC scripts explicitly instead of silently losing th
 - [ ] The unsupported-input diagnostic remains an error when ordinary rules are disabled.
 - [ ] Independent trustworthy template sites retain findings where safe under existing recoverable-error behavior.
 - [ ] Inline scripts and script setup remain unchanged; no external application module is imported, executed, or followed.
-- [ ] The root README describes the external-script boundary and a supported alternative.
+- [ ] The [analysis documentation](../../../docs/analysis.md) describes the external-script boundary and a supported alternative.
 
 ## Verification
 

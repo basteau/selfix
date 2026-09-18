@@ -2,7 +2,7 @@
 
 Keep this pnpm workspace small: one publishable package in `packages/selfix` and one private Vue app in `apps/playground`.
 This file is the central contributor and agent guide; do not add nested AGENTS.md files.
-Keep all user documentation in the root README.md. Present selfix as a standalone project, with a brief acknowledgment of shadcn/lint; do not add port or migration documents.
+Keep essential project and setup information in the root README.md, and detailed guides, references, troubleshooting, and maintainer procedures in docs/. Present selfix as a standalone project, with a brief acknowledgment of shadcn/lint; do not add port or migration documents.
 
 - Target Vue 3 single-file components and Tailwind CSS 4.
 - Use one integration path: the standalone runner with selfix.config.ts, loaded by Node's native TypeScript support. Keep ESLint/Oxlint adapters and alternate config formats out of scope unless explicitly requested.

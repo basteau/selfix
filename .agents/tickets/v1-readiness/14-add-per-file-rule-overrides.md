@@ -14,7 +14,7 @@ Let component authors relax selected rules for implementation files while retain
 - [ ] A component implementation can disable selected rules without disabling independent vocabulary checks; consumer files retain their normal rules.
 - [ ] Validate override options and keep fatal parsing/unsupported-input behavior explicit even where ordinary rules are disabled.
 - [ ] Preserve current configuration behavior when overrides are omitted; do not introduce an adapter or alternate config format.
-- [ ] Include complete config/API/CLI regressions and update the root README adoption recipe.
+- [ ] Include complete config/API/CLI regressions and update the [adoption recipe](../../../docs/adoption.md).
 
 ## Verification
 
@@ -24,7 +24,7 @@ Run `pnpm check` before reporting implementation complete. Append commands, outc
 
 ## Notes
 
-README adoption currently recommends excluding component directories, which skips every rule. A bounded overrides mechanism was recommended, but glob semantics, inheritance, and API path handling remain undecided. Keep this draft until those choices are approved; do not copy an entire ESLint configuration model.
+The adoption guide currently recommends excluding component directories, which skips every rule. A bounded overrides mechanism was recommended, but glob semantics, inheritance, and API path handling remain undecided. Keep this draft until those choices are approved; do not copy an entire ESLint configuration model.
 
 Approved for retention as draft work, not implementation-ready; resolve the listed design/testing decisions before promotion to ready.
 

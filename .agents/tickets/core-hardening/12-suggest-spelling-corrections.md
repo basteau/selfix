@@ -18,7 +18,7 @@ Initial examples are `flex-cols` to `flex-col` and `hovr:flex` to `hover:flex`. 
 - [ ] Tie-breaking and output bounds are deterministic; ambiguous or invalid candidates can produce no suggestion.
 - [ ] Existing diagnostics remain available when suggestion generation yields nothing.
 - [ ] No autofix, application expression evaluation, runtime package, or cross-file analysis is introduced.
-- [ ] The agreed API and examples are documented in the root README.
+- [ ] The agreed API and examples are documented in [the API reference](../../../docs/api.md) and relevant rule examples.
 
 ## Verification
 
