@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { createLinter, defineConfig, ruleNames, type Config, type RuleName } from "../src/index.js"
 
 const css = '@import "tailwindcss"; @theme { --color-primary: #124578; }'
@@ -11,6 +11,85 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it("prepares policy regexes before linting and reuses them across files", async () => {
+    const patterns: string[] = []
+    vi.stubGlobal(
+      "RegExp",
+      new Proxy(RegExp, {
+        construct(target, args) {
+          patterns.push(String(args[0]))
+          return Reflect.construct(target, args)
+        },
+      }),
+    )
+    try {
+      const linter = await createLinter({
+        css,
+        config: {
+          ui: [],
+          components: ["^GlobalButton$"],
+          componentImports: ["^@policy/ui$"],
+          ignoreImports: ["^@policy/ignored$"],
+          rules: only("no-restyle", {
+            allow: ["layout"],
+            deny: ["px-*"],
+            message: "blocked {{className}}",
+            contracts: [
+              { pattern: "^(Button|GlobalButton)$", allow: ["p-*"] },
+              { pattern: ".*", allow: ["*"] },
+            ],
+          }),
+        },
+      })
+      const prepared = patterns.length
+      const source = `<script setup>
+import Button from '@policy/ui'
+import Ignored from '@policy/ignored'
+</script><template><Button class="p-4 px-2 mt-4" /><GlobalButton class="px-2" /><Ignored class="px-2" /></template>`
+      for (const file of ["First.vue", "Second.vue"]) {
+        expect(linter.lint(source, file)).toEqual([
+          expect.objectContaining({
+            file,
+            rule: "no-restyle",
+            severity: "error",
+            component: "Button",
+            className: "px-2",
+            message: "blocked px-2",
+          }),
+          expect.objectContaining({
+            file,
+            component: "Button",
+            className: "mt-4",
+            message: "blocked mt-4",
+          }),
+          expect.objectContaining({
+            file,
+            component: "GlobalButton",
+            className: "px-2",
+            message: "blocked px-2",
+          }),
+        ])
+      }
+      // Observe only policy regexes; Vue and Tailwind may construct their own.
+      const policyPatterns = [
+        "^GlobalButton$",
+        "^@policy/ui$",
+        "^@policy/ignored$",
+        "^(Button|GlobalButton)$",
+        ".*",
+        "^p-.*$",
+        "^px-.*$",
+        "^layout$",
+        "^.*$",
+      ]
+      expect(
+        patterns.slice(prepared).filter((pattern) => policyPatterns.includes(pattern)),
+      ).toEqual([])
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it("keeps uncertainty errors when ordinary rules are disabled", async () => {
     const linter = await createLinter({
       css,

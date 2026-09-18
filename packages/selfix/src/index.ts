@@ -43,18 +43,38 @@ export interface LinterOptions {
 function baseClass(token: string): string {
   return baseCandidate(token).replace(/^!|!$/g, "").replace(/^-/, "")
 }
-function matches(entries: string[], token: string, categories: Category[]) {
-  return entries.some((entry) => {
-    if (categories.includes(entry as Category)) return true
-    const regex = new RegExp(
-      `^${entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
-    )
-    return regex.test(entry.includes(":") ? token : baseClass(token))
-  })
+function prepareMatchers(entries: string[]) {
+  return entries.map((entry) => ({
+    entry,
+    fullToken: entry.includes(":"),
+    regex: new RegExp(`^${entry.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`),
+  }))
 }
-function policy(options: RuleOptions, component: string): RuleOptions {
-  const contract = options.contracts?.find((entry) => new RegExp(entry.pattern).test(component))
-  return contract ? { ...options, ...contract } : options
+function matches(
+  entries: ReturnType<typeof prepareMatchers>,
+  token: string,
+  categories: Category[],
+) {
+  return entries.some(
+    ({ entry, fullToken, regex }) =>
+      categories.includes(entry as Category) || regex.test(fullToken ? token : baseClass(token)),
+  )
+}
+function preparePolicy(options: RuleOptions, defaultAllow: string[]) {
+  return {
+    allow: prepareMatchers(options.allow ?? defaultAllow),
+    deny: prepareMatchers(options.deny ?? []),
+    message: options.message,
+  }
+}
+function prepareOptions(options: RuleOptions, defaultAllow: string[]) {
+  const fallback = preparePolicy(options, defaultAllow)
+  const contracts = (options.contracts ?? []).map((contract) => ({
+    regex: new RegExp(contract.pattern),
+    selected: preparePolicy({ ...options, ...contract }, defaultAllow),
+  }))
+  return (component: string) =>
+    contracts.find(({ regex }) => regex.test(component))?.selected ?? fallback
 }
 
 export async function createLinter({ css, base = process.cwd(), config = {} }: LinterOptions) {
@@ -63,19 +83,25 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
   const settings = ruleNames.map((name) => {
     const setting = config.rules?.[name] ?? "error"
     const [severity, options] = Array.isArray(setting) ? setting : [setting, {}]
-    return { name, severity, options }
+    return {
+      name,
+      severity,
+      policy: prepareOptions(options, name === "no-restyle" ? ["layout"] : []),
+    }
   })
+  const ignoreImports = (config.ignoreImports ?? []).map((pattern) => new RegExp(pattern))
+  const components = (config.components ?? []).map((pattern) => new RegExp(pattern))
+  const componentImports = (config.componentImports ?? []).map((pattern) => new RegExp(pattern))
   function isDesignComponent(site: ClassSite) {
     const source = site.importSource
-    if (source && config.ignoreImports?.some((pattern) => new RegExp(pattern).test(source)))
-      return false
+    if (source && ignoreImports.some((pattern) => pattern.test(source))) return false
     return Boolean(
-      config.components?.some((pattern) => new RegExp(pattern).test(site.component)) ||
+      components.some((pattern) => pattern.test(site.component)) ||
       (source &&
         ((config.ui ?? ["@/components/ui"]).some(
           (prefix) => source === prefix || source.startsWith(`${prefix}/`),
         ) ||
-          config.componentImports?.some((pattern) => new RegExp(pattern).test(source)))),
+          componentImports.some((pattern) => pattern.test(source)))),
     )
   }
 
@@ -108,11 +134,11 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
         emit("parse-error", "error", error.offset, error.message)
       if (collected.fatal)
         return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
-      for (const { name, severity, options } of settings) {
+      for (const { name, severity, policy } of settings) {
         if (severity === "off") continue
         const report = (
           site: { component: string; offset: number },
-          selected: RuleOptions,
+          selected: ReturnType<typeof preparePolicy>,
           fallback: string,
           token = "",
           category: Category = "unknown",
@@ -136,11 +162,8 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
         }
         if (name === "no-inline-styles") {
           for (const site of collected.styles) {
-            const selected = policy(options, site.component)
-            if (
-              matches(selected.allow ?? [], "style", []) &&
-              !matches(selected.deny ?? [], "style", [])
-            )
+            const selected = policy(site.component)
+            if (matches(selected.allow, "style", []) && !matches(selected.deny, "style", []))
               continue
             report(
               site,
@@ -152,7 +175,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
         }
         for (const site of collected.sites) {
           if (name === "no-restyle" && !isDesignComponent(site)) continue
-          const selected = policy(options, site.component)
+          const selected = policy(site.component)
           if (name === "require-static-classes") {
             if (site.dynamic)
               report(
@@ -164,16 +187,16 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
           }
           for (const token of new Set(site.tokens)) {
             const info = tailwind.inspect(token)
-            const denied = matches(selected.deny ?? [], token, info.categories)
+            const denied = matches(selected.deny, token, info.categories)
             const category =
-              info.categories.find((item) => selected.deny?.includes(item)) ??
+              info.categories.find((item) => selected.deny.some(({ entry }) => entry === item)) ??
               info.categories.find((item) => item !== "layout") ??
               info.categories[0] ??
               "unknown"
             if (name === "no-restyle") {
               // A utility may affect multiple categories. Opening layout cannot also open color.
               const disallowedCategory = info.categories.find(
-                (item) => !matches(selected.allow ?? ["layout"], token, [item]),
+                (item) => !matches(selected.allow, token, [item]),
               )
               const rejectedCategory = denied ? category : (disallowedCategory ?? category)
               if (denied || disallowedCategory)
@@ -188,7 +211,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
                 )
               continue
             }
-            if (!denied && matches(selected.allow ?? [], token, info.categories)) continue
+            if (!denied && matches(selected.allow, token, info.categories)) continue
             if (denied) {
               report(
                 site,
