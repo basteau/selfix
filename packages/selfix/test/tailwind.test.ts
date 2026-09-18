@@ -35,6 +35,111 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test("shares color value semantics across custom CSS composites and nested fallbacks", async () => {
+    const css = `@import "tailwindcss";
+      .fallback { color: var(--brand, var(--other, red)); }
+      .palette { color: var(--brand, var(--color-red-500, var(--other))); }
+      .background { background: center / cover linear-gradient(red, blue); }
+      .shadow { box-shadow: 0 0 4px red; }
+      .border { border-inline-start: 1px solid red; }
+      .outline { outline: 1px solid #abc; }
+      .filter { filter: drop-shadow(0 0 4px rgb(1 2 3)); }
+      .decoration { text-decoration: underline red; }
+      .transparent { text-shadow: 0 0 4px transparent; }
+      .semantic { background: linear-gradient(var(--red), var(--blue)); }
+      .nested { color: var(--brand, var(--other)); }
+      .mix { color: color-mix(in srgb, var(--brand), currentColor); }
+      .light { color: light-dark(var(--brand), var(--other)); }
+      .url { background: url(/red/blue.svg#abc); }
+      .urlquoted { background: url("icon)red.svg"); }
+      .quoted { background: image("red", "#abc", "var(--color-red-500)"); }
+      .identifiers { color: var(--brand_red, var(--red-blue)); }
+      .unrelated { font-family: red; content: "red"; }
+    `
+    const raw = [
+      "fallback",
+      "palette",
+      "background",
+      "shadow",
+      "border",
+      "outline",
+      "filter",
+      "decoration",
+      "transparent",
+    ]
+    const semantic = [
+      "semantic",
+      "nested",
+      "mix",
+      "light",
+      "url",
+      "urlquoted",
+      "quoted",
+      "identifiers",
+      "unrelated",
+    ]
+    const tailwind = await createTailwind(css, process.cwd())
+    for (const token of [...raw, ...semantic]) {
+      expect(tailwind.inspect(token), token).toMatchObject({
+        known: true,
+        rawColor: raw.includes(token),
+      })
+    }
+  })
+
+  test.each(["", "tw:"])(
+    "detects composite raw colors independently with prefix %s",
+    async (prefix) => {
+      const css = `@import "tailwindcss"; @theme inline ${prefix ? "prefix(tw)" : ""} { --color-brand: red; }`
+      const raw = [
+        "bg-[var(--color-red-500,red)]",
+        "[background:red]",
+        "hover:bg-[linear-gradient(red,blue)]!",
+        "focus:!shadow-[0_0_4px_red]",
+        "drop-shadow-[0_0_4px_red]",
+        "[text-decoration:underline_red]",
+        "[color:var(--color-red-500,var(--brand))]",
+        "[color:var(--brand,var(--other,red))]",
+        `[color:var(--${prefix ? "tw-" : ""}color-red-500,var(--other))]`,
+      ].map((token) => prefix + token)
+      const semantic = [
+        "bg-brand",
+        "bg-transparent",
+        "bg-[currentColor]",
+        "bg-[var(--red)]",
+        "bg-[var(--brand_red)]",
+        "bg-[color-mix(in_srgb,var(--brand),var(--other))]",
+        "[color:var(--brand,var(--other))]",
+        "bg-[linear-gradient(var(--brand),var(--other))]",
+      ].map((token) => prefix + token)
+      const tailwind = await createTailwind(css, process.cwd())
+      for (const token of [...raw, ...semantic]) {
+        expect(tailwind.inspect(token), token).toMatchObject({
+          known: true,
+          rawColor: raw.includes(token),
+        })
+      }
+      const linter = await createLinter({
+        css,
+        config: {
+          rules: {
+            "no-raw-colors": "error",
+            "no-restyle": "off",
+            "no-arbitrary-values": "off",
+            "no-inline-styles": "off",
+            "no-unknown-classes": "off",
+            "require-static-classes": "off",
+          },
+        },
+      })
+      expect(
+        linter
+          .lint(`<template><div class="${[...raw, ...semantic].join(" ")}" /></template>`)
+          .map(({ rule, className }) => ({ rule, className })),
+      ).toEqual(raw.map((className) => ({ rule: "no-raw-colors", className })))
+    },
+  )
+
   test("does not treat quoted content as color declarations", async () => {
     const css = '.label { content: "literal;color:red;"; } .actual { color: red; }'
     const tailwind = await createTailwind(css, process.cwd())

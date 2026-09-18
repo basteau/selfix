@@ -62,17 +62,29 @@ const cssNamedColors = new Set(
   transparent`.split(/\s+/),
 )
 
-function hasLiteralColor(value: string): boolean {
-  if (
-    /(?:^|[\s([,:])(?:#[0-9a-f]{3,8}\b|(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\()/i.test(
-      value,
-    )
-  ) {
-    return true
-  }
-  // Accept arbitrary property/type hints and declaration importance, not variable names.
-  const named = /^(?:[\w-]+:)?\s*([a-z]+)\s*(?:!important)?$/i.exec(value.trim())
-  return named !== null && cssNamedColors.has(named[1]!.toLowerCase())
+// Ignore strings and URLs, and consume whole identifiers so names such as
+// --red and red-banner cannot be mistaken for literal colors.
+function colorValueTokens(value: string, arbitrary = false): string[] {
+  const tokens =
+    value.match(
+      /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\((?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|[^)"'\\])*\)|--[\w-]+|#[\w-]+|[+-]?(?:\d*\.)?\d+(?:[a-z%]+)?|(?:\\.|[a-z_-])(?:\\.|[\w-])*(?:\()?|[^\s]/gi,
+    ) ?? []
+  return arbitrary
+    ? tokens.flatMap((token) =>
+        token.startsWith("--") || /^(?:["']|url\()/i.test(token)
+          ? [token]
+          : token.split(/(?<!\\)_/),
+      )
+    : tokens
+}
+
+function hasLiteralColor(value: string, arbitrary = false): boolean {
+  return colorValueTokens(value, arbitrary).some(
+    (token) =>
+      cssNamedColors.has(token.toLowerCase()) ||
+      /^#[0-9a-f]{3,8}$/i.test(token) ||
+      /^(?:rgb|rgba|hsl|hsla|hwb|lab|lch|oklab|oklch|color)\($/i.test(token),
+  )
 }
 
 const colorNamespaces = [
@@ -263,7 +275,7 @@ function hasArbitraryColorValue(token: string): boolean {
   if (bracketStart === -1 || bracketEnd <= bracketStart) return false
 
   const value = base.slice(bracketStart + 1, bracketEnd)
-  return hasLiteralColor(value)
+  return hasLiteralColor(value, true)
 }
 
 // Adapted from shadcn-ui/lint's bracket-aware class normalization (MIT).
@@ -530,13 +542,19 @@ function isColorDeclaration(property: string): boolean {
   return false
 }
 
+function isCompositeColorDeclaration(property: string): boolean {
+  return /^(?:background(?:-image)?|border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?|border-image(?:-source)?|outline|text-decoration|column-rule|box-shadow|text-shadow|filter|backdrop-filter|--tw-drop-shadow(?:-size)?|--tw-(?:inset-)?(?:shadow|ring-shadow))$/.test(
+    property,
+  )
+}
+
 function hasRawColor(
   declarations: Declaration[],
   stockColors: Set<string>,
   includeDeclarationLiterals: boolean,
 ): boolean {
   return declarations.some(({ property, value }) => {
-    if (!isColorDeclaration(property)) return false
+    if (!isColorDeclaration(property) && !isCompositeColorDeclaration(property)) return false
     if (includeDeclarationLiterals && hasLiteralColor(value)) {
       return true
     }
@@ -545,8 +563,10 @@ function hasRawColor(
 }
 
 function extractColorVariables(value: string): string[] {
-  return Array.from(
-    value.matchAll(/var\(--(?:[a-z]+-)?color-([^)]+)\)/g),
-    (match) => match[1],
-  ).filter(Boolean)
+  const tokens = colorValueTokens(value)
+  return tokens.flatMap((token, index) => {
+    if (token.toLowerCase() !== "var(") return []
+    const match = /^--(?:[a-z]+-)?color-(.+)$/.exec(tokens[index + 1] ?? "")
+    return match ? [match[1]!] : []
+  })
 }
