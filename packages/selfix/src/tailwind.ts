@@ -404,37 +404,30 @@ type Declaration = {
 
 function collectCustomClasses(chunks: string[]): Map<string, Declaration[]> {
   const customClasses = new Map<string, Declaration[]>()
-  const selectors = new Map<string, string[]>()
   for (const css of chunks) {
     scanDeclarations(
       css,
-      (declaration, selector) => {
-        for (const name of selectors.get(selector) ?? []) {
+      (declaration, _selector, names) => {
+        for (const name of names) {
           const existing = customClasses.get(name) ?? []
           existing.push(declaration)
           customClasses.set(name, existing)
         }
       },
-      (selector, parentSelector) => {
-        if (parentSelector) {
-          throw new Error(
-            `Unable to inspect CSS: unsupported selector "${selector}" (nested selector under "${parentSelector}").`,
-          )
-        }
-        if (!selectors.has(selector)) selectors.set(selector, selectorClasses(selector))
-      },
+      (selector, parentSelector, parentClasses) =>
+        selectorClasses(selector, parentSelector ? parentClasses : undefined),
     )
   }
   return customClasses
 }
 
 // This is class attribution, not selector matching or cascade evaluation.
-function selectorClasses(selector: string): string[] {
+function selectorClasses(selector: string, parentClasses?: string[]): string[] {
   const names = new Set<string>()
   const functions: string[] = []
   // Sticky matching makes unsupported characters fail instead of yielding partial names.
   const tokenPattern =
-    /\[(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|[^\]"'\\])*\]|(?:[.#]|::?)?(?:--|-[a-zA-Z_]|[a-zA-Z_])[\w-]*(?:\()?|\d+(?:\.\d+)?%|\s+|[*,)>+~]/y
+    /\[(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|[^\]"'\\])*\]|(?:[.#]|::?)?(?:--|-[a-zA-Z_]|[a-zA-Z_])[\w-]*(?:\()?|\d+(?:\.\d+)?%|\s+|[&*,)>+~]/y
   let index = 0
   let previous = ""
   let relationship = false
@@ -457,7 +450,20 @@ function selectorClasses(selector: string): string[] {
       }
       continue
     }
-    if (token.endsWith("(")) {
+    if (
+      parentClasses &&
+      (!previous || (previous === "," && functions.length === 0)) &&
+      token !== "&"
+    ) {
+      fail("nested selector branches must begin with a parent reference (&)")
+    }
+    if (token === "&") {
+      if (!parentClasses || functions.length || (previous && previous !== ",")) {
+        fail("parent references are supported only at the start of a nested selector branch")
+      }
+      hasClass = true
+      for (const name of parentClasses) names.add(name)
+    } else if (token.endsWith("(")) {
       const name = token.slice(0, -1).toLowerCase()
       if (![":is", ":where", ":not"].includes(name)) {
         fail("only :is(), :where(), and :not() selector functions are supported")
@@ -495,10 +501,10 @@ function parseDeclarations(css: string): Declaration[] {
 // declaration syntax fails explicitly instead of disappearing from inspection.
 function scanDeclarations(
   css: string,
-  visit: (declaration: Declaration, selector: string) => void,
-  inspectSelector?: (selector: string, parentSelector: string) => void,
+  visit: (declaration: Declaration, selector: string, classes: string[]) => void,
+  inspectSelector?: (selector: string, parentSelector: string, parentClasses: string[]) => string[],
 ): void {
-  const blocks: { selector: string; ignored: boolean }[] = []
+  const blocks: { selector: string; classes: string[]; ignored: boolean }[] = []
   const delimiters: string[] = []
   let text = ""
   let quote = ""
@@ -516,7 +522,7 @@ function scanDeclarations(
     const block = blocks.at(-1)
     if (!block) fail("declaration outside a rule")
     if (!block.ignored) {
-      visit({ property: match[1]!, value: match[2]!.trim() }, block.selector)
+      visit({ property: match[1]!, value: match[2]!.trim() }, block.selector, block.classes)
     }
   }
 
@@ -553,10 +559,21 @@ function scanDeclarations(
         if (!header) fail("missing rule header")
         if (/^--[\w-]*\s*:/.test(header)) fail("block-valued custom properties are unsupported")
         const parent = blocks.at(-1)
-        if (!header.startsWith("@") && !parent?.ignored) {
-          inspectSelector?.(header, parent?.selector ?? "")
+        if (
+          inspectSelector &&
+          parent?.selector &&
+          !parent.ignored &&
+          header.startsWith("@") &&
+          !/^@(media|supports|container|starting-style|property)(?:[\s(]|$)/i.test(header)
+        ) {
+          fail(`unsupported nested at-rule "${header}" under "${parent.selector}"`)
         }
+        const classes =
+          !header.startsWith("@") && !parent?.ignored
+            ? (inspectSelector?.(header, parent?.selector ?? "", parent?.classes ?? []) ?? [])
+            : (parent?.classes ?? [])
         blocks.push({
+          classes,
           selector: header.startsWith("@") ? (parent?.selector ?? "") : header,
           ignored: (parent?.ignored ?? false) || /^@property(?:\s|$)/i.test(header),
         })

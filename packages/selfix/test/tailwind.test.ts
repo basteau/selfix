@@ -35,6 +35,132 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test("retains declarations from parent-reference pseudo selectors", async () => {
+    const tailwind = await createTailwind(
+      ".card { margin: 1rem; &:hover { color: red; } }",
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card")).toEqual({
+      known: true,
+      categories: ["layout", "color"],
+      rawColor: true,
+    })
+  })
+
+  test("preserves nested ownership through conditions, lists, and multiple levels", async () => {
+    const tailwind = await createTailwind(
+      `.card, :is(.panel, .tile):not(.ghost) {
+        @media (width > 10px) {
+          margin: 1rem;
+          &:hover, &:where(.active, .selected):not(.excluded) {
+            @supports (display: grid) {
+              padding: 1rem;
+              &::before { color: red; }
+            }
+          }
+        }
+      }
+      .other { &:hover { border-radius: 1rem; } }
+      .ghost, .excluded { margin: 1rem; }`,
+      process.cwd(),
+    )
+    for (const token of ["card", "panel", "tile"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: true,
+        categories: ["layout", "color", "spacing"],
+        rawColor: true,
+      })
+    }
+    for (const token of ["active", "selected"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: true,
+        categories: ["color", "spacing"],
+        rawColor: true,
+      })
+    }
+    expect(tailwind.inspect("other")).toEqual({
+      known: true,
+      categories: ["shape"],
+      rawColor: false,
+    })
+    for (const token of ["ghost", "excluded"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: true,
+        categories: ["layout"],
+        rawColor: false,
+      })
+    }
+  })
+
+  test.each([
+    "& .child",
+    "& > span",
+    "& + .sibling",
+    "& ~ .sibling",
+    "&:hover, .child",
+    ":is(&)",
+    ".active&",
+    "& &",
+  ])("rejects unsupported nested relationship %s", async (selector) => {
+    await expect(
+      createTailwind(`.card { ${selector} { color: red; } }`, process.cwd()),
+    ).rejects.toThrow(/Unable to inspect CSS: unsupported selector/)
+  })
+
+  test.each(["@media(width>1px)", "@supports(display:grid)", "@container(width>1px)"])(
+    "preserves ownership in compact conditional %s",
+    async (condition) => {
+      const tailwind = await createTailwind(`.card { ${condition} { color: red; } }`, process.cwd())
+      expect(tailwind.inspect("card")).toEqual({
+        known: true,
+        categories: ["color"],
+        rawColor: true,
+      })
+    },
+  )
+
+  test("rejects unsupported nested at-rule ownership", async () => {
+    await expect(
+      createTailwind(".card { @scope (.child) { color: red; } }", process.cwd()),
+    ).rejects.toThrow(/Unable to inspect CSS: unsupported nested at-rule/)
+  })
+
+  test("inspects imported nested declarations consistently without losing literal provenance", async () => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-nested-css-"))
+    try {
+      await writeFile(
+        join(base, "theme.css"),
+        `
+        .text-primary { @container (width > 10px) {
+          &[data-label="&.fake"] { @starting-style { color: red; } }
+        } }
+      `,
+      )
+      const tailwind = await createTailwind(
+        `
+        @import "tailwindcss";
+        @import "./theme.css";
+        @theme { --color-primary: #123456; }
+      `,
+        base,
+      )
+      for (let count = 0; count < 2; count++) {
+        expect(tailwind.inspect("text-primary")).toEqual({
+          known: true,
+          categories: ["color"],
+          rawColor: true,
+        })
+        expect(tailwind.inspect("fake")).toEqual({
+          known: false,
+          categories: ["unknown"],
+          rawColor: false,
+        })
+      }
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
   test.each([
     String.raw`.hover\:card`,
     String.raw`.\63 ard`,

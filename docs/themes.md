@@ -25,6 +25,36 @@ directory when omitted). Imports inside a target resolve from that file's direct
 Missing targets fail without falling back to package CSS. Aliases do not affect trusted
 `@plugin`/`@config` module resolution or selfix's stock-color reference theme.
 
+### Nested custom CSS
+
+selfix inspects supported nested declarations from the CSS entry and imported stylesheets:
+
+```css
+.card {
+  margin: 1rem;
+  &:hover,
+  &:focus {
+    @media (width > 40rem) {
+      color: red;
+    }
+  }
+}
+```
+
+Here `card` retains both layout and color declarations, including the literal `red`.
+It can trigger both `no-restyle` and `no-raw-colors`, independently of whether the
+media query or pseudo-class currently matches. Nesting does not turn a literal
+color into a semantic theme reference.
+
+Each nested selector-list branch must start with a single `&`, followed by a
+supported compound selector. Multiple levels and `@media`, `@supports`,
+`@container`, and `@starting-style` blocks retain ownership. Descendants, siblings,
+parent references inside functions, and other nested at-rule blocks fail inspection
+explicitly; they are not attributed to the enclosing class. `@property` registrations
+remain ignored. See the [bounded selector subset](analysis.md#custom-css-selectors)
+for supported compounds and error behavior. This is class attribution, without
+browser matching or cascade evaluation.
+
 ### Nuxt UI application themes
 
 Keep the application's normal CSS entry, including `@import "tailwindcss";` and

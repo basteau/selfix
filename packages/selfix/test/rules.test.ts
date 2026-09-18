@@ -384,6 +384,38 @@ import Ignored from '@policy/ignored'
   })
 
   it.each(["no-restyle", "no-raw-colors"] as const)(
+    "%s independently inspects nested custom declarations at the original SFC class",
+    async (rule) => {
+      const linter = await createLinter({
+        css: `${css} .card { margin: 1rem; &:hover {
+          @media (width > 10px) { &::before { color: red; } }
+        } }`,
+        config: { rules: only(rule) },
+      })
+      for (let count = 0; count < 2; count++) {
+        expect(linter.lint(button('class="card"'), "Nested.vue")).toEqual([
+          expect.objectContaining({
+            rule,
+            className: "card",
+            file: "Nested.vue",
+            line: 2,
+            column: 19,
+          }),
+        ])
+      }
+    },
+  )
+
+  it("rejects nested descendants even with every rule disabled", async () => {
+    await expect(
+      createLinter({
+        css: `${css} .card { & .child { color: red; } }`,
+        config: { rules: Object.fromEntries(ruleNames.map((rule) => [rule, "off"])) },
+      }),
+    ).rejects.toThrow(/Unable to inspect CSS: unsupported selector/)
+  })
+
+  it.each(["no-restyle", "no-raw-colors"] as const)(
     "%s independently rejects custom colors overlapping a layout utility",
     async (rule) => {
       const linter = await createLinter({
