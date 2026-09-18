@@ -1,6 +1,6 @@
 # 08: Resolve CSS package exports
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -46,3 +46,7 @@ Approved from the core-hardening discussion. Start in `packages/selfix/src/tailw
 - Independent Standards and Spec reviews each identified the same P2 symlink dependency-resolution regression. Fixed with a focused fixture and realpath resolution.
 - Both reviewers re-reviewed the fix and reported zero remaining findings.
 - Documented limitations: exact CSS targets and style/default conditions only; no wildcard/array exports or automatic generated Nuxt theme loading.
+
+## Completion
+
+- Implementation committed successfully as `9220374` (`fix(css): resolve package stylesheet exports`). Ticket complete.
