@@ -59,6 +59,16 @@ This permits style attributes, SFC style blocks, and restyling inside those impl
 
 Use `exclude` only when you intend to skip the entire file. **Every rule skips excluded files**, and overrides cannot re-include them. There are no inline suppressions.
 
+### Verified workflows and current boundaries
+
+The playground's normal test suite runs the installed standalone CLI with its real Vue components, Tailwind theme, and TypeScript configuration. Its author/consumer case verifies that file overrides permit implementation styling while raw colors and unknown utilities still fail, consumer restyling remains restricted, and corrected files pass. Invalid examples live in temporary copies, keeping the visible playground usable.
+
+selfix deliberately treats a style binding as one policy site: even `:style="{ '--progress': 0.5 }"` is rejected by default. It supports whole-site or file-level permission, not individual-property allowlists. This differs from the pinned [upstream inline-style policy](https://github.com/shadcn-ui/lint/blob/bf89dcb7f66a306c7ac4943065298902afdbd969/packages/lint/src/rules/no-inline-styles.ts), which supports property matching and permits non-color CSS custom properties. The playground regression preserves selfix's stricter boundary; narrow property exceptions remain separate work.
+
+The separate pinned Nuxt smoke verifies generated application tokens, prepared UButton/local-component discovery, configured `ui` slot findings, and corrected source. Component discovery supplies verified guidance without deciding recognition or slot policies. These representative workflows establish bounded coverage, not complete upstream parity or validation against every real-world application.
+
+For contributors, `pnpm check` includes playground workflow tests using the lockfile's Vue/Tailwind versions; `pnpm --filter playground test` runs just that integration suite after building selfix. `pnpm smoke:nuxt` installs the pinned framework dependencies in a temporary app and runs application-owned preparation. It requires registry access and stays outside routine checks and the CI matrix. See [maintenance verification](maintaining.md) and the [Nuxt versions and limits](themes.md).
+
 ### Run locally and in CI
 
 Add this script to your existing `package.json` to check all Vue files under `src`:

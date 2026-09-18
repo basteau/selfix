@@ -19,6 +19,14 @@ function lint(cwd: string) {
   return { status: result.status, diagnostics: JSON.parse(result.stdout) }
 }
 
+function fixture() {
+  const project = mkdtempSync(path.join(playground, ".selfix-test-"))
+  projects.push(project)
+  for (const entry of ["src", "selfix.config.ts", "package.json"])
+    cpSync(path.join(playground, entry), path.join(project, entry), { recursive: true })
+  return project
+}
+
 it("accepts the actual playground with its theme, variants, and TypeScript config", () => {
   expect(lint(playground)).toEqual({ status: 0, diagnostics: [] })
 })
@@ -31,10 +39,7 @@ it.each([
   ["no-unknown-classes", '<div class="not-a-tailwind-class">Invalid</div>'],
   ["require-static-classes", '<div :class="runtimeClass">Invalid</div>'],
 ])("reports %s through the installed CLI and playground config", (rule, template) => {
-  const project = mkdtempSync(path.join(playground, ".selfix-test-"))
-  projects.push(project)
-  for (const entry of ["src", "selfix.config.ts", "package.json"])
-    cpSync(path.join(playground, entry), path.join(project, entry), { recursive: true })
+  const project = fixture()
   const file = path.join(project, "src/App.vue")
   writeFileSync(
     file,
@@ -64,4 +69,42 @@ const runtimeClass = ref("text-primary")
       props: { variant: ["primary", "secondary"] },
     })
   }
+})
+
+it("keeps author vocabulary and consumer policy checks active through a corrected adoption workflow", () => {
+  const project = fixture()
+  const author = path.join(project, "src/components/ui/Authored.vue")
+  const consumer = path.join(project, "src/App.vue")
+  const component = (classes: string) => `<script setup lang="ts">
+import Button from './Button.vue'
+</script>
+<template><Button class="p-8" /><div class="${classes}" /></template>
+<style scoped>div { padding: 1rem; }</style>\n`
+  writeFileSync(author, component("text-red-500 missing-token"))
+  writeFileSync(
+    consumer,
+    `<script setup lang="ts">
+import Button from './components/ui/Button.vue'
+</script>
+<template><Button class="p-8" /><div :style="{ '--progress': 0.5 }" /></template>\n`,
+  )
+  const failing = lint(project)
+  expect(failing.status).toBe(1)
+  expect(
+    failing.diagnostics.map(({ rule, file }: { rule: string; file: string }) => ({ rule, file })),
+  ).toEqual([
+    { rule: "no-restyle", file: consumer },
+    { rule: "no-inline-styles", file: consumer },
+    { rule: "no-raw-colors", file: author },
+    { rule: "no-unknown-classes", file: author },
+  ])
+  // Corrections use known tokens and the component API; keep author styling in place.
+  writeFileSync(author, component("text-primary p-4"))
+  writeFileSync(
+    consumer,
+    `<script setup lang="ts">
+import Button from './components/ui/Button.vue'
+</script><template><Button variant="secondary" class="mt-4" /><div class="w-full" /></template>`,
+  )
+  expect(lint(project)).toEqual({ status: 0, diagnostics: [] })
 })
