@@ -28,7 +28,7 @@ Component source discovery defaults to the config directory, even when scanning 
 
 Only `.vue` files are checked. Repeated inputs are deduplicated and files are sorted. Directory traversal skips symbolic-link entries. A directly supplied non-Vue file, unmatched input, or final scan with no Vue files fails; an empty scan is not a clean result.
 
-The CLI skips path segments named `node_modules`, `.git`, `dist`, `coverage`, `.nuxt`, and `.output`. Config `exclude` entries are not globs: a bare name such as `generated` matches a path segment; `src/components/ui` matches that config-relative path and descendants. Exclusions skip every rule for the whole file. `ignoreImports` affects component recognition only.
+The CLI skips path segments named `node_modules`, `.git`, `dist`, `coverage`, `.nuxt`, and `.output`. Config `exclude` entries are not globs: a bare name such as `generated` matches a path segment; `src/components/ui` matches that config-relative path and descendants. Exclusions skip every rule for the whole file and overrides cannot re-include them. `overrides[].files` patterns match from the config directory regardless of the working directory, CSS path, or discovery root. Matching overrides change rules for selected files; other files retain the top-level policy. `ignoreImports` affects component recognition only.
 
 Text output contains one `file:line:column severity rule message` line per diagnostic, followed by the checked-file/error/warning summary. Text paths are relative to the current directory. JSON output is a diagnostic array with no summary; a clean scan prints `[]`. JSON `file` paths are absolute.
 

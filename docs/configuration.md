@@ -18,7 +18,38 @@
 | `components`       | `string[]`                               | `[]`. Component-name regular expressions, including global components.                                                               |
 | `exclude`          | `string[]`                               | `[]`. CLI-only whole-file exclusions; see [discovery](cli.md#discovery-and-output).                                                  |
 | `note`             | `string`                                 | No appended note. Nonempty text is appended to every diagnostic, including `parse-error`.                                            |
+| `overrides`        | `FileOverride[]`                         | `[]`. Ordered per-file rule changes; see [per-file rule overrides](#per-file-rule-overrides).                                        |
 | `rules`            | `Partial<Record<RuleName, RuleSetting>>` | All six rules at `"error"`. Each value is `"off"`, `"warn"`, `"error"`, or `[severity, options]`.                                    |
+
+### Per-file rule overrides
+
+Use `overrides` to change selected rules for matching files while keeping other checks active:
+
+```ts
+export default defineConfig({
+  css: "src/style.css",
+  overrides: [
+    {
+      files: ["src/components/ui/**/*.vue"],
+      rules: { "no-inline-styles": "off", "no-restyle": "off" },
+    },
+  ],
+})
+```
+
+Each entry requires a nonempty `files` array and a `rules` object using the same settings and validation as top-level rules. At least one pattern must match for an entry to apply. Rules omitted from an entry retain their current settings; an empty rules object changes nothing. Overrides affect only rules, not recognition, themes, classProps, discovery, notes, or file selection.
+
+Patterns use `/` separators and match the entire normalized relative filename, case-sensitively. Exact paths, `*` (zero or more characters within one segment), `?` (one character within one segment), and `**` (a whole segment spanning zero or more directories) are supported. `src/*.vue` matches immediate children; `src/**/*.vue` includes immediate and nested files. Leading `./` is optional. Wildcards also match dot-prefixed names. Absolute patterns, `..` segments, backslashes, negation, braces, character classes, and extglobs are rejected; this is not a general shell glob engine.
+
+The CLI uses the config directory as the base. API callers use `configBase`, defaulting to cwd at linter creation; absolute filenames are made relative to it, and relative/default filenames resolve from it for matching only. Filenames outside that base do not match any override. Matching is lexical and performs no filesystem reads or symlink resolution. CSS `base` and discovery `project.root` are independent. Diagnostics and `{{file}}` keep the original supplied filename.
+
+All matching entries apply in array order, with later settings taking precedence per rule:
+
+- A severity string (`"off"`, `"warn"`, `"error"`) changes severity and preserves the current options, including contracts and messages. Turning a rule off and back on does not discard its options.
+- A tuple (`[severity, options]`) replaces that rule's entire options object. Arrays, contracts, and message maps are not merged. Omitted options use the rule's built-in defaults; for example, `["warn", {}]` resets `no-restyle` to its default layout allowance.
+- Component contracts then select policy within that file's effective rule options, using their existing first-match behavior.
+
+CLI exclusions skip whole files before overrides apply; overrides cannot re-include them. API callers still select their own files (`config.exclude` is CLI-only). Parse errors, unsupported-input errors, and configuration/theme-loading failures remain failures even when all ordinary rules are off. Warning limits count warnings after overrides have selected effective severities.
 
 ### Component recognition
 

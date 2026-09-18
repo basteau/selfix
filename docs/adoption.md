@@ -41,7 +41,23 @@ The limit counts all warnings. It does not track individual existing violations 
 
 When `no-restyle` is clean, change its severity to `"error"`. Enable another rule by changing its `"off"` setting to `"warn"`, measure the new count, and set the warning limit deliberately. Promote each rule to `"error"` as its findings are resolved. See the [rule reference](rules.md#rules) to choose the next check.
 
-If component implementations need unrestricted styling, add `exclude: ["src/components/ui"]` to the configuration. **Every rule skips excluded files.** selfix has no per-file rule overrides or inline suppressions; use exclusions only when you intend to skip the entire file.
+For component implementations, add a file override to your existing configuration:
+
+```ts
+overrides: [
+  {
+    files: ["src/components/ui/**/*.vue"],
+    rules: {
+      "no-inline-styles": "off",
+      "no-restyle": "off",
+    },
+  },
+],
+```
+
+This permits style attributes, SFC style blocks, and restyling inside those implementations. Other enabled rules still check them: keep `no-raw-colors` and `no-unknown-classes` enabled when you want color and vocabulary validation. Consumer files retain the top-level policy. Patterns are relative to the config directory and `**` includes zero or more directories; see [file overrides](configuration.md#per-file-rule-overrides) for ordering and inheritance.
+
+Use `exclude` only when you intend to skip the entire file. **Every rule skips excluded files**, and overrides cannot re-include them. There are no inline suppressions.
 
 ### Run locally and in CI
 

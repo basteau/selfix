@@ -136,6 +136,7 @@ export async function run(
     const linter = await createLinter({
       css: await readFile(cssPath, "utf8"),
       base: path.dirname(cssPath),
+      configBase: configDir,
       config: {
         ...config,
         project:

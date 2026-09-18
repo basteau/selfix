@@ -36,6 +36,58 @@ async function invoke(args: string[], dir: string) {
 }
 
 describe("CLI", () => {
+  it("applies config-relative file rules while retaining exclusions, failures, and warning limits", async () => {
+    const dir = await project()
+    await mkdir(path.join(dir, "src/ui"), { recursive: true })
+    await mkdir(path.join(dir, "src/ignored"))
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      `export default {
+      css:'theme.css', exclude:['src/ignored'],
+      overrides:[{files:['src/ui/**/*.vue'],rules:{'no-inline-styles':'off','no-raw-colors':'warn'}}]
+    }`,
+    )
+    await writeFile(
+      path.join(dir, "src/ui/Button.vue"),
+      '<template><div style="padding: 4px" class="bg-red-500 missing-class" /></template>',
+    )
+    await writeFile(path.join(dir, "src/ignored/Bad.vue"), "<template><div></template>")
+    await writeFile(
+      path.join(dir, "src/Page.vue"),
+      '<template><div style="padding: 4px" /></template>',
+    )
+    const args = ["--config", "../selfix.config.ts", "--css", "../theme.css", "--format", "json"]
+    const result = await invoke(args, path.join(dir, "src"))
+    expect(result.stderr).toBe("")
+    expect(result.code).toBe(1)
+    expect(
+      JSON.parse(result.stdout).map(
+        ({ rule, severity, file }: { rule: string; severity: string; file: string }) => ({
+          rule,
+          severity,
+          file,
+        }),
+      ),
+    ).toEqual([
+      { rule: "no-inline-styles", severity: "error", file: path.join(dir, "src/Page.vue") },
+      { rule: "no-raw-colors", severity: "warn", file: path.join(dir, "src/ui/Button.vue") },
+      { rule: "no-unknown-classes", severity: "error", file: path.join(dir, "src/ui/Button.vue") },
+    ])
+    await writeFile(path.join(dir, "src/Page.vue"), "<template><div /></template>")
+    await writeFile(
+      path.join(dir, "src/ui/Button.vue"),
+      '<template><div style="padding: 4px" class="bg-red-500" /></template>',
+    )
+    expect((await invoke(args, path.join(dir, "src"))).code).toBe(0)
+    expect((await invoke([...args, "--max-warnings", "0"], path.join(dir, "src"))).code).toBe(1)
+    await writeFile(
+      path.join(dir, "invalid.config.ts"),
+      `export default {css:'theme.css', overrides:[{files:['../**'],rules:{'no-inline-styles':'off'}}]}`,
+    )
+    expect(await invoke(["--config", "../invalid.config.ts"], path.join(dir, "src"))).toMatchObject(
+      { code: 2, stderr: expect.stringContaining("Invalid override file pattern") },
+    )
+  })
   it("discovers component sources from the config directory, with root override and opt-out", async () => {
     const dir = await project()
     await mkdir(path.join(dir, "app"))

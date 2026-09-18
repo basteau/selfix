@@ -1,9 +1,11 @@
+import path from "node:path"
 import { createProject, type ComponentDefinition } from "./project.js"
 import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
 import { collectVue, type ClassSite } from "./vue.js"
 import {
   ruleNames,
   validateConfig,
+  filePattern,
   type Config,
   type RuleName,
   type RuleOptions,
@@ -13,6 +15,7 @@ import {
 export { defineConfig, ruleNames } from "./config.js"
 export type {
   ClassProps,
+  FileOverride,
   ProjectOptions,
   Config,
   Contract,
@@ -44,6 +47,8 @@ export interface LinterOptions {
   css: string
   /** Directory from which CSS imports resolve. */
   base?: string
+  /** Base for override patterns and relative lint filenames; defaults to cwd. */
+  configBase?: string
   config?: Config
 }
 
@@ -133,7 +138,12 @@ function sourcePositions(source: string) {
   }
 }
 
-export async function createLinter({ css, base = process.cwd(), config = {} }: LinterOptions) {
+export async function createLinter({
+  css,
+  base = process.cwd(),
+  configBase = process.cwd(),
+  config = {},
+}: LinterOptions) {
   validateConfig(config)
   const tailwind = await createTailwind(css, base, config.cssAliases)
   const project = config.project ? createProject(config.project) : undefined
@@ -146,6 +156,17 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
       policy: prepareOptions(options, name === "no-restyle" ? ["layout"] : []),
     }
   })
+  const overrideBase = path.resolve(configBase)
+  const overrides = (config.overrides ?? []).map((override) => ({
+    patterns: override.files.map(filePattern),
+    rules: Object.entries(override.rules).map(([name, setting]) => ({
+      name,
+      severity: Array.isArray(setting) ? setting[0] : setting,
+      policy: Array.isArray(setting)
+        ? prepareOptions(setting[1], name === "no-restyle" ? ["layout"] : [])
+        : undefined,
+    })),
+  }))
   const ignoreImports = (config.ignoreImports ?? []).map((pattern) => new RegExp(pattern))
   const components = (config.components ?? []).map((pattern) => new RegExp(pattern))
   const componentImports = (config.componentImports ?? []).map((pattern) => new RegExp(pattern))
@@ -193,7 +214,26 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
         emit("parse-error", "error", error.offset, error.message)
       if (collected.fatal)
         return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
-      for (const { name, severity, policy } of settings) {
+      const effective = overrides.length ? settings.map((setting) => ({ ...setting })) : settings
+      const relativeFile = path
+        .relative(overrideBase, path.resolve(overrideBase, filename))
+        .split(path.sep)
+        .join("/")
+      if (
+        relativeFile !== ".." &&
+        !relativeFile.startsWith("../") &&
+        !path.isAbsolute(relativeFile)
+      ) {
+        for (const override of overrides) {
+          if (!override.patterns.some((pattern) => pattern.test(relativeFile))) continue
+          for (const replacement of override.rules) {
+            const selected = effective.find((setting) => setting.name === replacement.name)!
+            selected.severity = replacement.severity
+            if (replacement.policy) selected.policy = replacement.policy
+          }
+        }
+      }
+      for (const { name, severity, policy } of effective) {
         if (severity === "off") continue
         const report = (
           site: { component: string; offset: number; prop?: string; slot?: string },

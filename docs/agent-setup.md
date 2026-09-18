@@ -37,7 +37,7 @@ For an existing setup, make targeted edits to the current config. Preserve its t
 
 For a new setup, apply the user's chosen policy. If none was specified, use the complete [gradual adoption recipe](adoption.md): `no-restyle` at `warn` and the other five rules explicitly `off`. State that choice in the handoff. Do not disable checks, widen allowances or exclusions, or change the theme merely to obtain a clean run. If enforcement needs a policy decision, report it to the user.
 
-Excluding a component implementation directory skips **every rule** in that directory. There are currently no per-file rule overrides or inline suppressions. Do not add exclusions automatically; consult [exclusion semantics](cli.md#discovery-and-output).
+Excluding a component implementation directory skips **every rule** in that directory. Prefer narrowly scoped [file overrides](configuration.md#per-file-rule-overrides) when only selected rules need relaxing, preserving the other enabled checks. There are no inline suppressions. Do not add exclusions automatically; consult [exclusion semantics](cli.md#discovery-and-output).
 
 Add a command to the existing scripts object without replacing other scripts. For an app with `src` and a config at its root:
 

@@ -102,7 +102,7 @@ selfix analyzes Vue single-file component templates against your loaded Tailwind
 
 Additional class props such as `ui` or `contentClass` require explicit [classProps configuration](https://github.com/basteau/selfix/blob/main/docs/configuration.md#configured-class-props). The CLI discovers supported component sources and literal size/variant choices for diagnostic guidance; there is no wrapper tracing. JSX/TSX, template preprocessors, and external templates are outside the supported input.
 
-**Exclusions skip every rule for the entire file.** There are no per-file rule overrides or inline suppressions. A clean result applies only to the selected source and enabled checks; it does not guarantee complete styling coverage.
+**Exclusions skip every rule for the entire file.** Use [per-file rule overrides](https://github.com/basteau/selfix/blob/main/docs/configuration.md#per-file-rule-overrides) to relax selected checks while keeping the others active. There are no inline suppressions. A clean result applies only to the selected source and enabled checks; it does not guarantee complete styling coverage.
 
 Unsupported input and failed theme loading must not silently pass. Recoverable uncertainty can report `parse-error` alongside independent rule findings; fatal parser failures suppress ordinary findings for that file. See [analysis boundaries](https://github.com/basteau/selfix/blob/main/docs/analysis.md) for supported expressions and limits.
 

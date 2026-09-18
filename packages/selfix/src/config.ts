@@ -37,6 +37,11 @@ export interface RuleOptions {
   message?: Message
 }
 export type RuleSetting = Severity | [Severity, RuleOptions]
+export interface FileOverride {
+  /** Config-relative file patterns; all matching entries apply in order. */
+  files: string[]
+  rules: Partial<Record<RuleName, RuleSetting>>
+}
 export interface ClassProps {
   /** Regular expression matching the collected component name. First match wins. */
   pattern: string
@@ -82,6 +87,7 @@ export interface Config {
   exclude?: string[]
   note?: string
   rules?: Partial<Record<RuleName, RuleSetting>>
+  overrides?: FileOverride[]
 }
 
 export function defineConfig(config: Config): Config {
@@ -110,6 +116,40 @@ function pattern(value: unknown, label: string) {
   } catch {
     throw new Error(`Invalid regular expression in ${label}: ${value}`)
   }
+}
+
+/** A deliberately small file glob syntax, independent of filesystem traversal. */
+export function filePattern(value: string): RegExp {
+  const source = value.startsWith("./") ? value.slice(2) : value
+  const segments = source.split("/")
+  if (
+    !source ||
+    /^[!\\/]/.test(source) ||
+    /[\\:{}[\]()]/.test(source) ||
+    segments.some(
+      (segment) =>
+        !segment ||
+        segment === "." ||
+        segment === ".." ||
+        (segment.includes("**") && segment !== "**"),
+    )
+  )
+    throw new Error(
+      `Invalid override file pattern: ${value}. Use relative paths with *, **, or ?; ** must occupy a whole segment.`,
+    )
+  const regex = segments
+    .map((segment, index) => {
+      const last = index === segments.length - 1
+      if (segment === "**") return last ? ".*" : "(?:[^/]+/)*"
+      return (
+        segment
+          .replace(/[.+^$|]/g, "\\$&")
+          .replace(/\*/g, "[^/]*")
+          .replace(/\?/g, "[^/]") + (last ? "" : "/")
+      )
+    })
+    .join("")
+  return new RegExp(`^${regex}$`, "s")
 }
 function options(value: unknown, label: string, contract = false) {
   const obj = record(value, label)
@@ -168,6 +208,7 @@ export function validateConfig(config: unknown): asserts config is Config {
       "exclude",
       "note",
       "rules",
+      "overrides",
     ],
     "config",
   )
@@ -252,8 +293,23 @@ export function validateConfig(config: unknown): asserts config is Config {
     if (["componentImports", "ignoreImports", "components"].includes(key))
       (obj[key] as string[]).forEach((item) => pattern(item, key))
   }
-  if (obj.rules === undefined) return
-  const rules = record(obj.rules, "rules")
+  if (obj.rules !== undefined) validateRules(obj.rules)
+  if (obj.overrides !== undefined) {
+    if (!Array.isArray(obj.overrides)) throw new Error("overrides must be an array.")
+    obj.overrides.forEach((value, index) => {
+      const label = `overrides[${index}]`
+      const entry = record(value, label)
+      keys(entry, ["files", "rules"], label)
+      strings(entry.files, `${label}.files`)
+      if (!(entry.files as string[]).length) throw new Error(`${label}.files must not be empty.`)
+      for (const file of entry.files as string[]) filePattern(file)
+      validateRules(entry.rules)
+    })
+  }
+}
+
+function validateRules(value: unknown) {
+  const rules = record(value, "rules")
   keys(rules, ruleNames, "rule")
   for (const [name, setting] of Object.entries(rules)) {
     const severity = Array.isArray(setting) ? setting[0] : setting
