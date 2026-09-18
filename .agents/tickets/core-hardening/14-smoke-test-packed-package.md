@@ -1,6 +1,6 @@
 # 14: Smoke-test the packed package
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -45,3 +45,7 @@ Approved from the core-hardening discussion. Relevant paths: `packages/selfix/te
 - Independent Standards review: zero findings. Independent Spec review: zero findings. Both reviewed the actual owned working-tree changes against the recorded baseline; execution evidence supplied by implementer.
 - CI now smoke-tests each packed branch/PR/tag artifact and passes that same archive to dry-run/upload/publication. No rebuild occurs after smoke verification.
 - Limitations: registry access is intentionally required for smoke verification. This run tested Node 24, not the minimum Node 22.18; hosted CI/publication were not executed locally. The upstream reference could not be fetched; implementation is original Node built-in code with attribution for the artifact-testing approach.
+
+## Completion
+
+Implementation committed as `612e559` (`test(package): verify packed artifact in isolated consumer`). All acceptance criteria, independent reviews, and required checks passed. Final implementation and staged diffs reviewed; unrelated documentation tickets preserved.
