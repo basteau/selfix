@@ -1,6 +1,6 @@
 # 01: Resolve component sources and enrich variant guidance
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -35,6 +35,8 @@ Run `pnpm check` and `git diff --check`. Record focused red/green results, compa
 ## Notes
 
 ### Verification and review
+
+- Implementation commit: `bbe8d41` (`feat(discovery): enrich findings with verified component metadata`). All acceptance criteria verified. Removed the retained Nuxt inspection fixture after the successful fresh integration run.
 
 - Implemented automatic CLI discovery rooted at the config directory and opt-in API `config.project`. Supported JSONC tsconfig/jsconfig paths/extends, explicit aliases and component maps, import/export identities and explicit barrel chains, prepared Nuxt declarations, and bounded complete literal prop types. Metadata enriches no-restyle only; local policy identity, original source locations, independent findings, custom messages, and source-only API calls remain intact.
 - Snapshot regressions cover disk edits, different projects, caller-supplied source precedence, mutation isolation, external statically imported sources, ordered alias fallbacks, defining-directory bases and extends arrays. Negative cases cover shadowed macros, merged/inherited/imported types, cyclic/ambiguous sources, malformed/missing metadata, explicit targets, and Nuxt preparation failures. No application expressions are executed.
