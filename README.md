@@ -28,10 +28,8 @@ Requires **Node.js ≥22.18.0**, **Vue ≥3.2.13 <4**, and **Tailwind CSS ≥4 <
 
 CI covers packed consumers on Linux and macOS using Node 22.18.0 with the minimum Vue/Tailwind peers, and Node 24 with workspace peers. Each run records exact versions; see the [compatibility checks](https://github.com/basteau/selfix/blob/main/docs/maintaining.md) for the matrix and local commands.
 
-**Experimental alpha:** APIs and rules may change during prerelease.
-
 ```sh
-pnpm add -D selfix@alpha
+pnpm add -D selfix
 ```
 
 Use `"type": "module"` in your project's `package.json`. selfix runs as a standalone command with `selfix.config.ts`, loaded by Node's native TypeScript support. Type annotations, `import type`, and `satisfies` work; enums and `tsconfig` path aliases do not. Node does not type-check this file.

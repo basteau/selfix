@@ -6,10 +6,8 @@ Create a Button, report a padding override, and correct it. Run these commands f
 
 Requires **Node.js ≥22.18.0**, **Vue ≥3.2.13 <4**, and **Tailwind CSS ≥4 <5**. Vue and Tailwind are the only consumer peer dependencies. Install any missing peers before continuing. Same-name `v-bind` shorthand requires Vue ≥3.4; see [compiler troubleshooting](troubleshooting.md#vue-compiler-capabilities-are-missing) if startup fails.
 
-**Experimental alpha:** APIs and rules may change during prerelease. Install the published alpha:
-
 ```sh
-pnpm add -D selfix@alpha
+pnpm add -D selfix
 ```
 
 Use `"type": "module"` in your project's `package.json`. Node loads `selfix.config.ts` with native TypeScript support. Type annotations, `import type`, and `satisfies` work; enums and `tsconfig` path aliases do not. Node does not type-check this file. **Configuration executes as Node code; use trusted files.**

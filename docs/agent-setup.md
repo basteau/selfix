@@ -29,7 +29,7 @@ Configuration runs as Node code. Inspect and trust `selfix.config.ts` and Tailwi
 
 ## Add the runner and choose policy
 
-Use the detected package manager and the workspace's dependency ownership conventions. In a pnpm application that owns its tooling, install with `pnpm add -D selfix@alpha`. Vue and Tailwind are the only consumer peers; inspect existing versions before adding any missing peer. Preserve existing lint tools and scripts. selfix uses only the standalone runner with `selfix.config.ts`; no ESLint or Oxlint adapter is needed.
+Use the detected package manager and the workspace's dependency ownership conventions. In a pnpm application that owns its tooling, install with `pnpm add -D selfix`. Vue and Tailwind are the only consumer peers; inspect existing versions before adding any missing peer. Preserve existing lint tools and scripts. selfix uses only the standalone runner with `selfix.config.ts`; no ESLint or Oxlint adapter is needed.
 
 Follow the [configuration reference](configuration.md) and [native TypeScript requirements](getting-started.md#quickstart). The documented setup uses `"type": "module"`; if the package is CommonJS, resolve compatibility with its existing scripts before changing that field. Node loads the config without type-checking it; avoid enums and `tsconfig` path aliases.
 

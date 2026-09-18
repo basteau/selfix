@@ -30,76 +30,40 @@ See [AGENTS.md](https://github.com/basteau/selfix/blob/main/AGENTS.md) for contr
 
 ## Releases
 
-Only `packages/selfix` is published. [Changelogen](https://github.com/unjs/changelogen) prepares the package version and root `CHANGELOG.md` from repository-wide Conventional Commits. The commands below only update files; do not pass Changelogen's `--release`, `--push`, or `--publish` flags.
-
-Tag CI creates a [GitHub Release](https://github.com/basteau/selfix/releases) from that version's changelog section after checks and npm publication (or its bootstrap skip). Alpha and beta versions become GitHub prereleases, not Latest. Existing releases are left unchanged on reruns. Each version must have exactly one nonempty `## vVERSION` section.
-
-### Routine releases
-
-The historical changelog-base correction was applied in `0.1.0-alpha.1`. Future releases use the latest release tag automatically; do not repeat the old `--from` override.
-
-With a clean working tree and full history:
+Only `packages/selfix` is published. Changelogen prepares its version and the root `CHANGELOG.md` from Conventional Commits. Start on `main` with a clean working tree and full history, including tags:
 
 ```sh
-git switch main
 git pull --ff-only
-pnpm release:prepare -r 0.1.0-alpha.2
+pnpm install --frozen-lockfile
+pnpm release:prepare -r 1.0.0
 pnpm format
 pnpm check
 ```
 
-Review the version and changelog, commit as `chore(release): v0.1.0-alpha.2`, push, and wait for green CI before creating and pushing an annotated `vVERSION` tag for that commit. After tag checks and environment approval, CI publishes the exact checked tarball with OIDC and provenance, without checkout, dependency installation, or package scripts in the publish job.
+Replace `1.0.0` with the next version. Review the public API, package version, and changelog, then commit as `chore(release): vVERSION`. Preparation only edits files; do not pass Changelogen's `--release`, `--push`, or `--publish` flags. Each version must have exactly one nonempty `## vVERSION` changelog section.
 
-Release progression: `0.1.0-alpha.0` → `0.1.0-alpha.1` → `0.1.0-beta.0` → `0.1.0`. Use explicit `-r` versions; Changelogen's inferred `0.x` feature bumps are patches.
+Push the commit and wait for green CI, then create and push an annotated tag for that commit:
 
-CI maps validated versions to [npm dist-tags](https://docs.npmjs.com/adding-dist-tags-to-packages/): `X.Y.Z-alpha.N` → `alpha`, `X.Y.Z-beta.N` → `beta`, and stable `X.Y.Z` → `latest`. Git tags add a `v` prefix. Other prereleases and build metadata are rejected. Users opt in with `selfix@alpha` or `selfix@beta`. Verify npm dist-tags after bootstrap with `npm view selfix dist-tags --json`; if `latest` points to the prerelease, remove it with `npm dist-tag rm selfix latest`.
+```sh
+git push origin main
+git tag -a v1.0.0 -m "v1.0.0"
+git push origin refs/tags/v1.0.0
+```
+
+Tag CI validates the version and changelog, runs checks and packed-consumer compatibility tests, then publishes the exact checked archive through npm trusted publishing with provenance. The publish job does not rebuild the package or run package scripts. After npm publication succeeds, CI creates a [GitHub Release](https://github.com/basteau/selfix/releases) from the changelog. Existing GitHub releases are left unchanged on reruns.
+
+Stable versions publish to npm's `latest` tag and become the latest GitHub release. Verify the completed tag run, GitHub release, and registry metadata:
+
+```sh
+npm view selfix version dist-tags --json
+```
 
 For external configuration failures, fix the configuration and rerun the failed job. Never move a published tag or reuse a published version; content changes require a new release.
 
-## Historical bootstrap
+### Publishing configuration
 
-The following records the initial publication procedure. It is not part of routine releases; do not repeat publication of an existing version.
+The npm trusted publisher must match GitHub repository **`basteau/selfix`**, workflow **`ci.yml`**, and environment **`npm`**. Keep the GitHub `npm` environment restricted to release tags, with reviewers where available. No npm tokens belong in GitHub secrets. A publish dry-run does not verify registry permissions or OIDC authentication.
 
-<details>
-<summary>Initial setup and first release: 0.1.0-alpha.0</summary>
-
-### One-time setup
-
-- Keep package repository metadata and the Git remote pointing to `basteau/selfix`.
-- Direct pushes to `main` are allowed; run `pnpm check` before pushing and wait for green CI before tagging. Protect `main` against deletion and force pushes, and restrict `v*` tags to admins.
-- Use Conventional Commits and preserve relevant Lore trailers. Optional PRs use squash merging with the PR title as the commit subject; CI validates those titles.
-- Create the `npm` GitHub environment, restrict it to release tags, and require reviewers where available. Leave repository Actions variable `NPM_PUBLISH_ENABLED` unset until bootstrap is complete.
-
-### First release: 0.1.0-alpha.0
-
-Start on `main` with a clean working tree and full Git history, including tags. Prepare each version once. If its version and notes are already committed, skip preparation; if only the version is set, add `--no-bump`:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm release:prepare -r 0.1.0-alpha.0
-pnpm format
-pnpm check
-```
-
-Review the package version and `CHANGELOG.md`, commit as `chore(release): v0.1.0-alpha.0`, and push `main`. After CI passes, tag that commit:
-
-```sh
-git tag -a v0.1.0-alpha.0 -m "v0.1.0-alpha.0"
-git push origin refs/tags/v0.1.0-alpha.0
-```
-
-CI validates metadata and changelog, runs checks, then packs, installs, and smoke-tests the package in an isolated consumer before the publication dry-run. Every branch and PR also runs the package smoke test. Download `selfix-package` from the successful tag run and extract `selfix.tgz`. Inspect and publish that tarball once locally:
-
-```sh
-tar -tzf selfix.tgz
-npm login
-npm publish ./selfix.tgz --access public --tag alpha --ignore-scripts
-```
-
-Configure the package's [npm trusted publisher](https://docs.npmjs.com/trusted-publishers/): GitHub Actions, `basteau/selfix`, workflow **`ci.yml`**, environment **`npm`**. Permit direct `npm publish`, then set repository variable `NPM_PUBLISH_ENABLED=true`. Do not rerun publication of `v0.1.0-alpha.0`. Once published, users can install with `pnpm add -D selfix@alpha`.
-
-Use a current npm CLI for bootstrap and trusted publishing. No npm tokens belong in GitHub secrets. After verifying trusted publishing, disallow token-based publishing in npm settings. A publish dry-run does not verify registry permissions or OIDC authentication.
-
-</details>
+Protect `main` against deletion and force pushes, and restrict `v*` tags to maintainers. Direct pushes are supported; run `pnpm check` before pushing and wait for green CI before tagging. Optional PRs use squash merging with a Conventional Commit title, which CI validates.
 
 See also: [contributor guide](../AGENTS.md), [CLI reference](cli.md), and [theme integration checks](themes.md).
