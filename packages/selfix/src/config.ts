@@ -47,7 +47,24 @@ export function normalizePropName(name: string): string {
   return name.replace(/\B([A-Z])/g, "-$1").toLowerCase()
 }
 
+export interface ProjectOptions {
+  /** Project metadata/source root; CLI resolves this relative to its config. */
+  root?: string
+  /** Import patterns (at most one *) mapped to local source paths. */
+  aliases?: Record<string, string>
+  /** Exact local/global component names mapped to Vue definitions. */
+  components?: Record<string, string>
+  /** Explicit tsconfig/jsconfig file, relative to root. */
+  tsconfig?: string
+  /** Detect Nuxt from package metadata by default; false disables it. */
+  nuxt?: boolean
+  /** Prepared component declarations for a nondefault Nuxt build directory. */
+  nuxtComponents?: string
+}
+
 export interface Config {
+  /** Optional filesystem discovery; the CLI enables it by default. */
+  project?: ProjectOptions | false
   /** Additional props containing classes, scoped by component name. */
   classProps?: ClassProps[]
   /** CSS entry relative to the configuration file. Required by the CLI. */
@@ -141,6 +158,7 @@ export function validateConfig(config: unknown): asserts config is Config {
     obj,
     [
       "css",
+      "project",
       "classProps",
       "cssAliases",
       "ui",
@@ -153,6 +171,45 @@ export function validateConfig(config: unknown): asserts config is Config {
     ],
     "config",
   )
+  if (obj.project !== undefined && obj.project !== false) {
+    const project = record(obj.project, "project")
+    keys(
+      project,
+      ["root", "aliases", "components", "tsconfig", "nuxt", "nuxtComponents"],
+      "project",
+    )
+    const localPath = (value: unknown, label: string) => {
+      if (
+        typeof value !== "string" ||
+        !value.trim() ||
+        (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value))
+      )
+        throw new Error(`${label} must be a non-empty local path.`)
+    }
+    for (const key of ["root", "tsconfig", "nuxtComponents"])
+      if (project[key] !== undefined) localPath(project[key], `project.${key}`)
+    if (project.nuxt !== undefined && typeof project.nuxt !== "boolean")
+      throw new Error("project.nuxt must be a boolean.")
+    for (const key of ["aliases", "components"])
+      if (project[key] !== undefined) {
+        for (const [name, target] of Object.entries(record(project[key], `project.${key}`))) {
+          if (!name.trim() || name.split("*").length > 2)
+            throw new Error(`Invalid project.${key} name: ${name}`)
+          localPath(target, `project.${key}.${name}`)
+          if (typeof target !== "string") continue
+          if (
+            key === "components" &&
+            (!target.endsWith(".vue") || target.includes("*") || name.includes("*"))
+          )
+            throw new Error("project.components must map exact names to .vue paths.")
+          if (
+            key === "aliases" &&
+            (target.split("*").length > 2 || (target.includes("*") && !name.includes("*")))
+          )
+            throw new Error("project.aliases supports at most one matching wildcard.")
+        }
+      }
+  }
   for (const key of ["css", "note"])
     if (obj[key] !== undefined && typeof obj[key] !== "string")
       throw new Error(`${key} must be a string.`)

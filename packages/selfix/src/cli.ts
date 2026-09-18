@@ -138,6 +138,13 @@ export async function run(
       base: path.dirname(cssPath),
       config: {
         ...config,
+        project:
+          config.project === false
+            ? false
+            : {
+                ...config.project,
+                root: path.resolve(configDir, config.project?.root ?? "."),
+              },
         cssAliases: Object.fromEntries(
           Object.entries(config.cssAliases ?? {}).map(([id, target]) => [
             id,

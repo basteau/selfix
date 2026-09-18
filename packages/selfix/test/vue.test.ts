@@ -3,6 +3,21 @@ import { compileScript, compileTemplate, parse } from "vue/compiler-sfc"
 import { collectVue } from "../src/vue.js"
 
 describe("collectVue", () => {
+  it("retains exported import identity separately from local policy names", () => {
+    const source = `<script setup lang="ts">
+import Main from './Main.vue';
+import { Button as Action, type Ignored } from './barrel';
+import * as Namespace from './widgets';
+</script><template><Action class="p-4" /></template>`
+    const result = collectVue(source, "Page.vue")
+    expect([...result.imports.values()]).toEqual([
+      { local: "Main", importSource: "./Main.vue", imported: "default" },
+      { local: "Action", importSource: "./barrel", imported: "Button" },
+      { local: "Namespace", importSource: "./widgets", imported: "*" },
+    ])
+    expect(result.sites[0].component).toBe("Action")
+  })
+
   it.each([false, true])(
     "excludes type imports from runtime component identity (fallback: %s)",
     (forceCompileTemplateAst) => {

@@ -96,6 +96,10 @@ try {
   writeFileSync(path.join(consumer, "Page.vue"), '<template><div class="p-4" /></template>\n')
   assert.deepEqual(JSON.parse(run(cli, ["Page.vue", "--format", "json"])), [])
   writeFileSync(
+    path.join(consumer, "Button.vue"),
+    `<script setup lang="ts">type Size = 'sm' | 'lg'; defineProps<{size?: Size}>()</script><template><button /></template>`,
+  )
+  writeFileSync(
     path.join(consumer, "api.mjs"),
     `import assert from "node:assert/strict";
 import { createLinter } from "selfix";
@@ -111,6 +115,13 @@ assert.equal(diagnostics[0].column, 16);
 assert.equal(diagnostics[0].offset, source.indexOf(':class'));
 const shorthand = linter.lint('<template><div :class /></template>', 'Shorthand.vue');
 assert.ok(shorthand.some(d => d.rule === ${Number(versions.vue.split(".")[1]) >= 4 ? '"require-static-classes"' : '"parse-error"'}));
+const projectLinter = await createLinter({ css: '@import "tailwindcss";', config: { components: ['^Button$'], project: {} } });
+const projectSource = '<script setup>import Button from "./Button.vue"</script><template><Button class="p-4" /></template>';
+const finding = projectLinter.lint(projectSource, 'Page.vue')[0];
+assert.equal(finding.rule, 'no-restyle');
+assert.equal(finding.file, 'Page.vue');
+assert.deepEqual(finding.definition.props, { size: ['sm', 'lg'] });
+assert.ok(finding.definition.file.endsWith('/Button.vue'));
 `,
   )
   run(process.execPath, ["api.mjs"])

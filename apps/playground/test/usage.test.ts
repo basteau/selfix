@@ -53,8 +53,15 @@ const runtimeClass = ref("text-primary")
     expect.objectContaining({ rule, severity: "error", file, line: 6, column: expect.any(Number) }),
   ])
   if (rule === "no-restyle") {
+    const definition = path.join(project, "src/components/ui/Button.vue")
     expect(result.diagnostics[0].message).toBe(
-      "Button owns its appearance. Use its variant prop; keep only layout classes here.",
+      "Button owns its appearance. Use its variant prop; keep only layout classes here." +
+        ` Definition: ${definition}. Accepted variant values: "primary", "secondary".` +
+        " These choices do not guarantee a visual replacement for this class.",
     )
+    expect(result.diagnostics[0].definition).toEqual({
+      file: definition,
+      props: { variant: ["primary", "secondary"] },
+    })
   }
 })

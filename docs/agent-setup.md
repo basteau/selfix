@@ -23,7 +23,7 @@ Read the project's contributor and agent instructions and record its current cha
 - Installed Node, Vue, and Tailwind versions. selfix requires Node ≥22.18.0, Vue ≥3.2.13 <4, and Tailwind ≥4 <5. Stop and report incompatible versions instead of upgrading the application as a setup side effect.
 - Each application's actual Tailwind CSS entry, including imported tokens, plugins, and generated CSS. Follow [theme loading](themes.md), including preparation for Nuxt UI. Do not substitute a minimal theme for the application's theme to remove findings.
 - Actual component import strings in representative Vue files, including shared UI packages and aliases, plus global or auto-imported names. `ui` matches import-source prefixes; it is not a directory search. Use [component recognition](configuration.md#component-recognition) to configure only the required matches.
-- Existing rule severities, contracts, class props, exclusions, and warning limits. Preserve them. Read the relevant component definitions to find supported props; selfix does not discover or validate variants automatically.
+- Existing rule severities, contracts, class props, exclusions, and warning limits. Preserve them. Use discovered definition paths and verified size/variant choices when available, then inspect the component API before choosing a replacement. Discovery does not validate prop values or establish visual equivalence.
 
 Configuration runs as Node code. Inspect and trust `selfix.config.ts` and Tailwind `@plugin`/`@config` modules before running them. See [trust and analysis limits](analysis.md#limitations-and-trust).
 

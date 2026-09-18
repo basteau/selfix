@@ -125,12 +125,14 @@ files and does not execute Nuxt configuration or run preparation itself.
 Verified with Nuxt 4.5.2, Nuxt UI 4.11.1, Tailwind CSS 4.3.3, and Vue 3.5.42.
 The repository's `pnpm smoke:nuxt` command installs these pinned direct dependencies in a
 temporary app and verifies preparation, an application-only color versus the package
-fallback, CLI paths, and missing-file errors. It requires network access and runs separately
+fallback, automatic prepared UButton and local-component discovery, configured `ui` slot findings, corrected source, CLI paths, and missing-file errors. It requires network access and runs separately
 from `pnpm check`.
 
 This integration loads CSS definitions for class analysis. It does not evaluate runtime
 `app.config.ts` values or discover component slot contracts. Inspecting `:ui` prop maps
 also requires explicit [classProps configuration](configuration.md#configured-class-props); CSS aliases alone
 do not enable prop inspection.
+
+The CLI also reads prepared `.nuxt/components.d.ts` mappings for diagnostic definition paths. The pinned UButton source uses runtime prop declarations, so its size/variant lists are omitted; a prepared local typed component can provide verified lists. Discovery leaves theme aliases and slot policies unchanged. See [component source discovery](configuration.md#component-source-discovery) for custom build paths and supported declarations.
 
 See also: [configuration](configuration.md), [API reference](api.md), and [troubleshooting](troubleshooting.md).

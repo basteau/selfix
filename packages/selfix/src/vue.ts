@@ -14,7 +14,8 @@ if (missingCapabilities.length > 0) {
       "Reinstall a supported Vue version (>=3.2.13 <4) with its matching compiler packages.",
   )
 }
-const { babelParse, compileTemplate, parse: parseSfc } = compiler
+export const { babelParse, parse: parseSfc } = compiler
+const { compileTemplate } = compiler
 
 // Numeric node tags also work with older Vue releases without runtime enum exports.
 const VueNode = {
@@ -80,9 +81,10 @@ interface StaticBinding {
   dynamic: boolean
 }
 
-interface ComponentAlias {
+export interface ComponentAlias {
   local: string
   importSource: string
+  imported: string
 }
 
 type ComponentAliases = Map<string, ComponentAlias>
@@ -112,7 +114,13 @@ export function collectVue(
   source: string,
   filename: string,
   options: CollectVueOptions = {},
-): { sites: ClassSite[]; styles: StyleSite[]; errors: ParseIssue[]; fatal: boolean } {
+): {
+  sites: ClassSite[]
+  styles: StyleSite[]
+  errors: ParseIssue[]
+  fatal: boolean
+  imports: ComponentAliases
+} {
   const errors: ParseIssue[] = []
   const parsed = parseSfc(source, { filename, sourceMap: false })
   for (const error of parsed.errors) {
@@ -160,21 +168,21 @@ export function collectVue(
 
   const template = parsed.descriptor.template
   if (!template) {
-    return { sites, styles: sortStyles(styles), errors, fatal }
+    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   if (template.src) {
     errors.push({
       message: "External template src is not supported",
       offset: template.loc.start.offset,
     })
-    return { sites, styles: sortStyles(styles), errors, fatal }
+    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   if (template.lang && template.lang !== "html") {
     errors.push({
       message: `Template language "${template.lang}" is not supported`,
       offset: template.loc.start.offset,
     })
-    return { sites, styles: sortStyles(styles), errors, fatal }
+    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   const templateAst = options.forceCompileTemplateAst ? undefined : template.ast
   const errorsBeforeCompile = errors.length
@@ -182,7 +190,7 @@ export function collectVue(
     templateAst ?? compileTemplateAst(template.content, filename, template.loc.start.offset, errors)
   fatal ||= errors.length > errorsBeforeCompile
   if (!ast) {
-    return { sites, styles: sortStyles(styles), errors, fatal }
+    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
 
   walkTemplate(
@@ -204,7 +212,7 @@ export function collectVue(
     sites,
     styles,
   )
-  return { sites, styles: sortStyles(styles), errors, fatal }
+  return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
 }
 
 function compileTemplateAst(
@@ -925,7 +933,15 @@ function collectImportAliases(statement: ImportDeclarationNode, aliases: Compone
     if (!isLikelyComponent(local)) {
       continue
     }
-    const alias = { local, importSource: statement.source.value }
+    const imported =
+      specifier.type === "ImportDefaultSpecifier"
+        ? "default"
+        : specifier.type === "ImportNamespaceSpecifier"
+          ? "*"
+          : specifier.imported.type === "Identifier"
+            ? specifier.imported.name
+            : specifier.imported.value
+    const alias = { local, importSource: statement.source.value, imported }
     aliases.set(local, alias)
   }
 }

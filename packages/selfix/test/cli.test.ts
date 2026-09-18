@@ -36,6 +36,60 @@ async function invoke(args: string[], dir: string) {
 }
 
 describe("CLI", () => {
+  it("discovers component sources from the config directory, with root override and opt-out", async () => {
+    const dir = await project()
+    await mkdir(path.join(dir, "app"))
+    await writeFile(
+      path.join(dir, "app/Button.vue"),
+      `<script setup lang="ts">defineProps<{size: 'sm' | 'lg'}>()</script><template><button /></template>`,
+    )
+    await writeFile(
+      path.join(dir, "app/Page.vue"),
+      `<script setup>import Button from '@/Button.vue'</script>\n<template><Button class="p-4" /></template>`,
+    )
+    await writeFile(
+      path.join(dir, "jsconfig.json"),
+      JSON.stringify({ compilerOptions: { paths: { "@/*": ["app/*"] } } }),
+    )
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      'export default {css:"theme.css", components:["^Button$"]}',
+    )
+    const args = ["Page.vue", "--config", "../selfix.config.ts", "--format", "json"]
+    const automatic = await invoke(args, path.join(dir, "app"))
+    expect(automatic.stderr).toBe("")
+    expect(automatic.code).toBe(1)
+    expect(JSON.parse(automatic.stdout)[0]).toMatchObject({
+      file: path.join(dir, "app/Page.vue"),
+      line: 2,
+      column: 19,
+      definition: { file: path.join(dir, "app/Button.vue"), props: { size: ["sm", "lg"] } },
+    })
+    await writeFile(
+      path.join(dir, "override.config.ts"),
+      'export default {css:"theme.css", components:["^Button$"], project:{root:"app", aliases:{"@/*":"./*"}}}',
+    )
+    expect(
+      JSON.parse(
+        (
+          await invoke(
+            ["Page.vue", "--config", "../override.config.ts", "--format", "json"],
+            path.join(dir, "app"),
+          )
+        ).stdout,
+      )[0].definition,
+    ).toEqual({ file: path.join(dir, "app/Button.vue"), props: { size: ["sm", "lg"] } })
+    await writeFile(
+      path.join(dir, "disabled.config.ts"),
+      'export default {css:"theme.css", components:["^Button$"], project:false}',
+    )
+    const disabled = await invoke(
+      ["Page.vue", "--config", "../disabled.config.ts", "--format", "json"],
+      path.join(dir, "app"),
+    )
+    expect(disabled.code).toBe(1)
+    expect(JSON.parse(disabled.stdout)[0]).not.toHaveProperty("definition")
+  })
   it("resolves CSS aliases from the config directory even with --css and a different cwd", async () => {
     const dir = await project()
     await mkdir(path.join(dir, "app"))

@@ -1,3 +1,4 @@
+import { createProject, type ComponentDefinition } from "./project.js"
 import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
 import { collectVue, type ClassSite } from "./vue.js"
 import {
@@ -12,6 +13,7 @@ import {
 export { defineConfig, ruleNames } from "./config.js"
 export type {
   ClassProps,
+  ProjectOptions,
   Config,
   Contract,
   Message,
@@ -20,9 +22,11 @@ export type {
   RuleSetting,
   Severity,
 } from "./config.js"
+export type { ComponentDefinition, ComponentProps } from "./project.js"
 export type { Category } from "./tailwind.js"
 
 export interface Diagnostic {
+  definition?: ComponentDefinition
   file: string
   rule: RuleName | "parse-error"
   severity: Exclude<Severity, "off">
@@ -132,6 +136,7 @@ function sourcePositions(source: string) {
 export async function createLinter({ css, base = process.cwd(), config = {} }: LinterOptions) {
   validateConfig(config)
   const tailwind = await createTailwind(css, base, config.cssAliases)
+  const project = config.project ? createProject(config.project) : undefined
   const settings = ruleNames.map((name) => {
     const setting = config.rules?.[name] ?? "error"
     const [severity, options] = Array.isArray(setting) ? setting : [setting, {}]
@@ -169,7 +174,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
         message: string,
         component?: string,
         className?: string,
-        location: Pick<Diagnostic, "prop" | "slot"> = {},
+        location: Pick<Diagnostic, "prop" | "slot" | "definition"> = {},
       ) => {
         positionAt ??= sourcePositions(source)
         diagnostics.push({
@@ -218,10 +223,42 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
             site.prop === undefined
               ? ""
               : ` [prop ${JSON.stringify(site.prop)}${site.slot === undefined ? "" : `, slot ${JSON.stringify(site.slot)}`}]`
-          emit(name, severity, site.offset, message + context, site.component, token || undefined, {
-            ...(site.prop === undefined ? {} : { prop: site.prop }),
-            ...(site.slot === undefined ? {} : { slot: site.slot }),
-          })
+          const definition =
+            name === "no-restyle"
+              ? project?.resolve(
+                  site.component,
+                  collected.imports.get(site.component),
+                  filename,
+                  source,
+                )
+              : undefined
+          const details = definition
+            ? ` Definition: ${definition.file}.` +
+              (["size", "variant"] as const)
+                .map((name) => {
+                  const values = definition.props?.[name]
+                  return values
+                    ? ` Accepted ${name} values: ${values.map((value) => JSON.stringify(value)).join(", ")}.`
+                    : ""
+                })
+                .join("") +
+              (definition.props
+                ? " These choices do not guarantee a visual replacement for this class."
+                : "")
+            : ""
+          emit(
+            name,
+            severity,
+            site.offset,
+            message + details + context,
+            site.component,
+            token || undefined,
+            {
+              ...(definition ? { definition } : {}),
+              ...(site.prop === undefined ? {} : { prop: site.prop }),
+              ...(site.slot === undefined ? {} : { slot: site.slot }),
+            },
+          )
         }
         if (name === "no-inline-styles") {
           for (const site of collected.styles) {

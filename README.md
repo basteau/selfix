@@ -20,7 +20,7 @@ A component owns its appearance. Callers choose its props and use layout utiliti
 <Button variant="secondary" class="mt-4 w-full">Save</Button>
 ```
 
-This example assumes Button is recognized through your configuration and provides a `secondary` variant. selfix does not discover or validate component variants. The [complete tutorial](https://github.com/basteau/selfix/blob/main/docs/getting-started.md) defines this Button and its theme.
+This example assumes Button is recognized through your configuration and provides a `secondary` variant. selfix can report verified literal size/variant choices from supported component definitions; it does not validate prop values or infer visual equivalence. The [complete tutorial](https://github.com/basteau/selfix/blob/main/docs/getting-started.md) defines this Button and its theme.
 
 ## Install
 
@@ -100,7 +100,7 @@ Only `no-restyle` requires a recognized UI component; the other five also check 
 
 selfix analyzes Vue single-file component templates against your loaded Tailwind theme and explicit policies. It reads supported literal alternatives and limited script constants without rendering the app or evaluating application expressions.
 
-Additional class props such as `ui` or `contentClass` require explicit [classProps configuration](https://github.com/basteau/selfix/blob/main/docs/configuration.md#configured-class-props). There is no cross-file wrapper tracing or automatic variant discovery. JSX/TSX, template preprocessors, and external templates are outside the supported input.
+Additional class props such as `ui` or `contentClass` require explicit [classProps configuration](https://github.com/basteau/selfix/blob/main/docs/configuration.md#configured-class-props). The CLI discovers supported component sources and literal size/variant choices for diagnostic guidance; there is no wrapper tracing. JSX/TSX, template preprocessors, and external templates are outside the supported input.
 
 **Exclusions skip every rule for the entire file.** There are no per-file rule overrides or inline suppressions. A clean result applies only to the selected source and enabled checks; it does not guarantee complete styling coverage.
 
