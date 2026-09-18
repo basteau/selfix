@@ -1,6 +1,6 @@
 {
   "name": "selfix",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "Design-system lint rules for Vue 3 and Tailwind CSS 4.",
   "license": "MIT",
   "repository": {

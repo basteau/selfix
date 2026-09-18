@@ -793,19 +793,19 @@ Use a current npm CLI for bootstrap and trusted publishing. No npm tokens belong
 
 ### Later releases
 
-For the next release only, use `--from e6f33ce`, the rewritten equivalent of the published alpha commit, to avoid repeating old notes. Leave the published tag unchanged. Once the next release is tagged on `main`, omit `--from`.
+The historical changelog-base correction was applied in `0.1.0-alpha.1`. Future releases use the latest release tag automatically; do not repeat the old `--from` override.
 
 With a clean working tree and full history:
 
 ```sh
 git switch main
 git pull --ff-only
-pnpm release:prepare -r 0.1.0-alpha.1 --from e6f33ce
+pnpm release:prepare -r 0.1.0-alpha.2
 pnpm format
 pnpm check
 ```
 
-Review the version and changelog, commit as `chore(release): v0.1.0-alpha.1`, push, and wait for green CI before tagging as above. After tag checks and environment approval, CI publishes the exact checked tarball with OIDC and provenance, without checkout, dependency installation, or package scripts in the publish job.
+Review the version and changelog, commit as `chore(release): v0.1.0-alpha.2`, push, and wait for green CI before tagging as above. After tag checks and environment approval, CI publishes the exact checked tarball with OIDC and provenance, without checkout, dependency installation, or package scripts in the publish job.
 
 Release progression: `0.1.0-alpha.0` → `0.1.0-alpha.1` → `0.1.0-beta.0` → `0.1.0`. Use explicit `-r` versions; Changelogen's inferred `0.x` feature bumps are patches.
 
