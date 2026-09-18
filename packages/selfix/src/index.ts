@@ -109,6 +109,26 @@ function restyleMessage(
   return `"${token}" is not allowed on <${component}>: ${reason}. ${guidance[category]}`
 }
 
+function sourcePositions(source: string) {
+  const starts = [0]
+  for (
+    let newline = source.indexOf("\n");
+    newline !== -1;
+    newline = source.indexOf("\n", newline + 1)
+  )
+    starts.push(newline + 1)
+  return (offset: number) => {
+    let low = 0
+    let high = starts.length
+    while (low + 1 < high) {
+      const middle = Math.floor((low + high) / 2)
+      if (starts[middle] <= offset) low = middle
+      else high = middle
+    }
+    return { line: low + 1, column: offset - starts[low] + 1 }
+  }
+}
+
 export async function createLinter({ css, base = process.cwd(), config = {} }: LinterOptions) {
   validateConfig(config)
   const tailwind = await createTailwind(css, base, config.cssAliases)
@@ -141,6 +161,7 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
     lint(source: string, filename = "component.vue"): Diagnostic[] {
       const collected = collectVue(source, filename, { classProps: config.classProps })
       const diagnostics: Diagnostic[] = []
+      let positionAt: ReturnType<typeof sourcePositions> | undefined
       const emit = (
         rule: Diagnostic["rule"],
         severity: Diagnostic["severity"],
@@ -150,14 +171,13 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
         className?: string,
         location: Pick<Diagnostic, "prop" | "slot"> = {},
       ) => {
-        const position = source.slice(0, offset).split("\n")
+        positionAt ??= sourcePositions(source)
         diagnostics.push({
           file: filename,
           rule,
           severity,
           message: config.note ? `${message} ${config.note}` : message,
-          line: position.length,
-          column: position.at(-1)!.length + 1,
+          ...positionAt(offset),
           offset,
           ...(component ? { component } : {}),
           ...(className ? { className } : {}),
