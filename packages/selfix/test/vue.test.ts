@@ -3,6 +3,37 @@ import { collectVue } from "../src/vue.js"
 
 describe("collectVue", () => {
   it.each([false, true])(
+    "keeps malformed class expressions as errors (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      for (const binding of [':class=""', ':class=" "', ':class="class"', ':class="["']) {
+        const source = `<template><div ${binding} /></template>`
+        const result = collectVue(source, "malformed.vue", { forceCompileTemplateAst })
+        expect(result.errors).toContainEqual(
+          expect.objectContaining({ offset: source.indexOf(":class") }),
+        )
+      }
+    },
+  )
+
+  it.each([false, true])(
+    "collects same-name class shorthand as dynamic (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<template>
+  <div :class />
+  <Box v-bind:class />
+  <div :class.prop />
+</template>`
+      const result = collectVue(source, "shorthand.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites).toEqual([
+        { component: "div", tokens: [], dynamic: true, offset: source.indexOf(":class") },
+        { component: "Box", tokens: [], dynamic: true, offset: source.indexOf("v-bind:class") },
+        { component: "div", tokens: [], dynamic: true, offset: source.indexOf(":class.prop") },
+      ])
+    },
+  )
+
+  it.each([false, true])(
     "preserves decoded expressions in slot scopes (fallback: %s)",
     (forceCompileTemplateAst) => {
       const source = `<script setup>const local = 'p-2';</script>

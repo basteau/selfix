@@ -11,6 +11,34 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it.each(["error", "off"] as const)(
+    "preserves independent findings with class shorthand (require-static-classes: %s)",
+    async (severity) => {
+      const linter = await createLinter({
+        css,
+        config: { rules: { ...only("no-unknown-classes"), "require-static-classes": severity } },
+      })
+      const source = `<template>
+  <div :class />
+  <div class="not-a-utility" />
+</template>`
+      const expected = [
+        expect.objectContaining({
+          rule: "no-unknown-classes",
+          className: "not-a-utility",
+          line: 3,
+          column: 8,
+        }),
+      ]
+      if (severity === "error") {
+        expected.unshift(
+          expect.objectContaining({ rule: "require-static-classes", line: 2, column: 8 }),
+        )
+      }
+      expect(linter.lint(source, "Shorthand.vue")).toEqual(expected)
+    },
+  )
+
   it.each([
     ["leading-6", "typography"],
     ["ease-in", "motion"],

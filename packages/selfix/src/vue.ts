@@ -5,6 +5,7 @@ const {
   babelParse,
   compileTemplate,
   parse: parseSfc,
+  version: vueVersion,
 } = createRequire(import.meta.url)("vue/compiler-sfc") as typeof VueCompilerSfc
 
 // Numeric node tags also work with older Vue releases without runtime enum exports.
@@ -91,6 +92,10 @@ interface TemplateContext {
 interface CollectVueOptions {
   forceCompileTemplateAst?: boolean
 }
+
+// Vue introduced same-name v-bind shorthand in 3.4. Older compilers must
+// continue reporting missing expressions, including on the untransformed AST.
+const supportsSameNameBinding = Number(vueVersion.split(".")[1]) >= 4
 
 const CLASS_HELPERS = new Set(["cn", "clsx", "twMerge"])
 
@@ -393,11 +398,18 @@ function collectElement(
     }
 
     if (isBoundAttribute(prop, "class")) {
-      const found = collectClassExpression(
-        expressionContent(prop.exp),
-        context.offset + prop.loc.start.offset,
-        context,
-      )
+      // A synthesized shorthand expression shares the argument's location.
+      // Never parse its reserved-word identifier `class` as application JavaScript.
+      const shorthand =
+        supportsSameNameBinding &&
+        (!prop.exp || prop.exp.loc.start.offset === prop.arg?.loc.start.offset)
+      const found = shorthand
+        ? { tokens: [], dynamic: true }
+        : collectClassExpression(
+            expressionContent(prop.exp),
+            context.offset + prop.loc.start.offset,
+            context,
+          )
       sites.push(
         classSite(
           component,
@@ -494,7 +506,7 @@ function isBoundAttribute(prop: DirectiveNode, name: string): boolean {
     prop.name === "bind" &&
     prop.arg?.type === VueNode.SimpleExpression &&
     prop.arg.isStatic &&
-    prop.arg.content === name
+    (prop.arg.content === name || prop.arg.loc.source === name)
   )
 }
 
