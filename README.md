@@ -235,6 +235,15 @@ pnpm format       # Apply formatting
 
 Try `class="p-8"` on a Button in `apps/playground/src/App.vue`, then run `pnpm --filter playground lint:design`. Remove it to restore a passing check; use the Button's `variant` prop to change appearance. `pnpm check` includes playground integration tests; run them alone after building with `pnpm --filter playground test`.
 
+To verify a release artifact locally (requires registry access):
+
+```sh
+pnpm --filter selfix pack --out /tmp/selfix.tgz
+pnpm smoke:package /tmp/selfix.tgz
+```
+
+The smoke check installs that archive with the workspace-tested Vue and Tailwind versions, loads native TypeScript configuration, and checks both failing and valid Vue fixtures. It prints the versions and commands and removes its temporary consumer on success or failure. CI publishes the same verified archive without rebuilding it.
+
 See [AGENTS.md](AGENTS.md) for contribution conventions. Keep documentation in this README and add regression tests for behavior changes. [Bug reports](https://github.com/basteau/selfix/issues) should include a minimal Vue/CSS example, config, command, diagnostic, and dependency versions.
 
 ## Releases
@@ -271,7 +280,7 @@ git tag -a v0.1.0-alpha.0 -m "v0.1.0-alpha.0"
 git push origin refs/tags/v0.1.0-alpha.0
 ```
 
-CI validates metadata and changelog, runs checks, and packs and dry-runs the package. Download `selfix-package` from the successful tag run and extract `selfix.tgz`. Inspect and publish that tarball once locally:
+CI validates metadata and changelog, runs checks, then packs, installs, and smoke-tests the package in an isolated consumer before the publication dry-run. Every branch and PR also runs the package smoke test. Download `selfix-package` from the successful tag run and extract `selfix.tgz`. Inspect and publish that tarball once locally:
 
 ```sh
 tar -tzf selfix.tgz

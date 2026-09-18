@@ -42,12 +42,15 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/check-release.mjs "$RUNNER_TEMP/release-notes.md"
       - run: pnpm check
-      - name: Pack the checked release
+      - name: Pack and smoke-test the checked package
+        run: |
+          pnpm --filter selfix pack --out "$RUNNER_TEMP/selfix.tgz"
+          pnpm smoke:package "$RUNNER_TEMP/selfix.tgz"
+      - name: Dry-run the verified release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           NPM_TAG: ${{ steps.release.outputs.npm_tag }}
         run: |
-          pnpm --filter selfix pack --out "$RUNNER_TEMP/selfix.tgz"
           npm publish "$RUNNER_TEMP/selfix.tgz" --tag "$NPM_TAG" --dry-run --ignore-scripts
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: startsWith(github.ref, 'refs/tags/')
