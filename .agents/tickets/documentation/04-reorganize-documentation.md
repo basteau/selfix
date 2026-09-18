@@ -77,3 +77,7 @@ Use documentation-focused validation rather than artificial failing runtime test
 - Standards: independent subagent reviewed the full owned working-tree scope against `f294eb5a3852c151297739d3ffcc0554e55dc17c`, code/package contracts, and original README. **0 findings.**
 - Spec: separate independent subagent reviewed the same scope and all ticket criteria, including preservation, navigation, packaged-link strategy, and ticket scope. **0 actionable findings.** No blocking or unresolved nonblocking review findings.
 - Limits: hosted GitHub/npm rendering and HTTP availability of the new documentation URLs cannot be checked before these files are pushed/published. Local targets/fragments, GFM rendering, and packed README contents were verified. Registry installation, network-dependent Nuxt/package smoke suites, and release operations were not run; no relevant executable or packaging behavior changed. The package consumers used locally available real peers.
+
+### Commit follow-up
+
+- The user subsequently requested commit and push. Implementation committed as `e4fd141e86cd6c57e506af61b40413b988f5eb46` (`docs: reorganize guides around a concise README`). The staged scope matched the reviewed changes and `git diff --cached --check` passed. Ticket remains done.
