@@ -1,6 +1,6 @@
 # 05: Support Vue same-name class shorthand
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -46,3 +46,8 @@ Approved from the core-hardening discussion. Inspect expression normalization an
 - Standards: independent reviewer found no actionable findings and independently ran the 85 focused tests.
 - Spec: independent reviewer found no actionable findings; all six acceptance criteria map to implementation and tests.
 - No unresolved findings. Older-version runtime coverage remains a verification limitation as recorded above.
+
+## Completion
+
+- Implementation commit: `e0f7ac958f2eaedef02f1a46596e28a1d2069d7b` (`fix(vue): support same-name class shorthand`).
+- Required checks and independent reviews passed before committing. Ticket marked done after the implementation commit succeeded.
