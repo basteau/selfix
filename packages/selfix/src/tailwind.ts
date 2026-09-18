@@ -771,7 +771,7 @@ function categoryFor({ property }: Declaration): Category {
   if (isColorDeclaration(property)) return "color"
   if (property === "animation" || property.startsWith("transition")) return "motion"
   if (property === "--tw-duration" || property === "--tw-ease") return "motion"
-  if (property === "border-radius") return "shape"
+  if (property === "border-radius" || property === "--tw-border-style") return "shape"
   if (
     property.startsWith("--tw-space-") ||
     property === "cursor" ||
@@ -791,13 +791,19 @@ function categoryFor({ property }: Declaration): Category {
   ) {
     return "spacing"
   }
-  if (property === "--tw-font-weight" || property === "--tw-leading") return "typography"
+  if (
+    property === "--tw-font-weight" ||
+    property === "--tw-leading" ||
+    property === "--tw-tracking"
+  )
+    return "typography"
   if (
     property.startsWith("font") ||
     property === "line-height" ||
     property === "letter-spacing" ||
     property === "text-align" ||
     property === "text-transform" ||
+    property === "text-overflow" ||
     property.startsWith("text-decoration") ||
     property === "white-space" ||
     property === "word-break" ||
@@ -815,6 +821,10 @@ function categoryFor({ property }: Declaration): Category {
     property === "--tw-rotate-x" ||
     property === "--tw-rotate-y" ||
     property === "--tw-rotate-z" ||
+    property === "--tw-scale-x" ||
+    property === "--tw-scale-y" ||
+    property === "--tw-scale-z" ||
+    property === "scale" ||
     property === "rotate" ||
     property === "translate"
   ) {

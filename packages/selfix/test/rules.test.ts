@@ -11,6 +11,76 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it.each([
+    ["mt-4", ["layout"]],
+    ["bg-primary", ["color"]],
+    ["tracking-wide", ["typography"]],
+    ["hover:tracking-wide!", ["typography"]],
+    ["p-4", ["spacing"]],
+    ["border-solid", ["shape"]],
+    ["hover:border-solid", ["shape"]],
+    ["scale-105", ["effects"]],
+    ["-scale-x-105", ["effects"]],
+    ["duration-200", ["motion"]],
+    ["truncate", ["layout", "typography"]],
+    ["md:truncate", ["layout", "typography"]],
+  ] as const)(
+    "enforces complete category permissions and deny precedence for %s",
+    async (token, allowed) => {
+      const source = button(`class="${token}"`)
+      const accepted = await createLinter({
+        css,
+        config: { rules: only("no-restyle", { allow: allowed }) },
+      })
+      expect(accepted.lint(source)).toEqual([])
+      for (const category of allowed) {
+        const restricted = await createLinter({
+          css,
+          config: {
+            rules: only("no-restyle", {
+              allow: allowed.filter((value) => value !== category),
+              message: "blocked {{category}}",
+            }),
+          },
+        })
+        expect(restricted.lint(source)).toEqual([
+          expect.objectContaining({
+            rule: "no-restyle",
+            className: token,
+            message: `blocked ${category}`,
+          }),
+        ])
+        const denied = await createLinter({
+          css,
+          config: { rules: only("no-restyle", { allow: allowed, deny: [category] }) },
+        })
+        expect(denied.lint(source)).toEqual([
+          expect.objectContaining({
+            rule: "no-restyle",
+            className: token,
+            message: expect.stringContaining("denied"),
+          }),
+        ])
+      }
+    },
+  )
+
+  it("does not let recognized categories hide unknown bookkeeping or CSS declarations", async () => {
+    const linter = await createLinter({
+      css: `${css} .custom { --tw-scale-future: 2; tab-size: 4; scale: 2; }`,
+      config: {
+        rules: only("no-restyle", { allow: ["effects"], message: "blocked {{category}}" }),
+      },
+    })
+    expect(linter.lint(button('class="custom"'))).toEqual([
+      expect.objectContaining({
+        rule: "no-restyle",
+        className: "custom",
+        message: "blocked unknown",
+      }),
+    ])
+  })
+
   it("applies recognition, contracts, and class props only to resolved component identities", async () => {
     const source = `<script setup lang="ts">
 import { Button, Button as BaseButton, UIButton, Base_Button, type SpecifierType } from '@/components/ui/button';

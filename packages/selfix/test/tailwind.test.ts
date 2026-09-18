@@ -35,6 +35,34 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test("keeps unknown declarations alongside recognized utility properties", async () => {
+    const tailwind = await createTailwind(
+      `@import "tailwindcss";
+      .custom { --tw-scale-unrecognized: 2; --tw-tracking-extra: 1; --tw-border-style-extra: solid; tab-size: 4; letter-spacing: 1px; }
+    `,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("custom").categories).toEqual(["typography", "unknown"])
+  })
+
+  test.each([
+    ["tracking-wide", ["typography"]],
+    ["scale-105", ["effects"]],
+    ["border-solid", ["shape"]],
+    ["truncate", ["layout", "typography"]],
+    ["hover:tracking-wide!", ["typography"]],
+    ["-scale-x-105", ["effects"]],
+    ["scale-3d", ["effects"]],
+    ["hover:border-solid", ["shape"]],
+    ["md:truncate", ["layout", "typography"]],
+  ] as const)(
+    "classifies common utility %s without unknown bookkeeping",
+    async (token, expected) => {
+      const tailwind = await createTailwind('@import "tailwindcss";', process.cwd())
+      expect(tailwind.inspect(token).categories).toEqual(expected)
+    },
+  )
+
   test("inspects direct and applied declarations together", async () => {
     const tailwind = await createTailwind(
       '@import "tailwindcss"; .card { margin: 1rem; @apply p-4 bg-red-500; }',
