@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { describe, expect, test } from "vitest"
@@ -35,6 +35,170 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test.each([{ style: "./theme.css" }, { default: "./index.cjs", style: "./theme.css" }])(
+    "loads a package stylesheet export %j",
+    async (exports) => {
+      const base = await mkdtemp(join(tmpdir(), "selfix-css-exports-"))
+      try {
+        const pkg = join(base, "node_modules", "fixture-theme")
+        await mkdir(pkg, { recursive: true })
+        await writeFile(join(pkg, "package.json"), JSON.stringify({ exports }))
+        await writeFile(join(pkg, "theme.css"), ".package-theme { padding: 1rem; }")
+        await writeFile(join(pkg, "index.cjs"), 'throw new Error("JavaScript is not CSS")')
+        const tailwind = await createTailwind('@import "fixture-theme";', base)
+        expect(tailwind.inspect("package-theme")).toEqual({
+          known: true,
+          categories: ["spacing"],
+          rawColor: false,
+        })
+      } finally {
+        await rm(base, { recursive: true, force: true })
+      }
+    },
+  )
+
+  test("resolves dependencies from a symlinked package's real directory", async () => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-css-linked-"))
+    try {
+      const modules = join(base, "node_modules")
+      const store = join(modules, ".store", "node_modules")
+      const pkg = join(store, "fixture-theme")
+      const dependency = join(store, "fixture-dependency")
+      await mkdir(pkg, { recursive: true })
+      await mkdir(dependency, { recursive: true })
+      await symlink(pkg, join(modules, "fixture-theme"), "dir")
+      await writeFile(
+        join(pkg, "package.json"),
+        JSON.stringify({ exports: { style: "./theme.css" } }),
+      )
+      await writeFile(join(pkg, "theme.css"), '@import "fixture-dependency";')
+      await writeFile(join(dependency, "package.json"), JSON.stringify({ exports: "./theme.css" }))
+      await writeFile(join(dependency, "theme.css"), ".dependency { padding: 1rem; }")
+      const tailwind = await createTailwind('@import "fixture-theme";', base)
+      expect(tailwind.inspect("dependency")).toEqual({
+        known: true,
+        categories: ["spacing"],
+        rawColor: false,
+      })
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  test.each([
+    { exports: { "./theme": { style: { default: "./css/theme.css" } } } },
+    { exports: { "./theme": "./css/theme.css" } },
+    { exports: { "./theme": { default: "./css/theme.css" } } },
+  ])("loads scoped subpaths and nested imports %j", async (manifest) => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-css-subpath-"))
+    try {
+      const pkg = join(base, "node_modules", "@fixture", "theme")
+      await mkdir(join(pkg, "css"), { recursive: true })
+      await mkdir(join(base, "src"), { recursive: true })
+      await writeFile(join(pkg, "package.json"), JSON.stringify(manifest))
+      await writeFile(join(pkg, "css/theme.css"), '@import "./nested.css";')
+      await writeFile(join(pkg, "css/nested.css"), ".nested-theme { margin: 1rem; }")
+      const tailwind = await createTailwind('@import "@fixture/theme/theme";', join(base, "src"))
+      expect(tailwind.inspect("nested-theme")).toEqual({
+        known: true,
+        categories: ["layout"],
+        rawColor: false,
+      })
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  test.each([
+    { exports: "./theme.css" },
+    { exports: { ".": { style: "./theme.css" } } },
+    { style: "./theme.css", main: "./index.cjs" },
+    { main: "./theme.css" },
+    {},
+  ])("loads supported root stylesheet targets %j", async (manifest) => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-css-root-"))
+    try {
+      const pkg = join(base, "node_modules", "fixture-theme")
+      await mkdir(pkg, { recursive: true })
+      await writeFile(join(pkg, "package.json"), JSON.stringify(manifest))
+      for (const name of ["theme.css", "index.css"]) {
+        await writeFile(join(pkg, name), ".root-theme { padding: 1rem; }")
+      }
+      const tailwind = await createTailwind('@import "fixture-theme";', base)
+      expect(tailwind.inspect("root-theme").known).toBe(true)
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  test.each([
+    { exports: { style: "./missing.css", default: "./theme.css" } },
+    { exports: { style: ["./theme.css"] } },
+    { exports: { style: null, default: "./theme.css" } },
+    { exports: { import: "./theme.css" } },
+    { exports: { "./*": "./theme.css" } },
+    { exports: { style: "../outside.css" } },
+    { exports: { default: "./index.cjs" } },
+    { exports: null, style: "./theme.css" },
+  ])("rejects missing or unsupported exports with origin context %j", async (manifest) => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-css-invalid-"))
+    try {
+      const pkg = join(base, "node_modules", "fixture-theme")
+      await mkdir(pkg, { recursive: true })
+      await writeFile(join(pkg, "package.json"), JSON.stringify(manifest))
+      await writeFile(join(pkg, "theme.css"), ".should-not-load { padding: 1rem; }")
+      // Valid-looking CSS in a JS file must never become part of the theme.
+      await writeFile(join(pkg, "index.cjs"), ".should-not-load { padding: 1rem; }")
+      await expect(createTailwind('@import "fixture-theme";', base)).rejects.toThrow(
+        `Unable to resolve import "fixture-theme" from "${base}"`,
+      )
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
+  test("keeps CSS conditions separate from plugin and config module resolution", async () => {
+    const base = await mkdtemp(join(tmpdir(), "selfix-css-modules-"))
+    try {
+      for (const [name, code] of [
+        [
+          "fixture-plugin",
+          'module.exports = ({ addUtilities }) => addUtilities({ ".plugin-space": { padding: "3rem" } })',
+        ],
+        [
+          "fixture-config",
+          'module.exports = { theme: { extend: { colors: { configured: "#abcdef" } } } }',
+        ],
+      ]) {
+        const pkg = join(base, "node_modules", name!)
+        await mkdir(pkg, { recursive: true })
+        await writeFile(
+          join(pkg, "package.json"),
+          JSON.stringify({
+            exports: { style: "./missing.css", require: "./index.cjs" },
+          }),
+        )
+        await writeFile(join(pkg, "index.cjs"), code!)
+      }
+      const tailwind = await createTailwind(
+        '@import "tailwindcss"; @plugin "fixture-plugin"; @config "fixture-config";',
+        base,
+      )
+      expect(tailwind.inspect("plugin-space")).toEqual({
+        known: true,
+        categories: ["spacing"],
+        rawColor: false,
+      })
+      expect(tailwind.inspect("text-configured")).toEqual({
+        known: true,
+        categories: ["color"],
+        rawColor: false,
+      })
+    } finally {
+      await rm(base, { recursive: true, force: true })
+    }
+  })
+
   test("shares color value semantics across custom CSS composites and nested fallbacks", async () => {
     const css = `@import "tailwindcss";
       .fallback { color: var(--brand, var(--other, red)); }

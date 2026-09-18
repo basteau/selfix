@@ -1,6 +1,6 @@
-import { existsSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { readFile } from "node:fs/promises"
-import { dirname, isAbsolute, join, resolve } from "node:path"
+import { dirname, extname, isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { createRequire } from "node:module"
 import { __unstable__loadDesignSystem } from "tailwindcss"
@@ -183,7 +183,77 @@ async function loadStockColors(base: string): Promise<Set<string>> {
 }
 
 function resolveStylesheet(id: string, base: string): string {
-  return resolveImport(id, base, stylesheetCandidates(id))
+  try {
+    const candidate = stylesheetCandidates(id)[0]!
+    if (isAbsolute(candidate) || candidate.startsWith(".")) {
+      return stylesheetFile(resolve(base, candidate))
+    }
+    const match = /^(@[^/]+\/[^/]+|[^/@][^/]*)(?:\/(.+))?$/.exec(candidate)
+    if (!match) throw new Error("Unsupported package import")
+    const [, name, subpath] = match
+    const require = createRequire(join(resolve(base), "selfix-resolver.js"))
+    const searchPaths = [
+      ...(require.resolve.paths(name!) ?? []),
+      ...(packageRequire.resolve.paths(name!) ?? []),
+    ]
+    const directory = searchPaths
+      .map((path) => join(path, name!))
+      .find((path) => existsSync(join(path, "package.json")))
+    if (!directory) throw new Error("Package not found")
+    const pkg = JSON.parse(readFileSync(join(directory, "package.json"), "utf8")) as {
+      exports?: unknown
+      style?: unknown
+      main?: unknown
+    }
+    let target: unknown
+    if (pkg.exports !== undefined) {
+      const entry = pkg.exports
+      if (
+        entry &&
+        typeof entry === "object" &&
+        !Array.isArray(entry) &&
+        Object.keys(entry).some((key) => key.startsWith("."))
+      ) {
+        target = styleTarget((entry as Record<string, unknown>)[subpath ? `./${subpath}` : "."])
+      } else if (!subpath) {
+        target = styleTarget(entry)
+      }
+      if (
+        typeof target !== "string" ||
+        !target.startsWith("./") ||
+        target.split("/").some((part) => part === ".." || part === "node_modules") ||
+        /[\\*%?#]/.test(target)
+      ) {
+        throw new Error(
+          "Unsupported or missing stylesheet export (expected an exact local CSS target)",
+        )
+      }
+    } else {
+      target = subpath ?? pkg.style ?? pkg.main ?? "index.css"
+    }
+    if (typeof target !== "string") throw new Error("Unsupported stylesheet target")
+    return stylesheetFile(resolve(directory, target))
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`Unable to resolve import "${id}" from "${base}": ${reason}.`, { cause: error })
+  }
+}
+
+// Adapted from shadcn-ui/lint's CSS export selection (MIT).
+// https://github.com/shadcn-ui/lint/blob/53de86f0e7dcc341a9cb45c383a9f2c454d1e958/packages/lint/src/tailwind/oracle.ts
+function styleTarget(entry: unknown): unknown {
+  if (typeof entry === "string") return entry
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return undefined
+  const conditions = entry as Record<string, unknown>
+  // A declared style branch is authoritative, even when malformed or missing.
+  if (Object.hasOwn(conditions, "style")) return styleTarget(conditions.style)
+  return styleTarget(conditions.default)
+}
+
+function stylesheetFile(path: string): string {
+  if (extname(path) !== ".css") throw new Error(`Stylesheet target must end in .css: ${path}`)
+  if (!statSync(path).isFile()) throw new Error(`Stylesheet target is not a file: ${path}`)
+  return realpathSync(path)
 }
 
 function resolveModule(id: string, base: string): string {

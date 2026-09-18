@@ -200,6 +200,19 @@ const diagnostics = linter.lint(await readFile("src/Page.vue", "utf8"), "src/Pag
 
 `css` is source text; `base` is its directory for resolving imports (default: current directory). Reuse the linter for files sharing a theme; recreate it after theme changes. For one file, use `await lintSource(source, { css, base, config, filename })`. Both return the CLI's diagnostic shape.
 
+Stylesheet imports resolve from the importing stylesheet. Relative and absolute paths must name
+`.css` files. Packages are searched in Node's `node_modules` lookup paths from that directory,
+then from selfix's installation. Scoped packages and exact subpath exports are supported.
+For `exports`, selfix selects `style` before `default` (including nested conditions), or a
+string CSS target. A selected target must start with `./`, stay inside the package, and end
+in `.css`. Without `exports`, a subpath names a file directly; root imports use `style`,
+then `main`, then `index.css`. Missing selected targets fail instead of falling back.
+Export arrays, wildcard mappings, and conditions other than `style`/`default` are unsupported;
+JavaScript targets are never loaded as CSS. Errors identify the import and its origin directory.
+Tailwind's standard stylesheet imports remain supported. Trusted `@plugin`/`@config` modules
+keep Node module resolution and are unaffected by CSS conditions. Vite/Nuxt configuration
+and generated application themes are not loaded automatically.
+
 ## Limitations and trust
 
 - Vue SFC templates only: no JSX/TSX, template preprocessors, external templates, or arbitrary script-only class calls.
