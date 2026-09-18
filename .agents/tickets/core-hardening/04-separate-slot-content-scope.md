@@ -1,6 +1,6 @@
 # 04: Separate slot-content scope from owner scope
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -46,3 +46,8 @@ Approved from the core-hardening discussion. Start with `walkTemplate` and `shad
 - Standards: independent review identified an HTML-entity regression in an intermediate expression-source change. Restored decoded expression handling, adjusted fallback compiler options, and added regression coverage. Independent re-review found no remaining actionable findings.
 - Spec: independent review and re-review found no actionable findings; all acceptance criteria are covered.
 - No unresolved nonblocking findings. Generated template code is never executed.
+
+## Completion
+
+- Implementation commit: `2b3631889d37835da8cae5bc6bb03643a78ef70e` (`fix(vue): separate slot content and owner scopes`).
+- Required checks and independent reviews passed before committing. Ticket marked done after the implementation commit succeeded.
