@@ -51,6 +51,14 @@ The fixed helper names are `cn`, `clsx`, and `twMerge`. Imports under those loca
 
 External `<script src="./component.ts">` blocks produce a recoverable `parse-error` at the script block, even with every rule off. selfix does not load, import, or execute that application module, so its imports and component registrations are unavailable. Move the script content into an inline `<script>` or `<script setup>` block in the SFC. Independent literal template sites still receive applicable rule findings.
 
+## Custom CSS selectors
+
+Custom CSS attribution supports unescaped ASCII class identifiers (including hyphens and underscores), compound selectors such as `button.card.active[data-state="open"]:hover`, and comma-separated lists. Nonfunctional pseudo-classes and pseudo-elements preserve the subject's class associations. `:is()` and `:where()` accept lists of supported compounds and contribute their positive class names. All classes within `:not()` are excluded from attribution: `.card:not(.ghost)` contributes declarations to `card`, never to `ghost`. Attribute contents such as `[data-url="a.fake"]` do not define classes.
+
+This is conservative class attribution, not browser matching: every positive class in a supported compound receives the declarations, without checking runtime state, specificity, or whether all selector conditions hold.
+
+Escaped identifiers (including `.hover\:card` and hexadecimal CSS escapes) are rejected explicitly; selfix never registers a partial name. Other selector functions, nested negation, and descendant, child, or sibling relationships involving classes are unsupported. Nested selector rules, including implicit descendants and parent references (`&`), are also unsupported. Conditional at-rules such as `@media` preserve an enclosing supported selector. These forms fail theme loading with an `Unable to inspect CSS: unsupported selector` error that includes the selector and reason, even if rules are disabled. Rewrite the selector into supported compounds where equivalent; do not interpret this inspection failure as a clean lint result. Class-free element relationships in reset CSS do not create class associations.
+
 ## Limitations and trust
 
 - Analysis targets Vue SFC templates. JSX/TSX, template preprocessors, external templates, and arbitrary script-only class calls are outside the supported input. Props such as `ui`, `contentClass`, and `overlayClass` are inspected only when explicitly configured through [classProps](configuration.md#configured-class-props).

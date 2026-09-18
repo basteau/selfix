@@ -426,6 +426,61 @@ import Ignored from '@policy/ignored'
     },
   )
 
+  it.each(["no-restyle", "no-raw-colors"] as const)(
+    "%s attributes only supported positive selector classes",
+    async (rule) => {
+      const linter = await createLinter({
+        css: `${css} [data-url="a.fake"] { color: red; }
+          .fake, .ghost { margin: 1rem; }
+          .card:not(.ghost), .other:hover, :is(.first, .second) { color: red; }`,
+        config: { rules: only(rule) },
+      })
+      expect(linter.lint(button('class="fake ghost"'), "Selectors.vue")).toEqual([])
+      for (const token of ["card", "other", "first", "second"]) {
+        expect(linter.lint(button(`class="${token}"`), "Selectors.vue")).toEqual([
+          expect.objectContaining({
+            rule,
+            className: token,
+            file: "Selectors.vue",
+            line: 2,
+            column: 19,
+          }),
+        ])
+      }
+    },
+  )
+
+  it("reports attribute text and negated classes as unknown", async () => {
+    const linter = await createLinter({
+      css: `${css} [data-url="a.fake"] { color: red; } .card:not(.ghost) { color: red; }`,
+      config: { rules: only("no-unknown-classes") },
+    })
+    for (const token of ["fake", "ghost"]) {
+      expect(linter.lint(button(`class="${token}"`), "Selectors.vue")).toEqual([
+        expect.objectContaining({
+          rule: "no-unknown-classes",
+          className: token,
+          file: "Selectors.vue",
+          line: 2,
+          column: 19,
+        }),
+      ])
+    }
+    expect(linter.lint(button('class="card"'))).toEqual([])
+  })
+
+  it.each([String.raw`.hover\:card`, ".card:has(.child)"])(
+    "rejects unsupported selector %s even with all rules off",
+    async (selector) => {
+      await expect(
+        createLinter({
+          css: `${css} ${selector} { color: red; }`,
+          config: { rules: Object.fromEntries(ruleNames.map((rule) => [rule, "off"])) },
+        }),
+      ).rejects.toThrow(/Unable to inspect CSS: unsupported selector/)
+    },
+  )
+
   it("reports unknown slot classes only within slot content", async () => {
     const linter = await createLinter({ css, config: { rules: only("require-static-classes") } })
     const source = `<script setup>const local = 'p-2';</script>

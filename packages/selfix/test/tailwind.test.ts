@@ -35,6 +35,97 @@ describe("baseCandidate", () => {
 })
 
 describe("createTailwind", () => {
+  test.each([
+    String.raw`.hover\:card`,
+    String.raw`.\63 ard`,
+    ".card:has(.child)",
+    ".card .child",
+    ".card > .child",
+    ".card + .other",
+    ".card ~ .other",
+    ".card:nth-child(2 of .other)",
+    ".card:not(:not(.other))",
+    "&:hover",
+  ])("rejects unsupported selector attribution for %s", async (selector) => {
+    await expect(createTailwind(`${selector} { color: red; }`, process.cwd())).rejects.toThrow(
+      /Unable to inspect CSS: unsupported selector/,
+    )
+  })
+
+  test.each([
+    ".parent:has(.child) { .inner { color: red; } }",
+    ".parent { .child { color: red; } }",
+    ".parent { @media (width > 10px) { .child { color: red; } } }",
+  ])("rejects unsupported selector ancestry in %s", async (css) => {
+    await expect(createTailwind(css, process.cwd())).rejects.toThrow(
+      /Unable to inspect CSS: unsupported selector/,
+    )
+  })
+
+  test("retains positive subjects without attributing negated classes", async () => {
+    const tailwind = await createTailwind(
+      `.card:not(.ghost, :is(.missing, .absent)) { color: red; }
+       :is(.first, .second:hover), :where(.third):focus { padding: 1rem; }
+       .ghost { margin: 1rem; }`,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card")).toEqual({ known: true, categories: ["color"], rawColor: true })
+    expect(tailwind.inspect("ghost")).toEqual({
+      known: true,
+      categories: ["layout"],
+      rawColor: false,
+    })
+    for (const token of ["missing", "absent"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: false,
+        categories: ["unknown"],
+        rawColor: false,
+      })
+    }
+    for (const token of ["first", "second", "third"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: true,
+        categories: ["spacing"],
+        rawColor: false,
+      })
+    }
+  })
+
+  test("keeps class-free selector-list branches separate from class compounds", async () => {
+    const tailwind = await createTailwind(
+      `body main, button.card.active[data-state="open"]:hover, input + label,
+       ._label::before, .--notice { color: red; }`,
+      process.cwd(),
+    )
+    for (const token of ["card", "active", "_label", "--notice"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: true,
+        categories: ["color"],
+        rawColor: true,
+      })
+    }
+  })
+
+  test("ignores class-like text in selector attributes", async () => {
+    const tailwind = await createTailwind(
+      String.raw`[data-url="a.fake"] { color: red; }
+      .card[data-label='a.other, .third']:hover { padding: 1rem; }`,
+      process.cwd(),
+    )
+    for (const token of ["fake", "other", "third"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: false,
+        categories: ["unknown"],
+        rawColor: false,
+      })
+    }
+    expect(tailwind.inspect("card")).toEqual({
+      known: true,
+      categories: ["spacing"],
+      rawColor: false,
+    })
+  })
+
   test.each([{ style: "./theme.css" }, { default: "./index.cjs", style: "./theme.css" }])(
     "loads a package stylesheet export %j",
     async (exports) => {
