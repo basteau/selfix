@@ -1,6 +1,6 @@
 # 14: Add per-file rule overrides
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -23,6 +23,8 @@ After design approval, verify a small project containing component implementatio
 Run `pnpm check` before reporting implementation complete. Append commands, outcomes, review findings, and completion evidence during implementation.
 
 ## Notes
+
+- Completed in `8e9457b` (`feat(config): add per-file rule overrides`). All acceptance criteria and required verification passed; no remaining review findings.
 
 - Final path-matching regression: trailing `**` failed to match line breaks in valid filenames. Enabled dotAll for the generated matcher; the regression also checks exact whole-filename matching. Focused tests and full `pnpm check` passed after the fix; independent delta re-reviews returned zero findings.
 
