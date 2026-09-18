@@ -181,7 +181,13 @@ function compileTemplateAst(
     source,
     filename,
     id: "selfix",
-    compilerOptions: { hoistStatic: false },
+    // Keep expression identifiers intact for static analysis; generated code is unused.
+    compilerOptions: {
+      hoistStatic: false,
+      prefixIdentifiers: false,
+      cacheHandlers: false,
+      mode: "function",
+    },
   })
   for (const error of result.errors) {
     errors.push(issue(error, offset))
@@ -201,8 +207,9 @@ function walkTemplate(
 ): void {
   const visit = (node: TemplateNode, current: TemplateContext): void => {
     if (node.type === VueNode.Element) {
-      const next = shadowElementScope(node, current)
-      collectElement(node, next, sites, styles)
+      const elementContext = shadowElementScope(node, current, "for")
+      collectElement(node, elementContext, sites, styles)
+      const next = shadowElementScope(node, elementContext, "slot")
       for (const child of node.children) {
         visit(child, next)
       }
@@ -240,10 +247,14 @@ function expressionContent(expression: TemplateExpression | undefined): string |
   return expression?.type === VueNode.SimpleExpression ? expression.content : expression?.loc.source
 }
 
-function shadowElementScope(node: ElementNode, context: TemplateContext): TemplateContext {
+function shadowElementScope(
+  node: ElementNode,
+  context: TemplateContext,
+  directive: "for" | "slot",
+): TemplateContext {
   let next = context
   for (const prop of node.props) {
-    if (prop.type !== VueNode.Directive) {
+    if (prop.type !== VueNode.Directive || prop.name !== directive) {
       continue
     }
     const content = expressionContent(prop.exp)

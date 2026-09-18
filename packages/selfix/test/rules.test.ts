@@ -91,6 +91,32 @@ describe("design-system rules", () => {
     },
   )
 
+  it("reports unknown slot classes only within slot content", async () => {
+    const linter = await createLinter({ css, config: { rules: only("require-static-classes") } })
+    const source = `<script setup>const local = 'p-2';</script>
+<template>
+  <Box v-slot="{ local, cn }" :class="[local, cn('m-2')]">
+    <div :class="local" />
+    <div :class="cn('m-2')" />
+  </Box>
+  <div :class="local" />
+</template>`
+    expect(linter.lint(source, "Slot.vue")).toEqual([
+      expect.objectContaining({
+        rule: "require-static-classes",
+        file: "Slot.vue",
+        line: 4,
+        column: 10,
+      }),
+      expect.objectContaining({
+        rule: "require-static-classes",
+        file: "Slot.vue",
+        line: 5,
+        column: 10,
+      }),
+    ])
+  })
+
   it("reports shadowed helper calls at their original class attributes", async () => {
     const linter = await createLinter({ css, config: { rules: only("require-static-classes") } })
     const source = `<script setup>

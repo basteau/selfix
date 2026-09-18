@@ -3,6 +3,94 @@ import { collectVue } from "../src/vue.js"
 
 describe("collectVue", () => {
   it.each([false, true])(
+    "preserves decoded expressions in slot scopes (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>const local = 'p-2';</script>
+<template>
+  <Box v-slot="{ local = &quot;m-2&quot; }" :class="local">
+    <div :class="local" />
+    <div :class="&quot;gap-2&quot;" />
+    <div v-bind="{ class: &quot;p-4&quot; }" />
+  </Box>
+</template>`
+      const result = collectVue(source, "entities.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites.map(({ tokens, dynamic }) => ({ tokens, dynamic }))).toEqual([
+        { tokens: ["p-2"], dynamic: false },
+        { tokens: [], dynamic: true },
+        { tokens: ["gap-2"], dynamic: false },
+        { tokens: ["p-4"], dynamic: false },
+      ])
+      expect(result.sites.map(({ offset }) => offset)).toEqual(
+        [...source.matchAll(/:class=|v-bind=/gu)].map((match) => match.index),
+      )
+    },
+  )
+
+  it.each([false, true])(
+    "preserves nested slot and loop boundaries (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>
+const outer = 'p-2'; const inner = 'm-2'; const loop = 'gap-2';
+</script>
+<template>
+  <section :class="outer">
+    <Box v-slot="{ value: [outer] }" :class="outer">
+      <Box v-slot="{ inner = (() => { throw new Error('never run') })() }" :class="[outer, inner]">
+        <div :class="[outer, inner]" />
+      </Box>
+      <div :class="inner" />
+      <Box v-slot="{ inner }" v-for="loop in rows" :class="[loop, inner]">
+        <div :class="[loop, inner]" />
+      </Box>
+      <div :class="loop" />
+    </Box>
+    <div :class="[outer, inner, loop]" />
+  </section>
+</template>`
+      const result = collectVue(source, "nested-scopes.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites.map(({ tokens, dynamic }) => ({ tokens, dynamic }))).toEqual([
+        { tokens: ["p-2"], dynamic: false },
+        { tokens: ["p-2"], dynamic: false },
+        { tokens: ["m-2"], dynamic: true },
+        { tokens: [], dynamic: true },
+        { tokens: ["m-2"], dynamic: false },
+        { tokens: ["m-2"], dynamic: true },
+        { tokens: [], dynamic: true },
+        { tokens: ["gap-2"], dynamic: false },
+        { tokens: ["p-2", "m-2", "gap-2"], dynamic: false },
+      ])
+      expect(result.sites.map(({ offset }) => offset)).toEqual(
+        [...source.matchAll(/:class=/gu)].map((match) => match.index),
+      )
+    },
+  )
+
+  it.each([false, true])(
+    "keeps slot bindings out of owner attributes (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>const local = 'p-2';</script>
+<template>
+  <Box v-slot="{ local, cn }" :class="[local, cn('m-2')]">
+    <div :class="[local, cn('m-2')]" />
+  </Box>
+  <div :class="[local, cn('m-2')]" />
+</template>`
+      const result = collectVue(source, "slot-owner.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites.map(({ tokens, dynamic }) => ({ tokens, dynamic }))).toEqual([
+        { tokens: ["p-2", "m-2"], dynamic: false },
+        { tokens: [], dynamic: true },
+        { tokens: ["p-2", "m-2"], dynamic: false },
+      ])
+      expect(result.sites.map(({ offset }) => offset)).toEqual(
+        [...source.matchAll(/:class=/gu)].map((match) => match.index),
+      )
+    },
+  )
+
+  it.each([false, true])(
     "respects helper template scopes (fallback: %s)",
     (forceCompileTemplateAst) => {
       const source = `<template>
