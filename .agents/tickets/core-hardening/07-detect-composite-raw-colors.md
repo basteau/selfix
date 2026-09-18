@@ -1,6 +1,6 @@
 # 07: Detect raw colors in fallbacks and composite values
 
-Status: in-progress
+Status: done
 Blocked by: 06-scan-css-declarations-safely.md
 
 ## Goal
@@ -47,3 +47,7 @@ Approved from the core-hardening discussion. Build on ticket 06's reliable decla
 - Independent Standards review: one P2 composite-coverage finding, resolved with regressions; re-review found zero remaining findings.
 - Independent Spec review: zero findings against all seven acceptance criteria.
 - No remaining nonblocking limitations identified within this ticket's scope. Existing bounded CSS inspection remains unchanged.
+
+## Completion
+
+- Implementation committed successfully as 51ab736 (`fix(colors): detect raw colors in composite values`). Ticket complete.
