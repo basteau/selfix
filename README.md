@@ -217,6 +217,7 @@ and generated application themes are not loaded automatically.
 
 - Vue SFC templates only: no JSX/TSX, template preprocessors, external templates, or arbitrary script-only class calls.
 - No cross-file wrapper tracing, automatic variant discovery, or autofixes. Run separately from ESLint or Oxlint.
+- Recoverable collection uncertainty (such as dynamic `v-bind` attributes) produces `parse-error` diagnostics while independent, statically readable sites still receive rule diagnostics. Repeated unsupported properties in one object binding produce one uncertainty report. Fatal SFC, script, or template compiler failures suppress ordinary rule findings for the file.
 - Malformed SFCs produce `parse-error` diagnostics even with rules disabled. Unsupported templates and failed theme loading do not silently pass.
 - **Use trusted configuration:** config files and Tailwind `@plugin`/`@config` modules execute as Node modules. Application expressions do not.
 - Tailwind validation uses `__unstable__loadDesignSystem`; API changes may require a selfix update.

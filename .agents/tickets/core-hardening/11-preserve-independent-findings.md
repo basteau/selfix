@@ -1,6 +1,6 @@
 # 11: Preserve independent findings after recoverable collection issues
 
-Status: ready
+Status: in-progress
 Blocked by: none
 
 ## Goal
@@ -11,13 +11,13 @@ Currently collection of `v-bind="{ ...a, ...b, [key]: value }"` can emit several
 
 ## Acceptance criteria
 
-- [ ] Distinguish fatal parse failures from recoverable collection uncertainty using the smallest explicit representation needed.
-- [ ] Multiple equivalent unsupported-property reports from one binding are consolidated without hiding distinct actionable issues.
-- [ ] Trustworthy independent sites still receive rule diagnostics when another site has recoverable unsupported syntax.
-- [ ] Unsupported or invalid input still produces errors even when ordinary rules are disabled.
-- [ ] Findings are not emitted from AST regions whose validity cannot be established after a fatal failure.
-- [ ] Normal and fallback collection preserve original locations and deterministic ordering.
-- [ ] The public diagnostic behavior and any changed limitations are documented in the root README as needed.
+- [x] Distinguish fatal parse failures from recoverable collection uncertainty using the smallest explicit representation needed.
+- [x] Multiple equivalent unsupported-property reports from one binding are consolidated without hiding distinct actionable issues.
+- [x] Trustworthy independent sites still receive rule diagnostics when another site has recoverable unsupported syntax.
+- [x] Unsupported or invalid input still produces errors even when ordinary rules are disabled.
+- [x] Findings are not emitted from AST regions whose validity cannot be established after a fatal failure.
+- [x] Normal and fallback collection preserve original locations and deterministic ordering.
+- [x] The public diagnostic behavior and any changed limitations are documented in the root README as needed.
 
 ## Verification
 
@@ -26,3 +26,19 @@ Add collector and public-linter regressions for mixed supported/unsupported site
 ## Notes
 
 Approved from the core-hardening discussion. Relevant code: error collection in `packages/selfix/src/vue.ts` and the early return in `packages/selfix/src/index.ts`. Keep this separate from cross-use vocabulary ownership/provenance; no generic diagnostic framework is needed. Completion requires review and passing checks.
+
+## Implementation baseline
+
+- Starting revision: `ad9ca68e2f3414fea068b29b0fed3f7554b07092`, branch `main`.
+- Initial tracked/index changes: none. Pre-existing untracked `.agents/tickets/documentation/` is outside scope.
+- Owned scope: collector, linter, their focused tests, README behavior note, and this ticket.
+
+## Verification and review
+
+- Red: `pnpm exec vitest run packages/selfix/test/rules.test.ts -t 'preserves independent diagnostics and consolidates'` failed with three duplicate errors and the missing independent arbitrary-value finding.
+- Green: the same command passed after the collector/linter change. `pnpm typecheck` passed.
+- `pnpm exec vitest run packages/selfix/test/vue.test.ts packages/selfix/test/rules.test.ts`: 93 tests passed, including normal/fallback collection, distinct attributes, original locations, disabled rules, and fatal parsing.
+- Initial sandboxed `pnpm check` hit child-process `EPERM` in package/release/playground tests. The permitted rerun passed: 223 tests, typechecking, lint, formatting, package build, and playground typecheck/design lint/build.
+- Independent Standards review: zero findings. Independent Spec review: zero findings. Scope: owned working-tree changes against the recorded starting revision; unrelated documentation tickets excluded.
+- Final cleanup simplified singleton expectations and made the disabled-rules malformed-input assertion non-vacuous. No design changes or unresolved nonblocking findings.
+- Acceptance criteria are met; status remains in-progress until the requested implementation commit succeeds. Commit hash will be recorded afterward.

@@ -3,6 +3,58 @@ import { collectVue } from "../src/vue.js"
 
 describe("collectVue", () => {
   it.each([false, true])(
+    "keeps independent sites and separate uncertainty locations (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>const known = 'p-[13px]'</script>
+<template>
+  <div v-bind="{ ...a, ...b, [key]: value }" :[other]="value" />
+  <div :class="known" />
+  <div v-bind="attrs" />
+</template>`
+      const result = collectVue(source, "mixed.vue", { forceCompileTemplateAst })
+      expect(result.fatal).toBe(false)
+      expect(result.errors).toEqual([
+        {
+          message: "Dynamic v-bind attrs may contain class or style",
+          offset: source.indexOf("v-bind"),
+        },
+        {
+          message: "Dynamic v-bind argument may be class or style",
+          offset: source.indexOf(":[other]"),
+        },
+        {
+          message: "Dynamic v-bind attrs may contain class or style",
+          offset: source.lastIndexOf("v-bind"),
+        },
+      ])
+      expect(result.sites).toEqual([
+        { component: "div", tokens: [], dynamic: true, offset: source.indexOf("v-bind") },
+        {
+          component: "div",
+          tokens: ["p-[13px]"],
+          dynamic: false,
+          offset: source.indexOf(":class"),
+        },
+        { component: "div", tokens: [], dynamic: true, offset: source.lastIndexOf("v-bind") },
+      ])
+    },
+  )
+
+  it.each([false, true])(
+    "marks parser failures fatal (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      for (const source of [
+        '<template><div class="p-[13px]"></template>',
+        '<script setup>const broken =</script><template><div class="p-[13px]" /></template>',
+      ]) {
+        const result = collectVue(source, "fatal.vue", { forceCompileTemplateAst })
+        expect(result.fatal).toBe(true)
+        expect(result.errors.length).toBeGreaterThan(0)
+      }
+    },
+  )
+
+  it.each([false, true])(
     "keeps malformed class expressions as errors (fallback: %s)",
     (forceCompileTemplateAst) => {
       for (const binding of [':class=""', ':class=" "', ':class="class"', ':class="["']) {
@@ -586,20 +638,12 @@ const maybe = { four: ok };
 
       expect(result.sites).toEqual([
         { component: "div", tokens: ["safe"], dynamic: true, offset: source.indexOf(':class="') },
-        ...Array.from({ length: 4 }, () => ({
-          component: "div",
-          tokens: [],
-          dynamic: true,
-          offset: spreadOffset,
-        })),
+        { component: "div", tokens: [], dynamic: true, offset: spreadOffset },
         { component: "div", tokens: [], dynamic: true, offset: literalOffset },
       ])
-      expect(result.errors).toEqual(
-        Array.from({ length: 4 }, () => ({
-          message: "Dynamic v-bind attrs may contain class or style",
-          offset: spreadOffset,
-        })),
-      )
+      expect(result.errors).toEqual([
+        { message: "Dynamic v-bind attrs may contain class or style", offset: spreadOffset },
+      ])
       expect(result.styles).toEqual([{ component: "div", offset: literalOffset }])
     },
   )

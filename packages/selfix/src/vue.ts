@@ -103,7 +103,7 @@ export function collectVue(
   source: string,
   filename: string,
   options: CollectVueOptions = {},
-): { sites: ClassSite[]; styles: StyleSite[]; errors: ParseIssue[] } {
+): { sites: ClassSite[]; styles: StyleSite[]; errors: ParseIssue[]; fatal: boolean } {
   const errors: ParseIssue[] = []
   const parsed = parseSfc(source, { filename, sourceMap: false })
   for (const error of parsed.errors) {
@@ -120,6 +120,8 @@ export function collectVue(
     parsed.descriptor.scriptSetup?.loc.start.offset ?? 0,
     errors,
   )
+  // Parser failures invalidate the file; later collection issues leave independent sites usable.
+  let fatal = errors.length > 0
   const aliases: ComponentAliases = { byTemplateName: new Map(), byTagName: new Map() }
   collectComponentAliases(script, aliases)
   collectComponentAliases(setup, aliases)
@@ -137,27 +139,29 @@ export function collectVue(
 
   const template = parsed.descriptor.template
   if (!template) {
-    return { sites, styles: sortStyles(styles), errors }
+    return { sites, styles: sortStyles(styles), errors, fatal }
   }
   if (template.src) {
     errors.push({
       message: "External template src is not supported",
       offset: template.loc.start.offset,
     })
-    return { sites, styles: sortStyles(styles), errors }
+    return { sites, styles: sortStyles(styles), errors, fatal }
   }
   if (template.lang && template.lang !== "html") {
     errors.push({
       message: `Template language "${template.lang}" is not supported`,
       offset: template.loc.start.offset,
     })
-    return { sites, styles: sortStyles(styles), errors }
+    return { sites, styles: sortStyles(styles), errors, fatal }
   }
   const templateAst = options.forceCompileTemplateAst ? undefined : template.ast
+  const errorsBeforeCompile = errors.length
   const ast =
     templateAst ?? compileTemplateAst(template.content, filename, template.loc.start.offset, errors)
+  fatal ||= errors.length > errorsBeforeCompile
   if (!ast) {
-    return { sites, styles: sortStyles(styles), errors }
+    return { sites, styles: sortStyles(styles), errors, fatal }
   }
 
   walkTemplate(
@@ -173,7 +177,7 @@ export function collectVue(
     sites,
     styles,
   )
-  return { sites, styles: sortStyles(styles), errors }
+  return { sites, styles: sortStyles(styles), errors, fatal }
 }
 
 function compileTemplateAst(
@@ -471,8 +475,11 @@ function collectSpreadAttrs(
     sites.push(classSite(component, [], true, context.offset + prop.loc.start.offset, importSource))
     return
   }
+  let reportedUncertainty = false
   for (const property of expression.properties) {
     if (property.type !== "ObjectProperty" || property.computed) {
+      if (reportedUncertainty) continue
+      reportedUncertainty = true
       context.errors.push({
         message: "Dynamic v-bind attrs may contain class or style",
         offset: context.offset + prop.loc.start.offset,

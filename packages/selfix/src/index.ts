@@ -106,7 +106,8 @@ export async function createLinter({ css, base = process.cwd(), config = {} }: L
       }
       for (const error of collected.errors)
         emit("parse-error", "error", error.offset, error.message)
-      if (collected.errors.length) return diagnostics
+      if (collected.fatal)
+        return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
       for (const { name, severity, options } of settings) {
         if (severity === "off") continue
         const report = (

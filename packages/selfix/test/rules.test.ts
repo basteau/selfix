@@ -11,6 +11,71 @@ const button = (attrs: string) =>
   `<script setup>import { Button } from '@/components/ui/button'</script>\n<template><Button ${attrs} /></template>`
 
 describe("design-system rules", () => {
+  it("keeps uncertainty errors when ordinary rules are disabled", async () => {
+    const linter = await createLinter({
+      css,
+      config: { rules: Object.fromEntries(ruleNames.map((name) => [name, "off"])) },
+    })
+    const diagnostics = linter.lint(
+      '<template><div v-bind="{ ...a, ...b }" /><div class="p-[13px]" /></template>',
+    )
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        rule: "parse-error",
+        severity: "error",
+        message: "Dynamic v-bind attrs may contain class or style",
+      }),
+    ])
+    expect(linter.lint("<template><div></template>")).toEqual([
+      expect.objectContaining({ rule: "parse-error", severity: "error" }),
+    ])
+  })
+
+  it.each([
+    '<template><div class="p-[13px]" style="color: red"></template>',
+    '<script setup>const broken =</script><template><div class="p-[13px]" /></template><style>.x { color: red }</style>',
+  ])("suppresses ordinary findings after fatal parsing: %s", async (source) => {
+    const linter = await createLinter({ css })
+    const diagnostics = linter.lint(source)
+    expect(diagnostics.length).toBeGreaterThan(0)
+    expect(
+      diagnostics.every(({ rule, severity }) => rule === "parse-error" && severity === "error"),
+    ).toBe(true)
+    expect(diagnostics.map(({ offset }) => offset)).toEqual(
+      diagnostics.map(({ offset }) => offset).sort((a, b) => a - b),
+    )
+  })
+
+  it("preserves independent diagnostics and consolidates binding uncertainty", async () => {
+    const linter = await createLinter({ css, config: { rules: only("no-arbitrary-values") } })
+    const source = `<template>
+  <div v-bind="{ ...a, ...b, [key]: value }" />
+  <div class="p-[13px]" />
+  <div :[key]="value" />
+</template>`
+    expect(linter.lint(source, "Mixed.vue")).toEqual([
+      expect.objectContaining({
+        rule: "parse-error",
+        line: 2,
+        column: 8,
+        offset: source.indexOf("v-bind"),
+      }),
+      expect.objectContaining({
+        rule: "no-arbitrary-values",
+        className: "p-[13px]",
+        line: 3,
+        column: 8,
+        offset: source.indexOf("class="),
+      }),
+      expect.objectContaining({
+        rule: "parse-error",
+        line: 4,
+        column: 8,
+        offset: source.indexOf(":[key]"),
+      }),
+    ])
+  })
+
   it.each(["error", "off"] as const)(
     "preserves independent findings with class shorthand (require-static-classes: %s)",
     async (severity) => {
