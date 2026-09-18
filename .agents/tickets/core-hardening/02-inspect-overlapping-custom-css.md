@@ -1,6 +1,6 @@
 # 02: Inspect overlapping custom CSS
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -45,4 +45,8 @@ Approved from the core-hardening discussion. Start in `packages/selfix/src/tailw
 - Standards: independent read-only review found no actionable findings.
 - Spec: independent read-only review confirmed all six acceptance criteria, with no findings.
 - Existing selector and declaration-scanner limitations remain unchanged; no cascade or selector-engine expansion was attempted.
-- Implementation and reviews are complete; awaiting the requested commit before marking done.
+
+## Completion
+
+- Implementation commit: `8eac9f0118ad62f4278cd0d809f4f6a2ef210c2d` (`fix(tailwind): inspect overlapping custom CSS`).
+- Required checks and independent reviews passed before committing. Ticket marked done after the implementation commit succeeded.
