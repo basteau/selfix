@@ -2,12 +2,19 @@ import { createRequire } from "node:module"
 import type * as VueCompilerSfc from "vue/compiler-sfc"
 import { normalizePropName, type ClassProps } from "./config.js"
 
-const {
-  babelParse,
-  compileTemplate,
-  parse: parseSfc,
-  version: vueVersion,
-} = createRequire(import.meta.url)("vue/compiler-sfc") as typeof VueCompilerSfc
+const require = createRequire(import.meta.url)
+const { version: vueVersion } = require("vue/package.json") as { version: string }
+const compiler = require("vue/compiler-sfc") as typeof VueCompilerSfc
+const missingCapabilities = (["babelParse", "compileTemplate", "parse"] as const).filter(
+  (name) => typeof compiler[name] !== "function",
+)
+if (missingCapabilities.length > 0) {
+  throw new Error(
+    `Vue ${vueVersion} compiler is missing required capabilities: ${missingCapabilities.join(", ")}. ` +
+      "Reinstall a supported Vue version (>=3.2.13 <4) with its matching compiler packages.",
+  )
+}
+const { babelParse, compileTemplate, parse: parseSfc } = compiler
 
 // Numeric node tags also work with older Vue releases without runtime enum exports.
 const VueNode = {

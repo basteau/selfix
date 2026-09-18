@@ -7,12 +7,19 @@ import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-assert.equal(process.argv.length, 3, "Usage: pnpm smoke:package /absolute/path/selfix.tgz")
+assert.ok(
+  process.argv.length === 3 || process.argv.length === 5,
+  "Usage: pnpm smoke:package /absolute/path/selfix.tgz [vue-version tailwind-version]",
+)
 const archive = realpathSync(process.argv[2])
 const require = createRequire(import.meta.url)
 const versions = Object.fromEntries(
   ["vue", "tailwindcss"].map((name) => [name, require(`${name}/package.json`).version]),
 )
+if (process.argv.length === 5) {
+  versions.vue = process.argv[3]
+  versions.tailwindcss = process.argv[4]
+}
 const consumer = mkdtempSync(path.join(tmpdir(), "selfix-smoke-"))
 // Do not inherit loaders or global module lookup paths from the development environment.
 const env = { ...process.env }
@@ -87,6 +94,25 @@ try {
   assert.ok(message.endsWith("packed-config-loaded"), "Native TypeScript config must be loaded")
   writeFileSync(path.join(consumer, "Page.vue"), '<template><div class="p-4" /></template>\n')
   assert.deepEqual(JSON.parse(run(cli, ["Page.vue", "--format", "json"])), [])
+  writeFileSync(
+    path.join(consumer, "api.mjs"),
+    `import assert from "node:assert/strict";
+import { createLinter } from "selfix";
+const linter = await createLinter({ css: '@import "tailwindcss";' });
+assert.deepEqual(linter.lint('<template><div class="p-4" /></template>', 'Valid.vue'), []);
+const source = '<script setup>const classes = "p-[13px]"</script>\\n<template><div :class="classes" /></template>';
+const diagnostics = linter.lint(source, 'Bound.vue');
+assert.equal(diagnostics.length, 1);
+assert.equal(diagnostics[0].rule, 'no-arbitrary-values');
+assert.equal(diagnostics[0].className, 'p-[13px]');
+assert.equal(diagnostics[0].line, 2);
+assert.equal(diagnostics[0].column, 16);
+assert.equal(diagnostics[0].offset, source.indexOf(':class'));
+const shorthand = linter.lint('<template><div :class /></template>', 'Shorthand.vue');
+assert.ok(shorthand.some(d => d.rule === ${Number(versions.vue.split(".")[1]) >= 4 ? '"require-static-classes"' : '"parse-error"'}));
+`,
+  )
+  run(process.execPath, ["api.mjs"])
   console.log(`Packed selfix ${pkg.version} passed isolated consumer verification.`)
 } finally {
   rmSync(consumer, { recursive: true, force: true })

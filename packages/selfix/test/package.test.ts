@@ -1,5 +1,13 @@
 import { execFileSync, spawnSync } from "node:child_process"
-import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
@@ -67,4 +75,25 @@ it("runs the declared executable through an npm-style symlink", () => {
 it("publishes only the two requested consumer peer dependencies", () => {
   expect(pkg.dependencies).toBeUndefined()
   expect(Object.keys(pkg.peerDependencies).sort()).toEqual(["tailwindcss", "vue"])
+})
+
+it("reports a missing Vue compiler capability with upgrade guidance", () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "selfix-compiler-"))
+  dirs.push(dir)
+  cpSync(new URL("../dist", import.meta.url), path.join(dir, "dist"), { recursive: true })
+  writeFileSync(path.join(dir, "package.json"), '{"type":"module"}')
+  const vue = path.join(dir, "node_modules/vue")
+  mkdirSync(vue, { recursive: true })
+  writeFileSync(path.join(vue, "package.json"), '{"version":"3.2.13"}')
+  // Control only the unavailable-capability boundary, not parser behavior.
+  writeFileSync(
+    path.join(vue, "compiler-sfc.js"),
+    "exports.parse = () => {}; exports.compileTemplate = () => {};",
+  )
+  const result = spawnSync(process.execPath, ["dist/vue.js"], { cwd: dir, encoding: "utf8" })
+  expect(result.status).not.toBe(0)
+  expect(result.stderr).toContain(
+    "Vue 3.2.13 compiler is missing required capabilities: babelParse",
+  )
+  expect(result.stderr).toContain("Reinstall a supported Vue version (>=3.2.13 <4)")
 })

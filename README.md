@@ -14,7 +14,7 @@ Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint), with thanks to sha
 
 Create a Button, report a padding override, and correct it. Run these commands from your Vue project's root.
 
-Requires **Node.js ≥22.18.0**, **Vue ≥3.2.13 <4**, and **Tailwind CSS ≥4 <5**. Vue and Tailwind are the only consumer peer dependencies. Install any missing peers before continuing.
+Requires **Node.js ≥22.18.0**, **Vue ≥3.2.13 <4**, and **Tailwind CSS ≥4 <5**. Vue and Tailwind are the only consumer peer dependencies. Install any missing peers before continuing. selfix reads the Vue version from its package metadata and checks required compiler capabilities at startup. If capabilities are missing, reinstall a supported Vue version with matching compiler packages. Same-name `v-bind` shorthand requires Vue ≥3.4.
 
 **Experimental alpha:** APIs and rules may change during prerelease. Install the published alpha:
 
@@ -741,7 +741,9 @@ pnpm --filter selfix pack --out /tmp/selfix.tgz
 pnpm smoke:package /tmp/selfix.tgz
 ```
 
-The smoke check installs that archive with the workspace-tested Vue and Tailwind versions, loads native TypeScript configuration, and checks both failing and valid Vue fixtures. It prints the versions and commands and removes its temporary consumer on success or failure. CI publishes the same verified archive without rebuilding it.
+Pass explicit peer versions to verify the minimum supported pair: `pnpm smoke:package /absolute/path/selfix.tgz 3.2.13 4.0.0`.
+
+The smoke check installs that archive with the workspace-tested Vue and Tailwind versions by default, loads native TypeScript configuration, and checks both failing and valid Vue fixtures through the CLI and public API, including script-setup constants and version-sensitive shorthand. It prints the versions and commands and removes its temporary consumer on success or failure. CI publishes the same verified archive without rebuilding it.
 
 See [AGENTS.md](https://github.com/basteau/selfix/blob/main/AGENTS.md) for contribution conventions. Keep documentation in this README and add regression tests for behavior changes. [Bug reports](https://github.com/basteau/selfix/issues) should include a minimal Vue/CSS example, config, command, diagnostic, and dependency versions.
 
