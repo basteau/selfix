@@ -1,6 +1,6 @@
 # 01: Simplify API options and path ownership
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -9,11 +9,11 @@ Make the programmatic API express what callers actually supply, with clear path 
 
 ## Acceptance criteria
 
-- [ ] Record and approve a concrete before/after API before implementation. Compare clearer names and narrower types with consolidating project-relative defaults; preserve a separate stylesheet origin when CSS lives elsewhere. State the compatibility/release cost of removals or renames.
-- [ ] Separate CLI-only config from API options. Decide explicitly how API validation handles css/exclude supplied in config; do not continue silently accepting irrelevant settings or add a compatibility layer by default.
-- [ ] Make CSS imports/aliases, override matching, discovery roots, relative lint filenames, and diagnostic filenames predictable under the chosen design. Avoid requiring repeated project roots for ordinary callers while preserving legitimate separate locations.
-- [ ] Update createLinter, lintSource, CLI normalization, exports, internal callers, package smoke coverage, and affected docs together. Source-only API use must remain possible.
-- [ ] Preserve original-SFC diagnostics, independent rule enforcement, opt-in API discovery, and the separation between recognition and definition guidance. Failed loading must remain a failure.
+- [x] Record and approve a concrete before/after API before implementation. Compare clearer names and narrower types with consolidating project-relative defaults; preserve a separate stylesheet origin when CSS lives elsewhere. State the compatibility/release cost of removals or renames.
+- [x] Separate CLI-only config from API options. Decide explicitly how API validation handles css/exclude supplied in config; do not continue silently accepting irrelevant settings or add a compatibility layer by default.
+- [x] Make CSS imports/aliases, override matching, discovery roots, relative lint filenames, and diagnostic filenames predictable under the chosen design. Avoid requiring repeated project roots for ordinary callers while preserving legitimate separate locations.
+- [x] Update createLinter, lintSource, CLI normalization, exports, internal callers, package smoke coverage, and affected docs together. Source-only API use must remain possible.
+- [x] Preserve original-SFC diagnostics, independent rule enforcement, opt-in API discovery, and the separation between recognition and definition guidance. Failed loading must remain a failure.
 
 ## Verification
 
@@ -36,3 +36,7 @@ Approved replacement: createLinter({ css, root?, cssBase?, config? }). root defa
 ## Implementation baseline
 
 Starting revision: 918b51b on main; clean worktree after the approved documentation and ticket baseline commits. Own API/config/CLI normalization, affected consumers and docs, focused tests, and this ticket. User authorized implementation and commits; no push.
+
+## Completion
+
+Implementation: 02c5ca7. pnpm check passed (475 tests, typecheck, lint, format, playground, docs links/build); packed consumer smoke passed. Independent Standards and Spec reviews: no findings. git diff --check passed. Breaking changes recorded; no release or push.
