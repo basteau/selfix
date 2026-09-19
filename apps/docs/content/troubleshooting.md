@@ -13,6 +13,8 @@ pnpm exec selfix src/Page.vue
 
 ## A component does not receive no-restyle findings
 
+Run `pnpm exec selfix src/Page.vue --doctor` to see recognition, effective `no-restyle` severity, and definition discovery separately, including for components without classes. A zero-protection advisory is a successful setup report, not proof that your intended components are protected. Unsupported analysis still fails. See [doctor output and exits](cli.md#diagnose-component-protection).
+
 selfix must recognize the component before it protects it. Check that `ui` matches the **import string**, not a filesystem path. For global or auto-imported components, add a `components` name pattern.
 
 Also check that `ignoreImports` doesn't exclude the import, the file isn't excluded, and `no-restyle` is enabled. Follow [component recognition](configuration.md#component-recognition) for renamed or kebab-case components.

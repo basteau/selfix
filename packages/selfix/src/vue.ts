@@ -66,6 +66,13 @@ export interface ClassSite {
   slot?: string
 }
 
+export interface ComponentUsage {
+  component: string
+  offset: number
+  importSource?: string
+  unsupported?: string
+}
+
 export interface StyleSite {
   component: string
   offset: number
@@ -90,6 +97,7 @@ export interface ComponentAlias {
 type ComponentAliases = Map<string, ComponentAlias>
 
 interface TemplateContext {
+  usages: ComponentUsage[]
   classProps: { pattern: RegExp; props: Map<string, "class" | "slot-map"> }[]
   aliases: ComponentAliases
   bindings: Map<string, StaticBinding>
@@ -115,6 +123,7 @@ export function collectVue(
   filename: string,
   options: CollectVueOptions = {},
 ): {
+  usages: ComponentUsage[]
   sites: ClassSite[]
   styles: StyleSite[]
   errors: ParseIssue[]
@@ -156,6 +165,7 @@ export function collectVue(
   collectComponentAliases(setup, aliases)
 
   const bindings = collectStaticBindings(setup)
+  const usages: ComponentUsage[] = []
   const sites: ClassSite[] = []
   const styles: StyleSite[] = []
 
@@ -168,21 +178,21 @@ export function collectVue(
 
   const template = parsed.descriptor.template
   if (!template) {
-    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   if (template.src) {
     errors.push({
       message: "External template src is not supported",
       offset: template.loc.start.offset,
     })
-    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   if (template.lang && template.lang !== "html") {
     errors.push({
       message: `Template language "${template.lang}" is not supported`,
       offset: template.loc.start.offset,
     })
-    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   const templateAst = options.forceCompileTemplateAst ? undefined : template.ast
   const errorsBeforeCompile = errors.length
@@ -190,12 +200,13 @@ export function collectVue(
     templateAst ?? compileTemplateAst(template.content, filename, template.loc.start.offset, errors)
   fatal ||= errors.length > errorsBeforeCompile
   if (!ast) {
-    return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
 
   walkTemplate(
     ast,
     {
+      usages,
       classProps: (options.classProps ?? []).map((entry) => ({
         pattern: new RegExp(entry.pattern),
         props: new Map(
@@ -212,7 +223,7 @@ export function collectVue(
     sites,
     styles,
   )
-  return { sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+  return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
 }
 
 function compileTemplateAst(
@@ -409,6 +420,28 @@ function collectElement(
   const alias = isComponent ? resolveComponentAlias(node.tag, context.aliases) : undefined
   const component = alias?.local ?? (isComponent ? node.tag : node.tag.toLowerCase())
   const importSource = alias?.importSource
+  if (isComponent) {
+    const unsupported =
+      node.tag === "component" ||
+      node.tag === "Component" ||
+      node.tag.includes(".") ||
+      alias?.imported === "*" ||
+      node.props.some(
+        (prop) =>
+          prop.type === VueNode.Attribute &&
+          prop.name === "is" &&
+          prop.value?.content.startsWith("vue:"),
+      )
+        ? 'Dynamic, namespace, and is="vue:…" components are not supported; component coverage is incomplete.'
+        : undefined
+    context.usages.push({
+      component,
+      importSource,
+      offset: context.offset + node.loc.start.offset,
+      ...(unsupported ? { unsupported } : {}),
+    })
+  }
+
   const configured = context.classProps.find(({ pattern }) => pattern.test(component))?.props
 
   if (isTemplateStyleElement(node)) {

@@ -9,6 +9,7 @@ const help = `Usage: selfix [files, directories, or quoted globs] [options]
 Check Vue single-file components against your Tailwind design system.
 Defaults to the current directory and requires selfix.config.ts.
 
+  --doctor              Explain component recognition and protection
   --config <file.ts>     TypeScript configuration (default: selfix.config.ts)
   --css <file>           Tailwind CSS entry (overrides config.css)
   --format text|json    Output format (default: text)
@@ -43,6 +44,8 @@ export async function run(
     let cssPath: string | undefined
     let format = "text"
     let maxWarnings = Infinity
+    let doctor = false
+    let hasMaxWarnings = false
     for (let index = 0; index < args.length; index++) {
       const arg = args[index]
       if (arg === "--help" || arg === "-h") {
@@ -55,6 +58,10 @@ export async function run(
         ) as { version: string }
         io.out(`${pkg.version}\n`)
         return 0
+      }
+      if (arg === "--doctor") {
+        doctor = true
+        continue
       }
       if (arg === "--") {
         inputs.push(...args.slice(index + 1))
@@ -69,12 +76,17 @@ export async function run(
         if (arg === "--max-warnings") {
           if (!/^\d+$/.test(value))
             throw new Error("--max-warnings must be a non-negative integer.")
+          hasMaxWarnings = true
           maxWarnings = Number(value)
         }
       } else if (arg.startsWith("-")) throw new Error(`Unknown option: ${arg}.`)
       else inputs.push(arg)
     }
     if (!["text", "json"].includes(format)) throw new Error("--format must be text or json.")
+    if (doctor && (format === "json" || hasMaxWarnings))
+      throw new Error(
+        "--doctor supports text setup reports only. Remove --format json and --max-warnings, or run ordinary lint without --doctor.",
+      )
     configPath ??= path.join(cwd, "selfix.config.ts")
     if (!configPath.endsWith(".ts"))
       throw new Error("Configuration must be a .ts file exporting a default config object.")
@@ -146,6 +158,49 @@ export async function run(
         project: config.project === false ? false : (config.project ?? {}),
       },
     })
+    if (doctor) {
+      const reports = []
+      for (const file of [...files].sort())
+        reports.push({ file, ...linter.doctor(await readFile(file, "utf8"), file) })
+      io.out(`Configuration: ${configPath}\nTailwind CSS loaded: ${cssPath}\n`)
+      const usages = reports.flatMap((report) => report.usages)
+      const active = usages.filter((usage) => usage.active).length
+      for (const report of reports) {
+        const file = path.relative(cwd, report.file)
+        for (const usage of report.usages)
+          io.out(
+            `${file}:${usage.line}:${usage.column} <${usage.component}>: ${usage.reason}; no-restyle: ${usage.severity}; active protection: ${usage.active ? "yes" : "no"}; definition: ${usage.definition}\n`,
+          )
+        for (const issue of report.issues)
+          io.out(
+            `${file}:${issue.line}:${issue.column} error unsupported analysis: ${issue.message}\n`,
+          )
+      }
+      io.out(
+        `Scanned ${files.size} Vue file${files.size === 1 ? "" : "s"}; ${usages.length} component usages; ${active} actively protected.\n`,
+      )
+      if (!active) {
+        const reasons = []
+        if (!usages.length) reasons.push("no component usages collected")
+        if (usages.some((usage) => !usage.recognized))
+          reasons.push("usages are unrecognized or ignored")
+        if (usages.some((usage) => usage.recognized && usage.severity === "off"))
+          reasons.push("no-restyle is disabled for recognized usages")
+        if (reports.some((report) => report.issues.length))
+          reasons.push("analysis is incomplete; see errors above")
+        io.out(`Advisory: zero actively protected matches: ${reasons.join("; ")}.\n`)
+      }
+      for (const suggestion of new Set(
+        usages.flatMap((usage) => (usage.suggestion ? [usage.suggestion] : [])),
+      ))
+        io.out(
+          `If you intend to protect components from this import, add this exact import pattern to your config: ${suggestion}\n`,
+        )
+      io.out(
+        "Active protection describes the configured no-restyle policy; allowed classes depend on its contract. Definition discovery is separate: unavailable metadata does not disable protection. Dynamic/namespace components and wrapper tracing are unsupported; this report does not prove comprehensive coverage.\n",
+      )
+      return reports.some((report) => report.issues.length) ? 1 : 0
+    }
     const diagnostics: Diagnostic[] = []
     for (const file of [...files].sort())
       diagnostics.push(...linter.lint(await readFile(file, "utf8"), file))

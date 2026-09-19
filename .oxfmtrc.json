@@ -2,6 +2,7 @@
   "semi": false,
   "ignorePatterns": [
     "pnpm-lock.yaml",
+    "**/.taste/**",
     "**/dist/**",
     "**/fixtures/**",
     "**/.blume/**",

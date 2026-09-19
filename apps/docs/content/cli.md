@@ -46,6 +46,7 @@ The CLI doesn't search parent directories for a config. A config is required eve
 
 | Option                | Behavior                                                                   |
 | --------------------- | -------------------------------------------------------------------------- |
+| `--doctor`            | Explain component recognition, enforcement, and definition discovery.      |
 | `--config <file.ts>`  | Use this config. Defaults to `selfix.config.ts`.                           |
 | `--css <file>`        | Override the config's CSS entry.                                           |
 | `--format text\|json` | Choose output format. Defaults to `text`.                                  |
@@ -83,3 +84,25 @@ Findings go to stdout. Loading, config, and input failures go to stderr as `self
 | `2`  | Configuration, theme, discovery, or input failure, including an empty scan. |
 
 For gradual rollout, see [warning limits](adoption.md#set-a-warning-limit).
+
+## Diagnose component protection
+
+```sh
+pnpm exec selfix src --doctor
+```
+
+Doctor uses the same input selection, exclusions, configuration, CSS override, and path rules as ordinary lint. Its text report shows the resolved config, successfully loaded Tailwind CSS entry, scanned Vue file count, and each component usage at its original SFC line and column, including usages without classes.
+
+Each usage reports:
+
+- **Recognition:** the matching `components` pattern, `ui` prefix, or `componentImports` pattern. `ignoreImports` wins over all of these. Otherwise the report says no recognition setting matches.
+- **Enforcement:** the effective `no-restyle` severity after file overrides. Recognized usages with `warn` or `error` count as actively protected; `off` does not. The component's contract still determines which classes are allowed.
+- **Definition:** a verified source path, `unavailable`, or `disabled` by `project: false`. Discovery is separate from recognition: unavailable optional metadata does not disable protection.
+
+Zero actively protected matches produce an advisory explaining the observed cause: no collected component usages, unrecognized or ignored usages, or disabled enforcement. Exact import-pattern suggestions are options for components you intend to protect. They do not establish that an import belongs to your design system, and doctor never edits your config.
+
+Doctor reports setup, so ordinary styling violations are omitted. A completed report exits `0`, including zero-match advisories and unavailable definitions. Parse errors, unsupported analysis, and unreadable class inputs remain visible and exit `1`. Configuration, theme, discovery-loading, and input failures exit `2`, including empty scans. Errors mean the inventory may be incomplete.
+
+This first version supports text only. Remove `--format json` and `--max-warnings` when using `--doctor`; those combinations fail with exit `2`. Ordinary lint retains both options.
+
+Doctor preserves existing Vue identity and source-resolution limits. Imported kebab-case usages use the local import name; globals use their template name. Dynamic (`<component>` or `<Component>`), namespace, and `is="vue:…"` component syntax are reported as unsupported. Wrapper tracing, broader package resolution, and richer prop discovery are not supported. Application expressions are never evaluated, and the report does not prove comprehensive component coverage.

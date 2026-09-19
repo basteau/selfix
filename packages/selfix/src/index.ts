@@ -1,7 +1,7 @@
 import path from "node:path"
 import { createProject, type ComponentDefinition } from "./project.js"
 import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
-import { collectVue, type ClassSite } from "./vue.js"
+import { collectVue, type ComponentUsage } from "./vue.js"
 import {
   ruleNames,
   validateLinterConfig,
@@ -183,20 +183,119 @@ export async function createLinter(options: LinterOptions) {
   const ignoreImports = (config.ignoreImports ?? []).map((pattern) => new RegExp(pattern))
   const components = (config.components ?? []).map((pattern) => new RegExp(pattern))
   const componentImports = (config.componentImports ?? []).map((pattern) => new RegExp(pattern))
-  function isDesignComponent(site: ClassSite) {
+  function recognition(site: Pick<ComponentUsage, "component" | "importSource">) {
     const source = site.importSource
-    if (source && ignoreImports.some((pattern) => pattern.test(source))) return false
-    return Boolean(
-      components.some((pattern) => pattern.test(site.component)) ||
-      (source &&
-        ((config.ui ?? ["@/components/ui"]).some(
+    const ignored = source && ignoreImports.find((pattern) => pattern.test(source))
+    if (ignored)
+      return {
+        recognized: false,
+        reason: `ignored by ignoreImports ${JSON.stringify(ignored.source)}`,
+      }
+    const component = components.find((pattern) => pattern.test(site.component))
+    if (component)
+      return {
+        recognized: true,
+        reason: `recognized by components ${JSON.stringify(component.source)}`,
+      }
+    const prefix = source
+      ? (config.ui ?? ["@/components/ui"]).find(
           (prefix) => source === prefix || source.startsWith(`${prefix}/`),
-        ) ||
-          componentImports.some((pattern) => pattern.test(source)))),
-    )
+        )
+      : undefined
+    if (prefix !== undefined)
+      return { recognized: true, reason: `recognized by ui ${JSON.stringify(prefix)}` }
+    const imported = source && componentImports.find((pattern) => pattern.test(source))
+    if (imported)
+      return {
+        recognized: true,
+        reason: `recognized by componentImports ${JSON.stringify(imported.source)}`,
+      }
+    return { recognized: false, reason: "unrecognized (no recognition setting matches)" }
+  }
+
+  function effectiveSettings(filename: string) {
+    const effective = overrides.length ? settings.map((setting) => ({ ...setting })) : settings
+    const relativeFile = path.relative(root, path.resolve(root, filename)).split(path.sep).join("/")
+    if (
+      relativeFile !== ".." &&
+      !relativeFile.startsWith("../") &&
+      !path.isAbsolute(relativeFile)
+    ) {
+      for (const override of overrides) {
+        if (!override.patterns.some((pattern) => pattern.test(relativeFile))) continue
+        for (const replacement of override.rules) {
+          const selected = effective.find((setting) => setting.name === replacement.name)!
+          selected.severity = replacement.severity
+          if (replacement.options) {
+            selected.options = {
+              ...selected.options,
+              ...Object.fromEntries(
+                Object.entries(replacement.options).filter(([, value]) => value !== undefined),
+              ),
+            }
+            selected.policy = prepareOptions(
+              selected.options,
+              selected.name === "no-restyle" ? ["layout"] : [],
+            )
+          }
+        }
+      }
+    }
+    return effective
   }
 
   return {
+    doctor(source: string, filename: string) {
+      const collected = collectVue(source, filename, { classProps: config.classProps })
+      const positionAt = sourcePositions(source)
+      const severity = effectiveSettings(filename).find(
+        (setting) => setting.name === "no-restyle",
+      )!.severity
+      const issues = collected.errors.map((error) => ({ ...error, ...positionAt(error.offset) }))
+      if (!collected.fatal) {
+        for (const site of collected.sites) {
+          if (site.dynamic)
+            issues.push({
+              message: `Cannot statically inspect class input on <${site.component}>; enforcement coverage is incomplete.`,
+              offset: site.offset,
+              ...positionAt(site.offset),
+            })
+        }
+      }
+      const usages = (collected.fatal ? [] : collected.usages).map((site) => {
+        if (site.unsupported)
+          issues.push({
+            message: site.unsupported,
+            offset: site.offset,
+            ...positionAt(site.offset),
+          })
+        const match = recognition(site)
+        const definition = site.unsupported
+          ? undefined
+          : project?.resolve(
+              site.component,
+              collected.imports.get(site.component),
+              path.resolve(root, filename),
+              source,
+            )
+        return {
+          ...site,
+          ...positionAt(site.offset),
+          ...match,
+          severity,
+          active: !site.unsupported && match.recognized && severity !== "off",
+          definition: project ? (definition?.file ?? "unavailable") : "disabled",
+          suggestion:
+            !site.unsupported &&
+            !match.recognized &&
+            match.reason.startsWith("unrecognized") &&
+            site.importSource
+              ? `componentImports: [${JSON.stringify("^" + site.importSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$")}]`
+              : undefined,
+        }
+      })
+      return { usages, issues: issues.sort((a, b) => a.offset - b.offset) }
+    },
     lint(source: string, filename = "component.vue"): Diagnostic[] {
       const collected = collectVue(source, filename, { classProps: config.classProps })
       const diagnostics: Diagnostic[] = []
@@ -227,36 +326,7 @@ export async function createLinter(options: LinterOptions) {
         emit("parse-error", "error", error.offset, error.message)
       if (collected.fatal)
         return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
-      const effective = overrides.length ? settings.map((setting) => ({ ...setting })) : settings
-      const relativeFile = path
-        .relative(root, path.resolve(root, filename))
-        .split(path.sep)
-        .join("/")
-      if (
-        relativeFile !== ".." &&
-        !relativeFile.startsWith("../") &&
-        !path.isAbsolute(relativeFile)
-      ) {
-        for (const override of overrides) {
-          if (!override.patterns.some((pattern) => pattern.test(relativeFile))) continue
-          for (const replacement of override.rules) {
-            const selected = effective.find((setting) => setting.name === replacement.name)!
-            selected.severity = replacement.severity
-            if (replacement.options) {
-              selected.options = {
-                ...selected.options,
-                ...Object.fromEntries(
-                  Object.entries(replacement.options).filter(([, value]) => value !== undefined),
-                ),
-              }
-              selected.policy = prepareOptions(
-                selected.options,
-                selected.name === "no-restyle" ? ["layout"] : [],
-              )
-            }
-          }
-        }
-      }
+      const effective = effectiveSettings(filename)
       for (const { name, severity, policy } of effective) {
         if (severity === "off") continue
         const report = (
@@ -338,7 +408,7 @@ export async function createLinter(options: LinterOptions) {
           continue
         }
         for (const site of collected.sites) {
-          if (name === "no-restyle" && !isDesignComponent(site)) continue
+          if (name === "no-restyle" && !recognition(site).recognized) continue
           const selected = policy(site.component)
           if (name === "require-static-classes") {
             if (site.dynamic)

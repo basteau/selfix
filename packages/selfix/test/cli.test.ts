@@ -352,3 +352,256 @@ it("does not treat a matching directory as a file-prefix exclusion", async () =>
   for (const input of ["src", "src/**/*.vue"])
     expect((await invoke([input], dir)).stdout).toBe("Checked 1 Vue file: 0 errors, 0 warnings.\n")
 })
+
+describe("doctor", () => {
+  it("reports classless usages with original locations and shared recognition", async () => {
+    const dir = await project()
+    await writeFile(
+      path.join(dir, "Page.vue"),
+      `<script setup>
+import { Button as Action } from '@/components/ui/button'
+import Other from '@/components/ui-extra'
+</script>
+<template>
+  <action />
+  <Other class="p-4" />
+  <div />
+</template>`,
+    )
+    const result = await invoke(["--doctor", "Page.vue"], dir)
+    expect(result.code).toBe(0)
+    expect(result.stderr).toBe("")
+    expect(result.stdout).toContain(`Configuration: ${path.join(dir, "selfix.config.ts")}`)
+    expect(result.stdout).toContain(`Tailwind CSS loaded: ${path.join(dir, "theme.css")}`)
+    expect(result.stdout).toContain(
+      'Page.vue:6:3 <Action>: recognized by ui "@/components/ui"; no-restyle: error; active protection: yes; definition: unavailable',
+    )
+    expect(result.stdout).toContain(
+      "Page.vue:7:3 <Other>: unrecognized (no recognition setting matches)",
+    )
+    expect(result.stdout).toContain('componentImports: ["^@/components/ui-extra$"]')
+    expect(result.stdout).toContain("Scanned 1 Vue file; 2 component usages; 1 actively protected.")
+    expect(result.stdout).not.toContain("<div>")
+  })
+})
+
+it("doctor rejects dynamic enforcement inputs without evaluating application expressions", async () => {
+  const dir = await project()
+  await writeFile(
+    path.join(dir, "Page.vue"),
+    `<script setup>
+import Button from '@/components/ui/button'
+const classes = (() => { throw new Error('must not execute') })()
+</script><template><Button :class="classes" /></template>`,
+  )
+  const result = await invoke(["--doctor"], dir)
+  expect(result.code).toBe(1)
+  expect(result.stdout).toContain("Cannot statically inspect class input")
+  expect(result.stderr).toBe("")
+  expect(result.stdout).not.toContain("must not execute")
+})
+
+it("doctor shares import precedence and identity with ordinary lint", async () => {
+  const dir = await project()
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {
+    css:'theme.css', ui:['@/ui'], components:['^Global$', '^Ignored$'],
+    componentImports:['^library$'], ignoreImports:['^ignored$'], project:false
+  }`,
+  )
+  await writeFile(
+    path.join(dir, "Page.vue"),
+    `<script setup lang="ts">
+import { Button as Action } from '@/ui/button'
+import Exact from '@/ui'
+import Near from '@/ui-extra'
+import FromLibrary from 'library'
+import Ignored from 'ignored'
+import Div from '@/ui/div'
+import type TypeOnly from '@/ui/type'
+import { type TypeNamed } from '@/ui/type'
+</script><template>
+<action class="p-4" /><Exact class="p-4" /><Near class="p-4" />
+<FromLibrary class="p-4" /><Ignored class="p-4" /><Global class="p-4" />
+<div class="p-4" /><TypeOnly class="p-4" /><TypeNamed class="p-4" />
+</template>`,
+  )
+  const doctor = await invoke(["--doctor"], dir)
+  expect(doctor.code).toBe(0)
+  expect(doctor.stdout).toContain('<Action>: recognized by ui "@/ui"')
+  expect(doctor.stdout).toContain('<Exact>: recognized by ui "@/ui"')
+  expect(doctor.stdout).toContain("<Near>: unrecognized")
+  expect(doctor.stdout).toContain('<FromLibrary>: recognized by componentImports "^library$"')
+  expect(doctor.stdout).toContain('<Ignored>: ignored by ignoreImports "^ignored$"')
+  expect(doctor.stdout).toContain('<Global>: recognized by components "^Global$"')
+  expect(doctor.stdout).toContain("<TypeOnly>: unrecognized")
+  expect(doctor.stdout).toContain("<TypeNamed>: unrecognized")
+  expect(doctor.stdout).not.toContain("<Div>")
+  expect(doctor.stdout).not.toContain('componentImports: ["^ignored$"]')
+  expect(doctor.stdout).toContain("8 component usages; 4 actively protected.")
+  expect(doctor.stdout).toContain("definition: disabled")
+  const lint = await invoke(["--format", "json"], dir)
+  expect(
+    JSON.parse(lint.stdout)
+      .filter((d: { rule: string }) => d.rule === "no-restyle")
+      .map((d: { component: string }) => d.component),
+  ).toEqual(["Action", "Exact", "FromLibrary", "Global"])
+  expect((await invoke(["--doctor"], dir)).stdout).toBe(doctor.stdout)
+})
+
+it("doctor uses config-relative exclusions, overrides, and separate verified discovery", async () => {
+  const dir = await project()
+  await mkdir(path.join(dir, "src"))
+  await writeFile(path.join(dir, "Button.vue"), "<template><button /></template>")
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {
+    css:'missing.css', ui:['./Button.vue'], exclude:['src/Bad.vue'],
+    components:['^Button$'], rules:{'no-restyle':'off'},
+    overrides:[{files:['src/Warn.vue'],rules:{'no-restyle':'warn'}}]
+  }`,
+  )
+  const source = `<script setup>import Button from '../Button.vue'</script><template><Button class="p-4" /></template>`
+  await writeFile(path.join(dir, "src/Off.vue"), source)
+  await writeFile(path.join(dir, "src/Warn.vue"), source)
+  await writeFile(path.join(dir, "src/Bad.vue"), "<template><broken></template>")
+  const args = ["--config", "../selfix.config.ts", "--css", "../theme.css", "*.vue"]
+  const result = await invoke([...args, "--doctor"], path.join(dir, "src"))
+  expect(result.code).toBe(0)
+  expect(result.stdout).toContain("Scanned 2 Vue files; 2 component usages; 1 actively protected.")
+  expect(result.stdout).toContain(
+    `no-restyle: off; active protection: no; definition: ${path.join(dir, "Button.vue")}`,
+  )
+  expect(result.stdout).toContain(
+    `no-restyle: warn; active protection: yes; definition: ${path.join(dir, "Button.vue")}`,
+  )
+  const lint = await invoke([...args, "--format", "json"], path.join(dir, "src"))
+  expect(JSON.parse(lint.stdout)).toEqual([
+    expect.objectContaining({
+      rule: "no-restyle",
+      severity: "warn",
+      file: path.join(dir, "src/Warn.vue"),
+    }),
+  ])
+  const off = await invoke(
+    ["--config", "../selfix.config.ts", "--css", "../theme.css", "Off.vue", "--doctor"],
+    path.join(dir, "src"),
+  )
+  expect(off.code).toBe(0)
+  expect(off.stdout).toContain("no-restyle is disabled for recognized usages")
+})
+
+it.each([
+  ["<template><div /></template>", "no component usages collected"],
+  ["<template><Unknown /></template>", "usages are unrecognized or ignored"],
+])("doctor explains zero protection for %s", async (source, reason) => {
+  const dir = await project()
+  await writeFile(path.join(dir, "Page.vue"), source)
+  const result = await invoke(["--doctor"], dir)
+  expect(result.code).toBe(0)
+  expect(result.stdout).toContain(`Advisory: zero actively protected matches: ${reason}`)
+})
+
+it.each([
+  ["--format", "json"],
+  ["--max-warnings", "0"],
+])("doctor rejects %s %s", async (...options) => {
+  const dir = await project()
+  const result = await invoke(["--doctor", ...options], dir)
+  expect(result.code).toBe(2)
+  expect(result.stderr).toContain("Remove --format json and --max-warnings")
+})
+
+it.each([
+  "<template><div></template>",
+  '<script src="./external.ts"></script><template><Button /></template>',
+  '<template src="./external.html"></template>',
+  '<template lang="pug">Button</template>',
+  '<template><component :is="(() => { throw new Error() })()" /></template>',
+  `<script setup>import * as UI from 'library'</script><template><UI.Button /></template>`,
+])("doctor exposes unsupported or invalid input: %s", async (source) => {
+  const dir = await project()
+  await writeFile(path.join(dir, "Page.vue"), source)
+  const result = await invoke(["--doctor"], dir)
+  expect(result.code).toBe(1)
+  expect(result.stdout).toContain("error unsupported analysis:")
+  expect(result.stdout).toContain("0 actively protected.")
+})
+
+it.each(["theme", "metadata", "empty", "config", "input"])(
+  "doctor fails on %s loading",
+  async (failure) => {
+    const dir = await project()
+    if (failure !== "empty")
+      await writeFile(path.join(dir, "Page.vue"), "<template><Button /></template>")
+    if (failure === "theme")
+      await writeFile(path.join(dir, "theme.css"), '@import "missing-theme-package";')
+    if (failure === "metadata") await writeFile(path.join(dir, "tsconfig.json"), "{broken")
+    if (failure === "config")
+      await writeFile(path.join(dir, "selfix.config.ts"), "export default {css:42}")
+    const result = await invoke(["--doctor", ...(failure === "input" ? ["missing.vue"] : [])], dir)
+    expect(result.code).toBe(2)
+    expect(result.stderr).toContain("selfix:")
+    expect(result.stdout).not.toContain("Tailwind CSS loaded:")
+  },
+)
+
+it("doctor resolves prepared auto-imported globals without conflating discovery and protection", async () => {
+  const dir = await project()
+  await mkdir(path.join(dir, ".nuxt"))
+  await writeFile(path.join(dir, "Button.vue"), "<template><button /></template>")
+  await writeFile(
+    path.join(dir, ".nuxt/components.d.ts"),
+    `export const UButton: typeof import('../Button.vue')['default']`,
+  )
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {css:'theme.css', components:['^u-button$']}`,
+  )
+  await writeFile(path.join(dir, "Page.vue"), "<template><u-button /><UButton /></template>")
+  const result = await invoke(["--doctor", "Page.vue"], dir)
+  expect(result.code).toBe(0)
+  expect(result.stdout).toContain(
+    `<u-button>: recognized by components "^u-button$"; no-restyle: error; active protection: yes; definition: ${path.join(dir, "Button.vue")}`,
+  )
+  expect(result.stdout).toContain(
+    `<UButton>: unrecognized (no recognition setting matches); no-restyle: error; active protection: no; definition: ${path.join(dir, "Button.vue")}`,
+  )
+})
+
+it("doctor suggests escaped exact imports only once and never suggests for ignored imports", async () => {
+  const dir = await project()
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {css:'theme.css',ignoreImports:['^ignored$']}`,
+  )
+  await writeFile(
+    path.join(dir, "Page.vue"),
+    `<script setup>
+import Widget from '@acme/widget.v2'
+import Ignored from 'ignored'
+</script><template><Widget /><Widget /><Ignored /></template>`,
+  )
+  const result = await invoke(["--doctor"], dir)
+  expect(result.code).toBe(0)
+  const suggestions = result.stdout.split("\n").filter((line) => line.startsWith("If you intend"))
+  expect(suggestions).toHaveLength(1)
+  expect(suggestions[0]).toContain('componentImports: ["^@acme/widget\\\\.v2$"]')
+})
+
+it.each(['<Component :is="value" />', '<div is="vue:Button" />'])(
+  "doctor rejects alternate Vue component syntax %s",
+  async (tag) => {
+    const dir = await project()
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      `export default {css:'theme.css',components:['^Component$', '^div$']}`,
+    )
+    await writeFile(path.join(dir, "Page.vue"), `<template>${tag}</template>`)
+    const result = await invoke(["--doctor"], dir)
+    expect(result.code).toBe(1)
+    expect(result.stdout).toContain("0 actively protected.")
+    expect(result.stdout).toContain("component coverage is incomplete")
+  },
+)

@@ -45,6 +45,8 @@ Contracts use local import names: an imported `ActionButton` also covers `<actio
 
 `componentImports` adds import regexes; `ignoreImports` takes precedence. Recognition affects only `no-restyle`.
 
+Use `pnpm exec selfix src --doctor` to verify which setting recognizes each usage and whether file overrides leave `no-restyle` active. Definition discovery is reported separately; see [doctor reports](cli.md#diagnose-component-protection).
+
 ## Shared policy
 
 Set a rule to `"off"`, `"warn"`, or `"error"`. To add options, use `[severity, options]`:
