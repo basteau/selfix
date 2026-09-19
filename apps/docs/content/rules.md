@@ -5,7 +5,7 @@ description: Choose which styling habits to catch and how to correct them.
 
 selfix has six rules. All start at `"error"`; you can turn each off, make it a warning, or configure exceptions. Use the [adoption guide](adoption.md) to start with one rule.
 
-The examples assume your Tailwind theme defines `--color-primary` and `--color-on-primary`. `Button` is a [recognized component](configuration.md#component-recognition). Each section describes one rule; passing it does not bypass the others.
+The color examples use the theme below. `Button` is a [recognized component](configuration.md#component-recognition). Each section describes one rule; passing it does not bypass the others.
 
 ## no-restyle
 
@@ -37,9 +37,20 @@ Use colors named for their purpose so the theme controls their values.
 <div class="bg-primary text-on-primary" />
 ```
 
-Define names such as `primary` in your Tailwind `@theme`, then use their utilities. A token can contain a literal color; what matters is that the class refers to the token. Redefining `red-500` still leaves it a palette color.
+Add purpose-based colors to your Tailwind entry:
 
-Loaded custom CSS is checked too: `.alert { color: red; }` is reported when you use `alert`. Use `var(--color-primary)` instead. Color literals inside shadows and variable fallbacks also count.
+```css
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #3456d1;
+  --color-on-primary: #ffffff;
+}
+```
+
+The class must use the named token. Redefining `red-500` still leaves it a palette color.
+
+Custom CSS is checked too: replace `.alert { color: red; }` with a theme variable such as `var(--color-primary)`.
 
 `currentColor` and the built-in `bg-transparent` utility pass. Authored `transparent` in arbitrary values or custom CSS is reported. This rule checks class CSS, not SVG color attributes or inline style properties.
 
@@ -59,7 +70,7 @@ Use the theme's spacing and sizing choices instead of introducing a value at eac
 
 Choose a named utility that fits the design. If the design needs a new value, add it to the theme or allow that class explicitly with `allow: ["p-[13px]"]`.
 
-The rule also reports arbitrary properties (`[color:red]`) and bracket modifiers (`text-sm/[17px]`). Named modifiers (`bg-primary/50`), CSS-variable shorthand (`p-(--space)`), and arbitrary variants (`[&>span]:mt-4`) pass. It checks syntax, not whether a named equivalent exists.
+Arbitrary properties and bracket modifiers also fail. CSS-variable shorthand and arbitrary variants pass; the rule checks values, not variants.
 
 ## no-inline-styles
 
@@ -73,7 +84,7 @@ Keep styling in classes that selfix can check against your theme.
 <div class="p-4" />
 ```
 
-The rule reports `style` attributes and bindings, including a `style` key in a literal `v-bind` object. It also reports SFC `<style>` blocks, including `scoped`, `module`, and external blocks.
+The rule reports style attributes, bindings, and all SFC `<style>` blocks.
 
 For component implementations that need these styles, use a [file override](configuration.md#per-file-rule-overrides). For a component-specific exception, configure this rule with a contract:
 
@@ -81,7 +92,7 @@ For component implementations that need these styles, use a [file override](conf
 contracts: [{ pattern: "^ProgressBar$", allow: ["style"] }],
 ```
 
-The exception covers the whole style attribute. Property-level exceptions are not supported. A contract for `^style$` allows SFC style blocks; a rule-level `allow: ["style"]` allows both attributes and blocks. `deny: ["style"]` overrides these allowances.
+This allows the whole style attribute, not selected properties. Rule-level `allow: ["style"]` also allows SFC blocks; `deny: ["style"]` wins over allowances.
 
 A `<style>` tag inside the template is unsupported input, regardless of this rule's settings.
 
@@ -101,7 +112,7 @@ Check the spelling first. If the class exists in another stylesheet, make sure y
 
 Tailwind markers such as `group`, `peer`, `dark`, and `group/card` are accepted. Loaded custom classes are accepted too, but don't automatically gain Tailwind variants such as `hover:notice`.
 
-If an external system supplies a class that selfix cannot load, use an explicit exception such as `allow: ["external-widget"]`. That skips this rule only. selfix does not suggest spellings or change your code.
+If an external system supplies a class that selfix cannot load, use an explicit exception such as `allow: ["external-widget"]`. That skips this rule only.
 
 ## require-static-classes
 

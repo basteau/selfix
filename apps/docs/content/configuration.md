@@ -3,7 +3,7 @@ title: Configuration
 description: Tell selfix which components to protect and what callers can change.
 ---
 
-Your config connects three things: the theme your app uses, the components you want to protect, and the styling rules to enforce.
+Tell selfix which theme to load, which components to protect, and what callers can change.
 
 Create `selfix.config.ts` in the project root:
 
@@ -20,7 +20,7 @@ This protects imports such as `./components/ui/Button.vue` using all six default
 
 ## Configuration file
 
-Node loads the file using native TypeScript support. Use `"type": "module"` in `package.json` and a default export. Type annotations, `import type`, and `satisfies` work; enums and `tsconfig` import aliases do not. Node does not type-check the file.
+Use `"type": "module"` in `package.json` and a default export. Node loads the TypeScript directly without type-checking; enums and `tsconfig` import aliases are unsupported.
 
 `defineConfig` validates the settings. Unknown fields, invalid rule options, and malformed patterns fail with an error. Use trusted config files: they execute as Node code.
 
@@ -33,7 +33,7 @@ Node loads the file using native TypeScript support. Use `"type": "module"` in `
 import Button from "./components/ui/Button.vue"
 ```
 
-Prefixes match whole path segments. `@/components/ui` matches `@/components/ui/Button.vue`, but not `@/components/ui-extra`. The default is `["@/components/ui"]`; `ui: []` disables that prefix.
+Prefixes match whole path segments: `@/components/ui` does not match `@/components/ui-extra`.
 
 For global or auto-imported components, add name patterns to your config:
 
@@ -41,7 +41,7 @@ For global or auto-imported components, add name patterns to your config:
 components: ["^U[A-Z]", "^GlobalButton$"],
 ```
 
-These are regular expressions. `^U[A-Z]` matches `<UButton>`. Unimported kebab-case tags keep their spelling, so `<u-button>` needs a matching pattern too.
+These regular expressions match `<UButton>` and `<GlobalButton>`. Unimported kebab-case tags need their own matching pattern.
 
 For renamed imports, use the local name in contracts. `import { Button as ActionButton }` makes both `<ActionButton>` and `<action-button>` match `ActionButton`.
 
@@ -121,13 +121,9 @@ For components imported from `./components/ui`, this produces:
 <!-- Rejected. -->
 ```
 
-The first matching contract wins. Put specific patterns before broad ones. Omitted fields inherit the rule's options; supplied fields replace them. For example, `allow: ["w-full"]` replaces the layout allowance, and `deny: []` clears an inherited ban. Contracts do not inherit from each other.
+The first matching contract wins; put specific patterns first. It inherits omitted fields from the rule and replaces supplied fields. Contracts do not inherit from each other. For example, `allow: ["w-full"]` permits only that class, while `deny: []` clears an inherited ban.
 
-### Choose a variant or a contract
-
-Use a prop when the component already provides the appearance you need. For example, use `<Button variant="secondary">` if your Button defines that variant. Change the contract when callers need a new kind of control, such as CardContent's padding above.
-
-selfix may list declared `size` or `variant` choices in a finding. Check the component before choosing one: those choices don't promise the same visual result as the rejected class.
+Use a prop when your component already offers the appearance you need—for example, `<Button variant="secondary">`. Change the contract when callers need new control. Discovered prop choices are suggestions to inspect, not promises of an equivalent visual result.
 
 ## Per-file rule overrides
 
@@ -152,9 +148,9 @@ Other rules keep their current settings. Patterns are relative to the config dir
 | `src/Item?.vue` | One character after `Item`.            |
 | `src/**/*.vue`  | Files in `src` and all subdirectories. |
 
-Use `/` separators. Patterns are case-sensitive; `**` must occupy a whole segment. Absolute paths, `..`, backslashes, negation, braces, character classes, and extglobs are unsupported. Files outside the base don't match.
+Use case-sensitive `/` paths. `**` spans zero or more directories, including dot directories, and must occupy a whole segment. Only `*`, `**`, and `?` wildcards are supported; absolute paths and `..` are rejected. Files outside the root don't match.
 
-All matching overrides apply in order; later settings win per rule. A severity string changes only severity. A `[severity, options]` pair also updates the fields you supply; omitted fields keep their current values. Lists and message maps replace as a whole: use `deny: []` to clear a ban, `contracts: []` to remove contracts, or `message: {}` to clear the rule-level custom message. Matching contracts can still supply their own messages. Empty options preserve every field.
+All matching overrides apply in order. Severity changes only severity; options update only the fields supplied. Lists and message maps replace as a whole. Use `deny: []` to clear bans, `contracts: []` to remove contracts, or `message: {}` to clear the rule-level message. Omitted fields and empty options preserve current settings; contracts can still supply their own messages.
 
 Use `exclude` only to skip a whole file. Overrides cannot bring an excluded file back. There are no inline suppressions, and disabling rules does not suppress parse or loading failures.
 
@@ -176,11 +172,11 @@ classProps: [
 <MyPanel content-class="mt-4" />
 ```
 
-The first matching entry wins. Component names follow the same matching rules as contracts. Prop names normalize to kebab-case, so `contentClass` and `content-class` are the same prop; don't declare both. Native `class` and `style` cannot be reconfigured.
+The first matching entry wins. Names match as in contracts; `contentClass` and `content-class` refer to the same prop. Native `class` and `style` cannot be reconfigured.
 
 Unconfigured props are ignored. Configuring a prop does not itself protect the component with `no-restyle`; set up recognition too. All parts use the component's contract, with no per-slot policies.
 
-For slot maps, variables holding the whole map, computed keys, methods, and spreads remain unreadable. Known entries are still checked. Findings identify the prop and, when known, the slot.
+Use literal slot maps: computed keys, spreads, and variables holding the map are unreadable. Findings identify the prop and known slot.
 
 ## Custom messages
 
@@ -202,48 +198,26 @@ You can also supply a map keyed by category, with `default` as a fallback.
 | `{{slot}}`      | Known slot name, or empty.                                               |
 | `{{rule}}`      | Rule name.                                                               |
 
-A contract's message replaces the rule's entire message, including a map. A matching category wins over `default`, then built-in guidance. For `no-restyle`, the category is the first disallowed one unless a deny matched. Other class findings prefer a denied category, then the first non-layout category, then the first category in the table above.
-
-Use top-level `note` to append plain text to every finding, including `parse-error`. Notes don't substitute placeholders. Custom rule messages don't replace parse errors.
+A matching category message takes priority over `default`, then built-in guidance. A contract's message replaces the rule's whole message map. Top-level `note` appends plain text to every finding. Custom messages cannot replace parse errors.
 
 ## Component source discovery
 
 The CLI looks up component definitions to enrich `no-restyle` messages with source paths and readable prop choices. This is separate from recognition: finding a source file doesn't decide whether its component is protected.
 
-Usually no extra config is needed. Set `project: false` to disable discovery, or add `project` options when your paths need help:
+Usually no extra config is needed. Use `project: false` to disable discovery. Add these `project` options only when automatic lookup needs help:
 
-| Option           | Meaning                                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `root`           | Project directory. CLI: relative to the config directory. API: relative to the API `root`. Defaults to that directory.          |
-| `aliases`        | Import patterns mapped to local paths relative to root; zero or one `*` per pattern. Overrides discovered mappings.             |
-| `components`     | Exact names mapped to existing `.vue` files relative to root. Overrides discovered definitions.                                 |
-| `tsconfig`       | Metadata file relative to root. Default search: `tsconfig.json`, `jsconfig.json`, then prepared `.nuxt/tsconfig.json` for Nuxt. |
-| `nuxt`           | Force prepared Nuxt discovery on or off; otherwise auto-detected.                                                               |
-| `nuxtComponents` | Prepared declarations relative to root; defaults to `.nuxt/components.d.ts`. Enables Nuxt discovery unless `nuxt: false`.       |
+| Option           | Purpose                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------- |
+| `root`           | Source directory, relative to the config directory (API: `root`). Defaults to that directory.       |
+| `aliases`        | Import patterns mapped to local paths relative to root; at most one `*`.                            |
+| `components`     | Exact component names mapped to local `.vue` files relative to root.                                |
+| `tsconfig`       | Metadata file relative to root; normally detected from tsconfig/jsconfig or prepared Nuxt metadata. |
+| `nuxt`           | Enable or disable prepared Nuxt discovery; auto-detected by default.                                |
+| `nuxtComponents` | Generated declarations relative to root; defaults to `.nuxt/components.d.ts`.                       |
 
-API callers opt in with `config: { project: {} }`. CSS aliases and `ui` prefixes are separate from these filesystem mappings. In the API, `root` also supplies the base for file overrides, CSS alias targets, and relative lint filenames; `cssBase` controls stylesheet imports.
+Explicit aliases and component mappings take priority over discovered ones. For Nuxt, run `nuxt prepare` first; custom build directories need matching metadata and [CSS paths](themes.md#nuxt-ui-application-themes).
 
-### TypeScript path metadata
-
-Discovery reads JSONC `paths`, their `baseUrl`, and `extends` chains. Child paths replace inherited paths; later entries in an `extends` array win. Exact patterns win over wildcards, which prefer the longest prefix then suffix. Fallback targets are tried in order.
-
-A bare import needs a matching path entry; `baseUrl` alone isn't enough. Discovery doesn't execute build-tool configuration.
-
-### Component imports and re-exports
-
-Relative, absolute, and mapped imports can reach Vue files through explicit named or default re-exports. An exact file wins; extensionless imports need a unique candidate. Ambiguous or unsupported sources omit definition guidance. Explicit missing mappings and malformed metadata fail loading.
-
-### Prop choices
-
-Discovery reads literal `size` and `variant` unions in typed `defineProps`, including `withDefaults` and same-file aliases. Imported types, generics, inherited or merged interfaces, whole-object unions/intersections, runtime declarations, and shadowed macros omit choices. A malformed resolved SFC fails loading.
-
-### Prepared Nuxt components
-
-Run `nuxt prepare` first. Discovery reads direct component declarations from the generated file; wrapped lazy declarations are omitted. Missing artifacts report preparation guidance. With custom build paths, set `nuxtComponents`, `tsconfig`, and the [CSS alias](themes.md#nuxt-ui-application-themes).
-
-### Source snapshot
-
-A linter captures source and metadata when created. Recreate it after component, dependency, or metadata changes. Each CLI run does this automatically. In the API, supplied source takes precedence for the current SFC; other definitions use the captured files.
+Missing explicit mappings, malformed metadata, and invalid resolved components fail loading. Unresolved or unsupported definitions omit guidance; they don't change which components are protected. See [Troubleshooting](troubleshooting.md) for recovery and [API reuse](api.md#component-discovery-and-reuse) for source updates.
 
 ## Project settings
 

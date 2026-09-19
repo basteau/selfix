@@ -49,7 +49,7 @@ File overrides match filenames relative to `root`. Absolute filenames are made r
 
 Discovery is off by default in the API. Enable it with `config: { project: { root: "/path/to/app" } }` to include component definitions and readable prop choices in findings. Discovery defaults to the API `root`; a relative `project.root` resolves from it. Relative lint filenames always resolve from the API `root`.
 
-Reuse a linter while its theme, policy, and project sources stay the same. Recreate it after any of those change. There is no automatic reload. See [source snapshots](configuration.md#source-snapshot) for editor integrations.
+Reuse a linter while its theme, policy, and project sources stay the same. Recreate it after any of those change. There is no automatic reload. Project discovery captures source and metadata when the linter is created. Supplied source takes precedence for the current SFC; other definitions use that snapshot.
 
 ## Errors
 
