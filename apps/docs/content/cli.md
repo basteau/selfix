@@ -20,11 +20,17 @@ pnpm exec selfix src/Page.vue
 pnpm exec selfix "apps/**/*.vue" --config selfix.config.ts
 ```
 
-Quote globs so selfix receives the pattern itself. Duplicate files are checked once, in sorted order. An unmatched input, directly supplied non-Vue file, or empty scan fails.
+Input globs use Node’s glob syntax. Quote them to prevent shell expansion. Files are deduplicated and sorted; unmatched inputs, non-Vue file inputs, and empty scans fail.
 
 Directories named `node_modules`, `.git`, `dist`, `coverage`, `.nuxt`, and `.output` are skipped. Directory traversal also skips symbolic links.
 
-To skip more files, add `exclude` entries to the config. Use the same config-relative globs as file overrides: `**/generated/**` skips generated files at any depth; `src/generated/**` skips that directory's contents. `*` and `?` stay within one path segment; `**` spans zero or more directories, including dot directories. Exact `.vue` paths also work. Bare directory names aren't accepted. CLI input globs use Node's glob syntax and resolve from your working directory. Exclusions skip all rules. Use [file overrides](configuration.md#per-file-rule-overrides) to relax individual rules instead.
+Use config-relative `exclude` globs to skip entire files:
+
+```ts
+exclude: ["**/generated/**", "src/legacy/**/*.vue"],
+```
+
+These use the same [patterns as overrides](configuration.md#per-file-rule-overrides). Exact `.vue` paths also work; bare directory names don't. Exclusions skip every rule. Use overrides to relax individual rules.
 
 ### Paths
 
@@ -64,7 +70,7 @@ Use JSON when another tool needs the findings:
 pnpm exec selfix src --format json
 ```
 
-JSON output is an array with no summary. A clean check returns `[]`. File paths are absolute in JSON and relative to the working directory in text output.
+JSON returns a [diagnostic array](api.md#diagnostic-fields) with absolute paths and no summary; a clean check returns `[]`. Text paths are relative to the working directory.
 
 Findings go to stdout. Loading, config, and input failures go to stderr as `selfix: ...`, even in JSON mode.
 
@@ -77,20 +83,3 @@ Findings go to stdout. Loading, config, and input failures go to stderr as `self
 | `2`  | Configuration, theme, discovery, or input failure, including an empty scan. |
 
 For gradual rollout, see [warning limits](adoption.md#set-a-warning-limit).
-
-## Diagnostic fields
-
-A diagnostic is one reported finding. API and JSON consumers receive these fields:
-
-| Field            | Value                                    |
-| ---------------- | ---------------------------------------- |
-| `file`           | The affected Vue file.                   |
-| `rule`           | One of the six rules, or `parse-error`.  |
-| `severity`       | `warn` or `error`.                       |
-| `message`        | Explanation and guidance.                |
-| `line`, `column` | One-based position in the original file. |
-| `offset`         | Zero-based JavaScript string position.   |
-
-Optional fields are `component`, `className`, `prop`, `slot`, and `definition`. Class findings point to their containing attribute or binding. Findings within a file sort by offset, then rule name.
-
-`definition` contains an absolute component `file` and optional `props.size` and `props.variant` string arrays. These come from [source discovery](configuration.md#component-source-discovery); they provide guidance without validating prop values.

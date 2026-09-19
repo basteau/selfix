@@ -1,67 +1,68 @@
 ---
 title: API
-description: Check Vue source from your own Node tool.
+description: Check Vue source and consume findings from your own Node tool.
 ---
 
-Use `createLinter` when you want to choose files and handle findings in your own code. It loads a theme once, then checks as many Vue source strings as you need.
-
-For terminal and CI checks, use the [CLI](cli.md).
+Use `createLinter` to load a theme once and check multiple Vue source strings. For terminal or CI checks, use the [CLI](cli.md).
 
 ## Create a linter
 
-With selfix installed, save this as `check-design.mjs` in a project containing `src/style.css` and `src/Page.vue`. Run it with `node check-design.mjs`:
+With selfix installed, save this as `check-design.mjs` in your project root. It reads your existing `src/style.css` and `src/Page.vue`:
 
 ```js
 import { readFile } from "node:fs/promises"
-import { resolve } from "node:path"
 import { createLinter } from "selfix"
 
 const linter = await createLinter({
   css: await readFile("src/style.css", "utf8"),
-  cssBase: resolve("src"),
-  config: { ui: ["@/components/ui"] },
+  cssBase: "src",
+  config: { ui: ["./components/ui"] },
 })
 
 const source = await readFile("src/Page.vue", "utf8")
 console.log(linter.lint(source, "src/Page.vue"))
 ```
 
-Set `ui` to match your component imports. The result is an array of [diagnostics](cli.md#diagnostic-fields), or `[]` when there are no findings.
+Match `ui` to your component imports, then run `node check-design.mjs` from the project root.
 
 | Option    | Meaning                                                                                                  |
 | --------- | -------------------------------------------------------------------------------------------------------- |
-| `css`     | Required CSS source text, including imports and theme definitions.                                       |
-| `cssBase` | Origin for CSS imports, relative to root. Defaults to root.                                              |
-| `root`    | Project directory for overrides, CSS aliases, and relative filenames. Defaults to the current directory. |
-| `config`  | A `LinterConfig` policy object. Defaults to `{}`.                                                        |
+| `css`     | Required CSS source text.                                                                                |
+| `root`    | Base for overrides, CSS alias targets, discovery, and relative lint filenames. Defaults to cwd.          |
+| `cssBase` | Origin for stylesheet imports, relative to `root`. Defaults to `root`.                                   |
+| `config`  | [Policy settings](configuration.md); defaults to `{}`. CLI-only `css` and `exclude` fields are rejected. |
 
-You load the CSS and select the files. The API doesn't read `selfix.config.ts`. Its config rejects CLI-only `css` and `exclude` fields.
+The API doesn't read `selfix.config.ts`. You load the CSS and choose the files.
 
 ## Lint source
 
-`linter.lint(source, filename?)` runs synchronously and returns `Diagnostic[]`. The default filename is `component.vue`; results preserve the supplied name.
+`linter.lint(source, filename?)` synchronously returns diagnostics, or `[]` for no findings. The filename defaults to `component.vue` and is preserved in results. Files outside `root` receive top-level rules only.
 
-For a one-off check, `await lintSource(source, { css, root?, cssBase?, config?, filename? })` creates the linter and checks the source in one call.
-
-File overrides match filenames relative to `root`. Absolute filenames are made relative to that directory; files outside it receive only top-level rules. This matching doesn't change the filename in diagnostics.
+For one source string, `await lintSource(source, { css, root?, cssBase?, config?, filename? })` loads the theme and checks it in one call.
 
 ## Component discovery and reuse
 
-Discovery is off by default in the API. Enable it with `config: { project: { root: "/path/to/app" } }` to include component definitions and readable prop choices in findings. Discovery defaults to the API `root`; a relative `project.root` resolves from it. Relative lint filenames always resolve from the API `root`.
+Discovery is opt-in: add `config: { project: {} }` for component definitions and readable prop choices. An explicit `project.root` resolves from the API `root`.
 
-Reuse a linter while its theme, policy, and project sources stay the same. Recreate it after any of those change. There is no automatic reload. Project discovery captures source and metadata when the linter is created. Supplied source takes precedence for the current SFC; other definitions use that snapshot.
+Reuse the linter until its theme, policy, or project sources change, then recreate it. Discovery captures a source snapshot; the current SFC uses the source passed to `lint`. Each CLI run creates a fresh linter.
 
 ## Errors
 
-Parsing and unsupported-input problems return `parse-error` diagnostics. Invalid config, failed theme loading, and project-source loading failures throw or reject. Handle both errors and diagnostics; a failed load is not an empty result.
+Parsing and unsupported-input problems return `parse-error` diagnostics. Invalid config, theme loading, and project-source loading failures throw or reject. Handle both: a failed load is not a clean result.
 
-## Exports
+## Diagnostic fields
 
-| Runtime export | Purpose                                            |
-| -------------- | -------------------------------------------------- |
-| `createLinter` | Create a reusable linter.                          |
-| `lintSource`   | Create a linter and check one source string.       |
-| `defineConfig` | Validate and return a config.                      |
-| `ruleNames`    | The six names in [rule-reference order](rules.md). |
+A diagnostic is one reported finding. API and JSON consumers receive these fields:
 
-Exported types are `Config`, `LinterConfig`, `FileOverride`, `ProjectOptions`, `ClassProps`, `Contract`, `Message`, `RuleName`, `RuleOptions`, `RuleSetting`, `Severity`, `Category`, `LinterOptions`, `Diagnostic`, `ComponentDefinition`, and `ComponentProps`.
+| Field            | Value                                    |
+| ---------------- | ---------------------------------------- |
+| `file`           | The affected Vue file.                   |
+| `rule`           | One of the six rules, or `parse-error`.  |
+| `severity`       | `warn` or `error`.                       |
+| `message`        | Explanation and guidance.                |
+| `line`, `column` | One-based position in the original file. |
+| `offset`         | Zero-based JavaScript string position.   |
+
+Optional fields are `component`, `className`, `prop`, `slot`, and `definition`. Class findings point to their containing attribute or binding. Findings within a file sort by offset, then rule name.
+
+`definition` contains an absolute component `file` and optional `props.size` and `props.variant` string arrays. These come from [source discovery](configuration.md#component-source-discovery); they provide guidance without validating prop values.
