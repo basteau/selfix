@@ -1,6 +1,6 @@
 # 06: Replace implementation explanations with practical limits
 
-Status: in-progress
+Status: done
 Blocked by: 01-simplify-api-options.md
 
 ## Goal
@@ -9,11 +9,11 @@ Help readers load their real theme and understand the check’s meaningful limit
 
 ## Acceptance criteria
 
-- [ ] Keep the theme entry, relative CSS imports, exact aliases, and runnable Nuxt preparation workflow. Remove package-export resolution algorithms and move pinned integration versions to maintainer verification if still needed.
-- [ ] Replace exhaustive selector tables and declaration-association mechanics with a brief supported-CSS explanation and common failure guidance. Retain enough actionable information to avoid recommending unsupported fixes.
-- [ ] Retain a small class-expression example and the consequential limits on dynamic bindings, helper recognition, configured props, wrappers, and source formats. Remove syntax inventories not needed for a user decision.
-- [ ] Delete functional-utility transparency/compiler detail from the normal reading path. Keep an unusual restriction only if it materially helps recover from an actual error; do not manufacture an advanced page to preserve every paragraph.
-- [ ] Keep clean-result scope, parse/loading failures, and trusted executable configuration explicit. Keep theme preparation honest about stale/missing generated files. Repair links from troubleshooting and reference pages.
+- [x] Keep the theme entry, relative CSS imports, exact aliases, and runnable Nuxt preparation workflow. Remove package-export resolution algorithms and move pinned integration versions to maintainer verification if still needed.
+- [x] Replace exhaustive selector tables and declaration-association mechanics with a brief supported-CSS explanation and common failure guidance. Retain enough actionable information to avoid recommending unsupported fixes.
+- [x] Retain a small class-expression example and the consequential limits on dynamic bindings, helper recognition, configured props, wrappers, and source formats. Remove syntax inventories not needed for a user decision.
+- [x] Delete functional-utility transparency/compiler detail from the normal reading path. Keep an unusual restriction only if it materially helps recover from an actual error; do not manufacture an advanced page to preserve every paragraph.
+- [x] Keep clean-result scope, parse/loading failures, and trusted executable configuration explicit. Keep theme preparation honest about stale/missing generated files. Repair links from troubleshooting and reference pages.
 
 ## Verification
 
@@ -30,3 +30,7 @@ Keep one publishable package, two private apps, standalone selfix.config.ts, Vue
 ## Implementation baseline
 
 Starting revision: e1bd3e1 on main; clean worktree; dependency01 done. Own analysis/themes plus incoming README/troubleshooting labels and maintainer integration-version record.
+
+## Completion
+
+Implementation: c9f802b. Deleted syntax/selector inventories, declaration mechanics, CSS package selection algorithm, and functional utility transparency details. Kept consequential failures and configuration trust. Extracted binding and CSS examples passed; 254 focused regressions passed; pnpm check passed (489 tests, docs/build/playground); links/anchors and diff check passed. Nuxt workflow/versions checked against smoke fixture; no new network Nuxt smoke run. Independent Standards and Spec reviews: no findings.
