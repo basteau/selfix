@@ -18,7 +18,7 @@ import { createLinter } from "selfix"
 
 const linter = await createLinter({
   css: await readFile("src/style.css", "utf8"),
-  base: resolve("src"),
+  cssBase: resolve("src"),
   config: { ui: ["@/components/ui"] },
 })
 
@@ -28,26 +28,26 @@ console.log(linter.lint(source, "src/Page.vue"))
 
 Set `ui` to match your component imports. The result is an array of [diagnostics](cli.md#diagnostic-fields), or `[]` when there are no findings.
 
-| Option       | Meaning                                                                              |
-| ------------ | ------------------------------------------------------------------------------------ |
-| `css`        | Required CSS source text, including imports and theme definitions.                   |
-| `base`       | Directory for CSS imports and alias targets. Defaults to the current directory.      |
-| `configBase` | Directory for file-override matching. Defaults to the current directory at creation. |
-| `config`     | A [configuration object](configuration.md). Defaults to `{}`.                        |
+| Option    | Meaning                                                                                                  |
+| --------- | -------------------------------------------------------------------------------------------------------- |
+| `css`     | Required CSS source text, including imports and theme definitions.                                       |
+| `cssBase` | Origin for CSS imports, relative to root. Defaults to root.                                              |
+| `root`    | Project directory for overrides, CSS aliases, and relative filenames. Defaults to the current directory. |
+| `config`  | A `LinterConfig` policy object. Defaults to `{}`.                                                        |
 
-You load the CSS and select the files. The API doesn't read `selfix.config.ts`, use `config.css`, or apply `config.exclude`.
+You load the CSS and select the files. The API doesn't read `selfix.config.ts`. Its config rejects CLI-only `css` and `exclude` fields.
 
 ## Lint source
 
 `linter.lint(source, filename?)` runs synchronously and returns `Diagnostic[]`. The default filename is `component.vue`; results preserve the supplied name.
 
-For a one-off check, `await lintSource(source, { css, base?, configBase?, config?, filename? })` creates the linter and checks the source in one call.
+For a one-off check, `await lintSource(source, { css, root?, cssBase?, config?, filename? })` creates the linter and checks the source in one call.
 
-File overrides match filenames relative to `configBase`. Absolute filenames are made relative to that directory; files outside it receive only top-level rules. This matching doesn't change the filename in diagnostics.
+File overrides match filenames relative to `root`. Absolute filenames are made relative to that directory; files outside it receive only top-level rules. This matching doesn't change the filename in diagnostics.
 
 ## Component discovery and reuse
 
-Discovery is off by default in the API. Enable it with `config: { project: { root: "/path/to/app" } }` to include component definitions and readable prop choices in findings. Relative filenames resolve against that root for discovery only.
+Discovery is off by default in the API. Enable it with `config: { project: { root: "/path/to/app" } }` to include component definitions and readable prop choices in findings. Discovery defaults to the API `root`; a relative `project.root` resolves from it. Relative lint filenames always resolve from the API `root`.
 
 Reuse a linter while its theme, policy, and project sources stay the same. Recreate it after any of those change. There is no automatic reload. See [source snapshots](configuration.md#source-snapshot) for editor integrations.
 
@@ -64,4 +64,4 @@ Parsing and unsupported-input problems return `parse-error` diagnostics. Invalid
 | `defineConfig` | Validate and return a config.                      |
 | `ruleNames`    | The six names in [rule-reference order](rules.md). |
 
-Exported types are `Config`, `FileOverride`, `ProjectOptions`, `ClassProps`, `Contract`, `Message`, `RuleName`, `RuleOptions`, `RuleSetting`, `Severity`, `Category`, `LinterOptions`, `Diagnostic`, `ComponentDefinition`, and `ComponentProps`.
+Exported types are `Config`, `LinterConfig`, `FileOverride`, `ProjectOptions`, `ClassProps`, `Contract`, `Message`, `RuleName`, `RuleOptions`, `RuleSetting`, `Severity`, `Category`, `LinterOptions`, `Diagnostic`, `ComponentDefinition`, and `ComponentProps`.

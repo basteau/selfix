@@ -1,6 +1,6 @@
 # 01: Simplify API options and path ownership
 
-Status: ready
+Status: in-progress
 Blocked by: none
 
 ## Goal
@@ -32,3 +32,7 @@ Keep one publishable package, two private apps, standalone selfix.config.ts, Vue
 The user approved both the baseline commits and the proposed breaking designs, then authorized sequential implementation with clean per-ticket commits. This supersedes the earlier creation-only authorization and unresolved draft notes.
 
 Approved replacement: createLinter({ css, root?, cssBase?, config? }). root defaults to cwd and owns file overrides, CSS alias targets, and default discovery location; cssBase defaults to root and is only the origin for stylesheet imports. Relative cssBase and config.project.root resolve from root; an explicit discovery root stays available. Relative lint filenames refer to root for discovery and overrides, while emitted filenames remain exactly as supplied. Config remains the CLI type; export a narrower LinterConfig without css/exclude for API use and reject those fields at runtime. Reject removed base/configBase options with actionable errors. Keep API discovery opt-in. This intentionally breaks the old API; update consumers and record a BREAKING CHANGE trailer, without compatibility wrappers, version bump, or publication.
+
+## Implementation baseline
+
+Starting revision: 918b51b on main; clean worktree after the approved documentation and ticket baseline commits. Own API/config/CLI normalization, affected consumers and docs, focused tests, and this ticket. User authorized implementation and commits; no push.

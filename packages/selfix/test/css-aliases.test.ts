@@ -17,7 +17,7 @@ test("loads application CSS instead of the package fallback through an exact ali
     await writeFile(join(base, ".nuxt", "tokens.css"), "@theme { --color-brand: #123456; }")
     const linter = await createLinter({
       css: '@import "tailwindcss"; @import "fixture-ui";',
-      base,
+      root: base,
       config: { cssAliases: { "./fallback.css": ".nuxt/ui.css" } },
     })
     const diagnostics = linter.lint('<template><div class="bg-brand bg-fallback" /></template>')
@@ -36,7 +36,7 @@ test("a missing alias target rejects API creation even when the original import 
     await expect(
       createLinter({
         css: '@import "./fallback.css";',
-        base,
+        root: base,
         config: { cssAliases: { "./fallback.css": "missing.css" } },
       }),
     ).rejects.toThrow(`at "${join(base, "missing.css")}"`)
@@ -53,7 +53,7 @@ test("aliases match exact names and treat targets as files rather than more alia
     await writeFile(join(base, "theme.css"), ".aliased { padding: 1rem; }")
     const linter = await createLinter({
       css: '@import "./theme/other.css"; @import "#build/ui.css";',
-      base,
+      root: base,
       config: {
         cssAliases: {
           "./theme": "missing.css",

@@ -132,12 +132,12 @@ it("applies matching entries in order, preserves severity-only options, and repl
   ])
 })
 
-it("matches normalized filenames relative to configBase, independent of CSS and discovery roots", async () => {
+it("matches normalized filenames relative to root, independent of CSS and discovery roots", async () => {
   const configBase = path.join(process.cwd(), "virtual-project")
   const linter = await createLinter({
     css,
-    base: process.cwd(),
-    configBase,
+    cssBase: process.cwd(),
+    root: configBase,
     config: {
       project: false,
       overrides: [

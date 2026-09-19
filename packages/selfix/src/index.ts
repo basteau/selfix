@@ -4,9 +4,9 @@ import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
 import { collectVue, type ClassSite } from "./vue.js"
 import {
   ruleNames,
-  validateConfig,
+  validateLinterConfig,
   filePattern,
-  type Config,
+  type LinterConfig,
   type RuleName,
   type RuleOptions,
   type Severity,
@@ -18,6 +18,7 @@ export type {
   FileOverride,
   ProjectOptions,
   Config,
+  LinterConfig,
   Contract,
   Message,
   RuleName,
@@ -45,11 +46,11 @@ export interface Diagnostic {
 export interface LinterOptions {
   /** Full CSS source including imports and @theme. */
   css: string
-  /** Directory from which CSS imports resolve. */
-  base?: string
-  /** Base for override patterns and relative lint filenames; defaults to cwd. */
-  configBase?: string
-  config?: Config
+  /** Project root for overrides, CSS aliases, and relative filenames; defaults to cwd. */
+  root?: string
+  /** Origin for stylesheet imports, relative to root; defaults to root. */
+  cssBase?: string
+  config?: LinterConfig
 }
 
 function baseClass(token: string): string {
@@ -138,15 +139,29 @@ function sourcePositions(source: string) {
   }
 }
 
-export async function createLinter({
-  css,
-  base = process.cwd(),
-  configBase = process.cwd(),
-  config = {},
-}: LinterOptions) {
-  validateConfig(config)
-  const tailwind = await createTailwind(css, base, config.cssAliases)
-  const project = config.project ? createProject(config.project) : undefined
+export async function createLinter(options: LinterOptions) {
+  if ("base" in options)
+    throw new Error(
+      "The base option was removed. Use cssBase for stylesheet imports and root for project paths.",
+    )
+  if ("configBase" in options)
+    throw new Error("The configBase option was removed. Use root for project paths.")
+  const { css, config = {} } = options
+  for (const key of ["root", "cssBase"] as const) {
+    const value = options[key]
+    if (value !== undefined && (typeof value !== "string" || !value.trim()))
+      throw new Error(`${key} must be a non-empty directory path.`)
+  }
+  const root = path.resolve(options.root ?? process.cwd())
+  const cssBase = path.resolve(root, options.cssBase ?? ".")
+  validateLinterConfig(config)
+  const cssAliases = Object.fromEntries(
+    Object.entries(config.cssAliases ?? {}).map(([id, target]) => [id, path.resolve(root, target)]),
+  )
+  const tailwind = await createTailwind(css, cssBase, cssAliases)
+  const project = config.project
+    ? createProject({ ...config.project, root: path.resolve(root, config.project.root ?? ".") })
+    : undefined
   const settings = ruleNames.map((name) => {
     const setting = config.rules?.[name] ?? "error"
     const [severity, options] = Array.isArray(setting) ? setting : [setting, {}]
@@ -156,7 +171,6 @@ export async function createLinter({
       policy: prepareOptions(options, name === "no-restyle" ? ["layout"] : []),
     }
   })
-  const overrideBase = path.resolve(configBase)
   const overrides = (config.overrides ?? []).map((override) => ({
     patterns: override.files.map(filePattern),
     rules: Object.entries(override.rules).map(([name, setting]) => ({
@@ -216,7 +230,7 @@ export async function createLinter({
         return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
       const effective = overrides.length ? settings.map((setting) => ({ ...setting })) : settings
       const relativeFile = path
-        .relative(overrideBase, path.resolve(overrideBase, filename))
+        .relative(root, path.resolve(root, filename))
         .split(path.sep)
         .join("/")
       if (
@@ -268,7 +282,7 @@ export async function createLinter({
               ? project?.resolve(
                   site.component,
                   collected.imports.get(site.component),
-                  filename,
+                  path.resolve(root, filename),
                   source,
                 )
               : undefined

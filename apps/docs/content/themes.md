@@ -39,7 +39,7 @@ cssAliases: {
 },
 ```
 
-Targets resolve from the config directory in the CLI, or from `base` in the API. Imports inside the target file resolve from that file. Missing targets fail loading.
+Targets resolve from the config directory in the CLI, or from `root` in the API. Imports inside the target file resolve from that file. Missing targets fail loading.
 
 Aliases support exact names, not prefixes, wildcards, URLs, or chains. selfix doesn't load Vite or Nuxt config to discover them.
 

@@ -103,7 +103,9 @@ try {
     path.join(consumer, "api.mjs"),
     `import assert from "node:assert/strict";
 import { createLinter } from "selfix";
-const linter = await createLinter({ css: '@import "tailwindcss";' });
+const linter = await createLinter({ css: '@import "tailwindcss";', root: process.cwd(), cssBase: '.' });
+await assert.rejects(createLinter({ css: '', config: { exclude: [] } }), /only supported by the CLI/);
+await assert.rejects(createLinter({ css: '', base: '.' }), /Use cssBase/);
 assert.deepEqual(linter.lint('<template><div class="p-4" /></template>', 'Valid.vue'), []);
 const source = '<script setup>const classes = "p-[13px]"</script>\\n<template><div :class="classes" /></template>';
 const diagnostics = linter.lint(source, 'Bound.vue');

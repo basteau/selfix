@@ -142,7 +142,7 @@ describe("createTailwind", () => {
       })
       const linter = await createLinter({
         css: '@import "tailwindcss"; @import "./cards.css"; @theme inline { --color-primary: #123456; }',
-        base,
+        cssBase: base,
       })
       expect(
         linter

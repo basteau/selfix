@@ -143,7 +143,7 @@ overrides: [
 ],
 ```
 
-Other rules keep their current settings. Patterns are relative to the config directory in the CLI, or `configBase` in the API.
+Other rules keep their current settings. Patterns are relative to the config directory in the CLI, or `root` in the API.
 
 | Pattern         | Matches                                |
 | --------------- | -------------------------------------- |
@@ -214,14 +214,14 @@ Usually no extra config is needed. Set `project: false` to disable discovery, or
 
 | Option           | Meaning                                                                                                                         |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `root`           | Project directory. CLI: relative to the config directory. API: relative to the current directory. Defaults to that directory.   |
+| `root`           | Project directory. CLI: relative to the config directory. API: relative to the API `root`. Defaults to that directory.          |
 | `aliases`        | Import patterns mapped to local paths relative to root; zero or one `*` per pattern. Overrides discovered mappings.             |
 | `components`     | Exact names mapped to existing `.vue` files relative to root. Overrides discovered definitions.                                 |
 | `tsconfig`       | Metadata file relative to root. Default search: `tsconfig.json`, `jsconfig.json`, then prepared `.nuxt/tsconfig.json` for Nuxt. |
 | `nuxt`           | Force prepared Nuxt discovery on or off; otherwise auto-detected.                                                               |
 | `nuxtComponents` | Prepared declarations relative to root; defaults to `.nuxt/components.d.ts`. Enables Nuxt discovery unless `nuxt: false`.       |
 
-API callers opt in with `config: { project: {} }`. CSS aliases and `ui` prefixes are separate from these filesystem mappings.
+API callers opt in with `config: { project: {} }`. CSS aliases and `ui` prefixes are separate from these filesystem mappings. In the API, `root` also supplies the base for file overrides, CSS alias targets, and relative lint filenames; `cssBase` controls stylesheet imports.
 
 ### TypeScript path metadata
 

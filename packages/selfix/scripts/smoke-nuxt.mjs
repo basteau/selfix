@@ -62,13 +62,15 @@ try {
   const base = path.join(consumer, "app/assets/css")
   const appLinter = await createLinter({
     css,
-    base,
+    root: consumer,
+    cssBase: base,
     config: { cssAliases: { "#build/ui.css": generated } },
   })
   assert.deepEqual(appLinter.lint(source), [])
   const fallbackLinter = await createLinter({
     css,
-    base,
+    root: consumer,
+    cssBase: base,
     config: { cssAliases: { "#build/ui.css": fallback } },
   })
   assert.deepEqual(

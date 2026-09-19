@@ -133,25 +133,14 @@ export async function run(
       }
     }
     if (!files.size) throw new Error("No Vue files found. Check the paths and exclude settings.")
+    const { css: _css, exclude: _exclude, ...linterConfig } = config
     const linter = await createLinter({
       css: await readFile(cssPath, "utf8"),
-      base: path.dirname(cssPath),
-      configBase: configDir,
+      cssBase: path.dirname(cssPath),
+      root: configDir,
       config: {
-        ...config,
-        project:
-          config.project === false
-            ? false
-            : {
-                ...config.project,
-                root: path.resolve(configDir, config.project?.root ?? "."),
-              },
-        cssAliases: Object.fromEntries(
-          Object.entries(config.cssAliases ?? {}).map(([id, target]) => [
-            id,
-            path.resolve(configDir, target),
-          ]),
-        ),
+        ...linterConfig,
+        project: config.project === false ? false : (config.project ?? {}),
       },
     })
     const diagnostics: Diagnostic[] = []

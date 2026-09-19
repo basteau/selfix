@@ -74,7 +74,7 @@ export interface Config {
   classProps?: ClassProps[]
   /** CSS entry relative to the configuration file. Required by the CLI. */
   css?: string
-  /** Exact CSS imports mapped to local files, relative to the config directory (API: base). */
+  /** Exact CSS imports mapped to local files, relative to the config directory (API: root). */
   cssAliases?: Record<string, string>
   /** Import prefixes identifying design-system components. */
   ui?: string[]
@@ -88,6 +88,16 @@ export interface Config {
   note?: string
   rules?: Partial<Record<RuleName, RuleSetting>>
   overrides?: FileOverride[]
+}
+
+/** Programmatic linting policy; file selection and CSS loading belong to the caller. */
+export type LinterConfig = Omit<Config, "css" | "exclude">
+
+export function validateLinterConfig(config: unknown): asserts config is LinterConfig {
+  const obj = record(config, "config")
+  for (const field of ["css", "exclude"])
+    if (field in obj) throw new Error(`config.${field} is only supported by the CLI.`)
+  validateConfig(config)
 }
 
 export function defineConfig(config: Config): Config {
