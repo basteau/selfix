@@ -1,6 +1,6 @@
 # 05: Slim the configuration and rule references
 
-Status: in-progress
+Status: done
 Blocked by: 01-simplify-api-options.md, 02-unify-file-matching.md, 03-simplify-policy-precedence.md
 
 ## Goal
@@ -9,11 +9,11 @@ Make rules and configuration useful for choosing and adjusting enforcement witho
 
 ## Acceptance criteria
 
-- [ ] Lead each rule with purpose, one failing/passing example, and the common correction. Keep scope and consequential exceptions; remove repetitive caveats and obscure example inventories.
-- [ ] Keep common config, recognition, contracts, overrides, classProps, and an accurate compact option reference. Explain actual final defaults, matching, and precedence once.
-- [ ] Reduce discovery to its benefit, configurable options, and actionable failure guidance. Delete TypeScript path resolution, re-export traversal, and prop-extraction algorithms; keep lifecycle guidance only in the API.
-- [ ] Keep one useful custom message and supported placeholders. Delete internal category-selection ordering from the main explanation without making false replacement/fallback promises.
-- [ ] Preserve recognition versus discovery, deny precedence, independently enabled rules, exclusion scope, unsupported-input failures, and executable-config trust. Fix incoming links to removed sections.
+- [x] Lead each rule with purpose, one failing/passing example, and the common correction. Keep scope and consequential exceptions; remove repetitive caveats and obscure example inventories.
+- [x] Keep common config, recognition, contracts, overrides, classProps, and an accurate compact option reference. Explain actual final defaults, matching, and precedence once.
+- [x] Reduce discovery to its benefit, configurable options, and actionable failure guidance. Delete TypeScript path resolution, re-export traversal, and prop-extraction algorithms; keep lifecycle guidance only in the API.
+- [x] Keep one useful custom message and supported placeholders. Delete internal category-selection ordering from the main explanation without making false replacement/fallback promises.
+- [x] Preserve recognition versus discovery, deny precedence, independently enabled rules, exclusion scope, unsupported-input failures, and executable-config trust. Fix incoming links to removed sections.
 
 ## Verification
 
@@ -30,3 +30,7 @@ Keep one publishable package, two private apps, standalone selfix.config.ts, Vue
 ## Implementation baseline
 
 Starting revision: 8f0c218 on main; clean worktree. Dependencies 01–03 done. Own configuration/rules and API incoming source-snapshot link.
+
+## Completion
+
+Implementation: 7a3a8f4. Deleted TypeScript/re-export/prop-extraction algorithms and internal category ordering, rather than moving them to another page. API owns source snapshot guidance. Executed six rule examples and CardContent contract; links/anchors passed. pnpm check passed (489 tests, docs/build/playground); diff check passed. Independent Standards and Spec reviews: no findings.
