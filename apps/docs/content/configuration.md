@@ -154,7 +154,7 @@ Other rules keep their current settings. Patterns are relative to the config dir
 
 Use `/` separators. Patterns are case-sensitive; `**` must occupy a whole segment. Absolute paths, `..`, backslashes, negation, braces, character classes, and extglobs are unsupported. Files outside the base don't match.
 
-All matching overrides apply in order; later settings win per rule. A severity string preserves current options. A `[severity, options]` pair replaces them, with omitted options returning to built-in defaults.
+All matching overrides apply in order; later settings win per rule. A severity string changes only severity. A `[severity, options]` pair also updates the fields you supply; omitted fields keep their current values. Lists and message maps replace as a whole: use `deny: []` to clear a ban, `contracts: []` to remove contracts, or `message: {}` to clear the rule-level custom message. Matching contracts can still supply their own messages. Empty options preserve every field.
 
 Use `exclude` only to skip a whole file. Overrides cannot bring an excluded file back. There are no inline suppressions, and disabling rules does not suppress parse or loading failures.
 

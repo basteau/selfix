@@ -1,6 +1,6 @@
 # 03: Simplify policy precedence
 
-Status: ready
+Status: in-progress
 Blocked by: none
 
 ## Goal
@@ -32,3 +32,7 @@ Keep one publishable package, two private apps, standalone selfix.config.ts, Vue
 The user approved both the baseline commits and the proposed breaking designs, then authorized sequential implementation with clean per-ticket commits. This supersedes the earlier creation-only authorization and unresolved draft notes.
 
 Approved replacement: severity-only overrides change severity only; option-bearing overrides preserve omitted fields and replace explicitly supplied fields. Arrays and message maps replace as units, never deep-merge; [] clears lists, {} clears a message map, and empty options preserve prior fields. Existing all-matching file override order stays. Contracts and classProps keep first-match selection because they select one component policy; explicit deny still wins. Removing inherited options now requires explicit replacement/reset rather than omission. Record the breaking change and regression outcomes without releasing.
+
+## Implementation baseline
+
+Starting revision: dca5ed8 on main; clean worktree. Own policy option updates, focused public API tests, affected docs and this ticket.

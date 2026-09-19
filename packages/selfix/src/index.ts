@@ -168,6 +168,7 @@ export async function createLinter(options: LinterOptions) {
     return {
       name,
       severity,
+      options,
       policy: prepareOptions(options, name === "no-restyle" ? ["layout"] : []),
     }
   })
@@ -176,9 +177,7 @@ export async function createLinter(options: LinterOptions) {
     rules: Object.entries(override.rules).map(([name, setting]) => ({
       name,
       severity: Array.isArray(setting) ? setting[0] : setting,
-      policy: Array.isArray(setting)
-        ? prepareOptions(setting[1], name === "no-restyle" ? ["layout"] : [])
-        : undefined,
+      options: Array.isArray(setting) ? setting[1] : undefined,
     })),
   }))
   const ignoreImports = (config.ignoreImports ?? []).map((pattern) => new RegExp(pattern))
@@ -243,7 +242,18 @@ export async function createLinter(options: LinterOptions) {
           for (const replacement of override.rules) {
             const selected = effective.find((setting) => setting.name === replacement.name)!
             selected.severity = replacement.severity
-            if (replacement.policy) selected.policy = replacement.policy
+            if (replacement.options) {
+              selected.options = {
+                ...selected.options,
+                ...Object.fromEntries(
+                  Object.entries(replacement.options).filter(([, value]) => value !== undefined),
+                ),
+              }
+              selected.policy = prepareOptions(
+                selected.options,
+                selected.name === "no-restyle" ? ["layout"] : [],
+              )
+            }
           }
         }
       }

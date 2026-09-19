@@ -36,6 +36,7 @@ export interface RuleOptions {
   contracts?: Contract[]
   message?: Message
 }
+/** File overrides preserve omitted options; supplied lists/maps replace as units. */
 export type RuleSetting = Severity | [Severity, RuleOptions]
 export interface FileOverride {
   /** Config-relative file patterns; all matching entries apply in order. */
