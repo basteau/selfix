@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.0.0
+
+This release simplifies API paths, file matching, and rule overrides, with shorter developer guides and a new Blume documentation site.
+
+[Compare changes](https://github.com/basteau/selfix/compare/v1.0.0...v2.0.0)
+
+### Breaking changes
+
+- **API paths:** Replace `base` with `cssBase` and `configBase` with `root`. `root` defaults to the working directory and owns CSS alias targets, file overrides, relative lint filenames, and default component discovery. `cssBase` only controls stylesheet imports and defaults to `root`; relative `cssBase` and `project.root` resolve from `root`. Diagnostic filenames remain as supplied. API discovery remains opt-in. ([02c5ca7](https://github.com/basteau/selfix/commit/02c5ca7))
+- **API config:** `createLinter` and `lintSource` accept `LinterConfig`, which excludes CLI-only `css` and `exclude`. Those CLI-only fields are now rejected instead of silently ignored. The removed `base` and `configBase` options also fail with replacement guidance.
+- **Exclusions:** `exclude` uses the same config-relative, full-path glob syntax as overrides: `*`, `**`, and `?`. Replace `generated` with `**/generated/**` and `src/generated` with `src/generated/**`. Bare directory shorthand is rejected; exact `.vue` paths remain valid. ([9c53841](https://github.com/basteau/selfix/commit/9c53841))
+- **Override options:** `[severity, options]` now preserves omitted fields instead of resetting them. Supplied lists and message maps replace as units. Use `deny: []` or `contracts: []` to clear inherited lists, and `message: {}` to clear the rule-level custom message. Severity-only overrides still preserve options; matching contracts can still supply messages. ([a306a18](https://github.com/basteau/selfix/commit/a306a18))
+
+### Documentation
+
+The first tutorial now demonstrates one Button override and its correction. Guides remove internal algorithms, consolidate rollout and agent setup, and give CLI and API references distinct jobs. Documentation is 18% shorter, with runnable examples and verified links.
+
+Node, Vue, and Tailwind requirements are unchanged. All six rules still default to errors. No new consumer dependencies are required.
+
 ## v1.0.0
 
 First stable release of selfix: design-system linting for Vue 3 and Tailwind CSS 4, with six rules, a standalone CLI, and a typed Node API. Install with `pnpm add -D selfix`.
