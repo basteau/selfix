@@ -47,19 +47,7 @@ All six rules start as errors, including the rule against SFC `<style>` blocks. 
 
 selfix leaves your source unchanged. Fix a finding using component props, theme classes, or an explicit exception, then rerun the check.
 
-## Make it part of your workflow
-
-Add a script to your existing `package.json`:
-
-```json
-{
-  "scripts": {
-    "lint:design": "selfix src"
-  }
-}
-```
-
-Run `pnpm run lint:design` after UI changes, in CI, or from your coding agent. Errors fail the command. The [adoption guide](https://github.com/basteau/selfix/blob/main/apps/docs/content/adoption.md) explains warning limits and gradual rollout.
+Add `"lint:design": "selfix src"` to your existing package scripts. Run it after UI changes and in CI. See [Adoption](https://github.com/basteau/selfix/blob/main/apps/docs/content/adoption.md) for warning limits, workspaces, and agent instructions.
 
 ## Documentation
 

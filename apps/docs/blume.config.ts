@@ -26,9 +26,8 @@ export default defineConfig({
     sidebar: [
       "/",
       { label: "Get started", items: ["/getting-started", "/adoption"] },
-      { label: "Guides", items: ["/themes", "/agent-setup", "/troubleshooting"] },
+      { label: "Guides", items: ["/themes", "/agent-setup", "/analysis", "/troubleshooting"] },
       { label: "Reference", items: ["/rules", "/configuration", "/cli", "/api"] },
-      { label: "Concepts", items: ["/analysis"] },
       { label: "Contributing", items: ["/maintaining"] },
     ],
   },

@@ -62,21 +62,18 @@ When `no-restyle` is clean, change it to `"error"`. Pick another [rule](rules.md
 
 ## Allow styling inside component implementations
 
-A Button's implementation may need styling that its callers must not override. Add this field to your config to allow it inside `src/components/ui`:
+A Button's implementation may need styles its callers cannot add. Use [file overrides](configuration.md#per-file-rule-overrides) to permit those styles in component files while keeping other rules active. `exclude` skips every check in a file.
 
-```ts
-overrides: [
-  {
-    files: ["src/components/ui/**/*.vue"],
-    rules: {
-      "no-inline-styles": "off",
-      "no-restyle": "off",
-    },
-  },
-],
+## Workspaces
+
+Each run uses one config and one theme. Give apps with different themes separate configs. With tooling installed at the workspace root, run:
+
+```sh
+pnpm exec selfix apps/store/src --config apps/store/selfix.config.ts
+pnpm exec selfix apps/admin/src --config apps/admin/selfix.config.ts
 ```
 
-Other enabled rules still apply to those files. Callers elsewhere keep the original policy. Use [file overrides](configuration.md#per-file-rule-overrides) for these exceptions; `exclude` would skip every check in the file.
+In the store config, `css: "src/style.css"` resolves to `apps/store/src/style.css`. Exclusions and overrides are also config-relative. Check shared packages with their intended consuming theme. For app-owned tooling, use app-local scripts.
 
 ## Run the same check in CI and coding agents
 
@@ -94,4 +91,4 @@ After UI changes, run pnpm run lint:design. Correct findings using component
 props, theme classes, or agreed contracts, then rerun the check.
 ```
 
-For apps with separate themes or help verifying the setup, see [Agent setup](agent-setup.md).
+For an agent to configure the project and prove enforcement, use [Agent setup](agent-setup.md).

@@ -1,6 +1,6 @@
 # 08: Consolidate adoption and agent setup
 
-Status: ready
+Status: in-progress
 Blocked by: 02-unify-file-matching.md, 03-simplify-policy-precedence.md, 04-simplify-first-use.md
 
 ## Goal
@@ -26,3 +26,7 @@ Own apps/docs/content/adoption.md and agent-setup.md plus navigation and focused
 Created from the product/docs clarity discussion. The user approved the eight-ticket breakdown and dependencies, with 01–03 retained as drafts pending interface decisions. No separate spec exists. Approval here is to create local tickets, not to implement, commit, push, release, or publish externally.
 
 Keep one publishable package, two private apps, standalone selfix.config.ts, Vue/Tailwind-only consumer peers, and no evaluation of application expressions. Preserve deterministic actionable original-SFC diagnostics. Prefer plain functions and Node built-ins. Keep essential setup in README and detailed docs in apps/docs/content; no port/migration documents or nested AGENTS.md files. Preserve existing working-tree changes and completed ticket identities.
+
+## Implementation baseline
+
+Starting revision: 111a76d on main; clean worktree; dependencies02–04 and editorial05–07 done. Own adoption/agent setup, navigation, and final collection cuts/links under editorial acceptance criterion. Preserve release/troubleshooting procedures.

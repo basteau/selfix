@@ -23,7 +23,7 @@ Use the component's existing props to choose its appearance. If callers need mor
 
 This is the only rule that requires a recognized component. A native `<div class="p-4">` is outside its scope.
 
-A class that changes several things needs permission for all of them. For example, a custom class that sets margin and color needs both `layout` and `color` allowed, or an allowance for that class by name. An explicit `deny` always wins.
+A class affecting several categories needs all of them allowed, or an allowance by class name. Explicit bans win; see [policy options](configuration.md#shared-policy).
 
 ## no-raw-colors
 
@@ -126,7 +126,7 @@ Write complete class names so selfix can check every possible choice.
 <div :class="large ? 'mt-4' : 'mt-2'" />
 ```
 
-selfix reads both alternatives without running the condition. Arrays and class objects work too; see [supported bindings](analysis.md#vue-class-bindings).
+Both alternatives are checked without running the condition. See [supported bindings](analysis.md#vue-class-bindings) for more forms.
 
 This rule accepts custom messages, but no `allow` or `deny` list: it cannot match a class name it cannot read. Turning it off leaves those dynamic values unchecked. Unsupported syntax can still produce `parse-error`.
 

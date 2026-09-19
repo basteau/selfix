@@ -19,9 +19,9 @@ A Button can own its appearance while the page controls its placement:
 <Button class="mt-4 w-full">Save</Button>
 ```
 
-These examples assume you've told selfix which Button to protect. Its styling rules form a **contract**: the classes callers are allowed to add. The default contract permits layout changes such as margin and width. You can give individual components more freedom.
+Tell selfix which components to protect. Their **contract** defines the classes callers may add; by default, it permits layout changes such as margin and width.
 
-When a check fails, selfix points to the class in your `.vue` file and explains the rejected change. Use the component's props or adjust its contract, then run the check again.
+Findings point to the class in your `.vue` file. Use the component’s props or adjust its contract, then check again.
 
 ## Use your existing components and theme
 
