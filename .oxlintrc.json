@@ -1,4 +1,6 @@
 {
-  "categories": { "correctness": "error" },
-  "ignorePatterns": ["**/dist/**", "**/fixtures/**"]
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": ["**/dist/**", "**/fixtures/**", "**/.blume/**", "**/.blume-verify/**"]
 }

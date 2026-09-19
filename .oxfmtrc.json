@@ -1,4 +1,10 @@
 {
   "semi": false,
-  "ignorePatterns": ["pnpm-lock.yaml", "**/dist/**", "**/fixtures/**"]
+  "ignorePatterns": [
+    "pnpm-lock.yaml",
+    "**/dist/**",
+    "**/fixtures/**",
+    "**/.blume/**",
+    "**/.blume-verify/**"
+  ]
 }

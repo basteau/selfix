@@ -9,11 +9,15 @@
     "lint": "oxlint --deny-warnings .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm --filter playground check",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm --filter playground check && pnpm docs:check",
     "dev": "pnpm build && pnpm --filter playground dev",
     "smoke:package": "node packages/selfix/scripts/smoke-install.mjs",
     "smoke:nuxt": "pnpm build && node packages/selfix/scripts/smoke-nuxt.mjs",
-    "release:prepare": "changelogen --dir packages/selfix --output ../../CHANGELOG.md --bump --clean --noAuthors"
+    "release:prepare": "changelogen --dir packages/selfix --output ../../CHANGELOG.md --bump --clean --noAuthors",
+    "docs:dev": "pnpm --filter @selfix/docs dev",
+    "docs:build": "pnpm --filter @selfix/docs build",
+    "docs:preview": "pnpm --filter @selfix/docs preview",
+    "docs:check": "pnpm --filter @selfix/docs check"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

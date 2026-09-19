@@ -4,3 +4,5 @@ coverage/
 *.tgz
 packages/selfix/README.md
 .selfix-test-*/
+.blume/
+.blume-verify/

@@ -1,0 +1,15 @@
+{
+  "name": "@selfix/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "blume dev",
+    "build": "blume build",
+    "preview": "blume preview",
+    "check": "blume validate --strict && blume build --isolated"
+  },
+  "devDependencies": {
+    "@astrojs/markdown-satteri": "0.4.1",
+    "blume": "1.7.1"
+  }
+}
