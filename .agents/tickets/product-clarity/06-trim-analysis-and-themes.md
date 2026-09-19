@@ -1,6 +1,6 @@
 # 06: Replace implementation explanations with practical limits
 
-Status: ready
+Status: in-progress
 Blocked by: 01-simplify-api-options.md
 
 ## Goal
@@ -26,3 +26,7 @@ Own apps/docs/content/analysis.md and themes.md plus tightly scoped troubleshoot
 Created from the product/docs clarity discussion. The user approved the eight-ticket breakdown and dependencies, with 01–03 retained as drafts pending interface decisions. No separate spec exists. Approval here is to create local tickets, not to implement, commit, push, release, or publish externally.
 
 Keep one publishable package, two private apps, standalone selfix.config.ts, Vue/Tailwind-only consumer peers, and no evaluation of application expressions. Preserve deterministic actionable original-SFC diagnostics. Prefer plain functions and Node built-ins. Keep essential setup in README and detailed docs in apps/docs/content; no port/migration documents or nested AGENTS.md files. Preserve existing working-tree changes and completed ticket identities.
+
+## Implementation baseline
+
+Starting revision: e1bd3e1 on main; clean worktree; dependency01 done. Own analysis/themes plus incoming README/troubleshooting labels and maintainer integration-version record.

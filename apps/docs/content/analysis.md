@@ -1,102 +1,47 @@
 ---
-title: How analysis works
-description: Understand what selfix can read and what a clean check means.
+title: Analysis limits
+description: Know what selfix checks and when it needs more explicit source.
 ---
 
-selfix reads your code without running your app. Vue's parser finds classes in your components. Tailwind's compiler explains what those classes do. Your rules decide whether to allow them.
-
-That distinction matters: `p-4` is a valid Tailwind class, but it can still break a Button's styling contract.
+selfix checks Vue classes against your Tailwind theme without running your app. A class can exist in Tailwind and still break a component's contract: `p-4` is valid, but changes a protected Button's padding.
 
 ## Vue class bindings
 
-A class can depend on state and still be readable:
+State-dependent classes work when each possible class name is written out:
 
 ```vue
 <div :class="large ? 'mt-4' : 'mt-2'" />
+<div :class="['mt-4', { 'w-full': wide }]" />
 ```
 
-selfix checks both `mt-4` and `mt-2`. It doesn't need to know the value of `large`.
+selfix checks both branches, array values, and class-object keys. It also reads literal `v-bind` objects and top-level string constants in `<script setup>`.
 
-These forms are supported:
-
-| Form                                                | What gets checked                                     |
-| --------------------------------------------------- | ----------------------------------------------------- |
-| `class="mt-4 w-full"`                               | Both classes.                                         |
-| `:class="['mt-4', { 'w-full': wide }]"`             | Array values and object keys.                         |
-| `:class="wide ? 'w-full' : 'w-auto'"`               | Both branches.                                        |
-| `:class="active && 'mt-4'"`                         | The right-hand value.                                 |
-| `:class="choice \|\| 'mt-4'"` or `choice ?? 'mt-4'` | Both alternatives; an unreadable one remains dynamic. |
-| `v-bind="{ class: 'mt-4' }"`                        | The class value.                                      |
-
-Strings in backticks work when they contain no interpolation. TypeScript wrappers such as `as` and `satisfies` don't change the result. Booleans and `null` add no classes.
-
-String construction, member access, computed keys, and spreads leave values unreadable. `require-static-classes` reports those values while other readable classes are still checked. Same-name `:class` shorthand is also dynamic; it requires Vue ≥3.4.
-
-### Script constants
-
-A string constant in `<script setup>` works:
-
-```vue
-<script setup>
-const placement = "mt-4"
-</script>
-
-<template>
-  <div :class="placement" />
-</template>
-```
-
-Only top-level constants holding strings directly are resolved. Arrays, objects, imported values, references to other constants, `let`, and constants in normal `<script>` blocks are not.
+Constructed strings such as `` `mt-${size}` ``, imported values, and computed keys remain unreadable. `require-static-classes` reports them; readable classes in the same binding still get checked. Write complete alternatives instead of assembling names.
 
 ### Helpers and scope
 
-selfix reads arguments to `cn`, `clsx`, and `twMerge` using the same rules. Those local names are fixed; a renamed import such as `merge` isn't recognized. A local declaration, loop variable, or slot binding with the same name shadows the helper or constant in that scope.
+`cn`, `clsx`, and `twMerge` arguments use the same class-expression rules. These local names are fixed; renamed imports and other helpers aren't recognized. Local variables, loops, and slot bindings can shadow helpers or constants.
 
-Helpers are not executed. selfix checks their class arguments without trying to reproduce how they merge classes. `cva`, `tv`, and custom helper lists are unsupported.
+Helpers aren't executed, and selfix doesn't simulate how they merge classes.
 
 ### Unsupported bindings
 
-Some syntax can hide entire attributes. For example, `v-bind="attrs"` might contain a class or style that selfix cannot see. It produces `parse-error`, even with all six rules off. Dynamic attribute names and unresolved spreads in `v-bind` objects do the same.
+`v-bind="attrs"` could hide entire attributes, so it produces `parse-error` even with every rule off. Dynamic attribute names and unresolved spreads in binding objects do the same. Use explicit attributes or literal objects.
 
-Invalid expressions, external templates, template preprocessors, and external `<script src>` blocks also produce `parse-error`. Put script content inside the SFC to make it available for analysis.
-
-When possible, selfix continues checking readable parts of the file. Fatal parsing errors stop ordinary checks for that file.
+Malformed Vue, external templates, template preprocessors, and external script blocks also fail. Keep the template and script inside the SFC. Where possible, readable parts are still checked.
 
 ## Custom CSS selectors
 
-selfix also reads custom classes from your loaded CSS. It checks their possible effects without predicting the browser's cascade or current state. For `.card.active`, for example, both `card` and `active` receive the declarations.
+Loaded custom classes contribute their CSS effects, including supported nesting and `@apply`. The check considers possible effects, not the browser's current state or cascade.
 
-### Supported selectors
-
-| Selector                                      | Classes checked           |
-| --------------------------------------------- | ------------------------- |
-| `.card`, `.card-title`, `.card_title`         | The named class.          |
-| `button.card.active:hover`                    | `card` and `active`.      |
-| `.card, .panel`                               | Each class.               |
-| `.card::before`                               | `card`.                   |
-| `:is(.card, .panel)`, `:where(.card, .panel)` | The positive class names. |
-| `.card:not(.ghost)`                           | `card` only.              |
-
-Attribute text is not a class name. Class-free reset selectors don't create class associations.
-
-### Nested selectors
-
-Each nested branch must start with one `&`, such as `&:hover`. It inherits the outer class names. Multiple levels and `@media`, `@supports`, `@container`, and `@starting-style` blocks are supported. `@property` registrations are ignored.
-
-See [Nested custom CSS](themes.md#nested-custom-css) for an example.
-
-### Unsupported selectors
-
-Theme loading fails for escaped class names, relationships involving classes such as `.card .child`, implicit nesting, and nested relationships such as `& > span`. Unsupported selector functions, nested negation, and parent references inside selector functions or other nested at-rules also fail.
-
-The error includes the selector and reason. Change the CSS only if you can preserve its behavior; otherwise, treat it as an analysis limit to resolve.
+Use direct class selectors such as `.card` and nested states such as `&:hover`. Relationships such as `.card .child` or `& > span`, escaped class names, and unsupported selector functions fail theme loading. The error names the selector and reason. Only rewrite it if you can preserve its behavior; otherwise treat it as an analysis limit.
 
 ## Limitations and trust
 
-A clean result means the enabled rules found no violations in the selected files. Excluded files and unconfigured class props are not checked. Dynamic classes remain unchecked if you turn off `require-static-classes`.
+A clean result covers only selected files and enabled rules. Excluded files, unconfigured class props, and dynamic values with `require-static-classes` disabled remain unchecked.
 
-selfix targets Vue SFC templates. It doesn't analyze JSX/TSX, arbitrary script-only class calls, or follow styling through wrappers. Configure wrapper components and [additional class props](configuration.md#configured-class-props) explicitly.
+selfix targets Vue SFC templates, not JSX/TSX or script-only class calls. It doesn't follow styles through wrappers. Configure wrapper recognition and [class props](configuration.md#configured-class-props) explicitly.
 
 Application expressions are never evaluated. **Configuration is executable:** use trusted `selfix.config.ts` files and Tailwind `@plugin` or `@config` modules. They run with Node's permissions.
 
-Unsupported input and failed theme loading produce failures, not clean results. See [Troubleshooting](troubleshooting.md) to investigate them.
+Unsupported input and failed theme loading produce failures, not clean results. See [Troubleshooting](troubleshooting.md) for recovery.

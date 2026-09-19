@@ -50,7 +50,7 @@ The Nuxt integration needs registry access and runs separately:
 pnpm smoke:nuxt
 ```
 
-It prepares a temporary app using the [pinned versions](themes.md#nuxt-ui-application-themes), then checks generated colors, component discovery, `ui` props, and failure cases. It is outside `pnpm check` and the CI matrix.
+The fixture pins Nuxt 4.5.2, Nuxt UI 4.11.1, Tailwind CSS 4.3.3, and Vue 3.5.42. It prepares a temporary app, then checks generated colors, component discovery, `ui` props, and failure cases. It is outside `pnpm check` and the CI matrix.
 
 ## Documentation website
 

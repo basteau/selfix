@@ -53,7 +53,7 @@ Generated directories are skipped. An empty scan exits with code `2`; see [file 
 
 The error names the import and where selfix tried to resolve it. Check that file first. Config `css` paths are relative to the config directory; `--css` paths are relative to your working directory.
 
-For package imports, check their [CSS exports](themes.md#package-stylesheets). For generated themes, run the app's preparation step. For an unsupported selector, compare it with [selector support](analysis.md#custom-css-selectors) before changing its behavior.
+For package imports, check that the package exposes a local `.css` entry. Use an exact [CSS alias](themes.md#css-aliases) if the import needs an explicit file target. For generated themes, run the app's preparation step. For an unsupported selector, compare it with [selector support](analysis.md#custom-css-selectors) before changing its behavior.
 
 Failed theme loading stops the check. Fix the loading problem before interpreting results.
 
