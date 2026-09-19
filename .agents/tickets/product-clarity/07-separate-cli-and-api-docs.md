@@ -1,6 +1,6 @@
 # 07: Give CLI and API documentation distinct jobs
 
-Status: in-progress
+Status: done
 Blocked by: 01-simplify-api-options.md, 02-unify-file-matching.md
 
 ## Goal
@@ -9,11 +9,11 @@ Let terminal users learn to run a check and tool authors learn to consume result
 
 ## Acceptance criteria
 
-- [ ] Keep CLI commands, input selection, all supported flags, output format choice, stdout/stderr behavior, and exit codes concise and accurate.
-- [ ] Make the API page the canonical home for diagnostic fields and linter reuse/recreation. Replace the CLI schema section with a useful link; update all incoming diagnostic/lifecycle links.
-- [ ] Use the settled API and path model from 01–02 in one runnable API example. Keep the distinction between findings and thrown/loading errors.
-- [ ] Remove the exported-type inventory and repeated path/lifecycle explanations. Retain public entry-point guidance necessary to use the API; TypeScript declarations supply exhaustive type names.
-- [ ] Preserve original-file location meaning, optional discovery guidance, clean-array behavior, and the fact that failed loading is not a clean result.
+- [x] Keep CLI commands, input selection, all supported flags, output format choice, stdout/stderr behavior, and exit codes concise and accurate.
+- [x] Make the API page the canonical home for diagnostic fields and linter reuse/recreation. Replace the CLI schema section with a useful link; update all incoming diagnostic/lifecycle links.
+- [x] Use the settled API and path model from 01–02 in one runnable API example. Keep the distinction between findings and thrown/loading errors.
+- [x] Remove the exported-type inventory and repeated path/lifecycle explanations. Retain public entry-point guidance necessary to use the API; TypeScript declarations supply exhaustive type names.
+- [x] Preserve original-file location meaning, optional discovery guidance, clean-array behavior, and the fact that failed loading is not a clean result.
 
 ## Verification
 
@@ -30,3 +30,7 @@ Keep one publishable package, two private apps, standalone selfix.config.ts, Vue
 ## Implementation baseline
 
 Starting revision: 21046f7 on main; clean worktree; dependencies01–02 done. Own CLI/API and incoming diagnostic links.
+
+## Completion
+
+Implementation: 624530e. Exact API example and CLI text/JSON executed on failing/corrected source; filenames, locations and clean array confirmed. Diagnostic schema and lifecycle canonical in API; type inventory deleted. Links/anchors and pnpm check passed (489 tests, docs/build/playground); diff check passed. Independent Standards and Spec reviews: no findings.
