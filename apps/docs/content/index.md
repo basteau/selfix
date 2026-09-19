@@ -3,7 +3,7 @@ title: Introduction
 description: Keep your Vue components consistent as your app grows.
 ---
 
-You build a Button with the right padding, colors, and variants. Then a page adds `p-4`. Another adds `bg-red-500`. The same component starts looking different everywhere.
+You build a Button with the right padding and colors. Then a page adds `p-4`. Another adds `bg-red-500`. The same component starts looking different everywhere.
 
 selfix catches these overrides in Vue 3 and Tailwind CSS 4 projects. You choose what callers can change, and selfix checks those rules whenever you run it.
 
@@ -27,7 +27,7 @@ When a check fails, selfix points to the class in your `.vue` file and explains 
 
 selfix works with your own component library. It reads your Tailwind CSS to check that classes exist and use your theme's colors. It can also report arbitrary values, inline styles, and class names it cannot read without running code.
 
-It runs as a standalone command. Vue and Tailwind are its only consumer peer dependencies; you don't need a UI kit or another linter.
+Run it as a standalone command with your existing Vue and Tailwind setup. No UI kit or other linter is required.
 
 ## Try it
 

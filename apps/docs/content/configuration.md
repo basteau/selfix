@@ -125,7 +125,7 @@ The first matching contract wins. Put specific patterns before broad ones. Omitt
 
 ### Choose a variant or a contract
 
-Use a prop when the component already provides the appearance you need. For example, the [tutorial Button](getting-started.md) has a `secondary` variant. Change the contract when callers need a new kind of control, such as CardContent's padding above.
+Use a prop when the component already provides the appearance you need. For example, use `<Button variant="secondary">` if your Button defines that variant. Change the contract when callers need a new kind of control, such as CardContent's padding above.
 
 selfix may list declared `size` or `variant` choices in a finding. Check the component before choosing one: those choices don't promise the same visual result as the rejected class.
 

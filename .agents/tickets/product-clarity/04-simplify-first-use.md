@@ -1,6 +1,6 @@
 # 04: Reduce the first-use example
 
-Status: ready
+Status: in-progress
 Blocked by: none
 
 ## Goal
@@ -26,3 +26,7 @@ Own README.md, content/index.md, and content/getting-started.md, with necessary 
 Created from the product/docs clarity discussion. The user approved the eight-ticket breakdown and dependencies, with 01–03 retained as drafts pending interface decisions. No separate spec exists. Approval here is to create local tickets, not to implement, commit, push, release, or publish externally.
 
 Keep one publishable package, two private apps, standalone selfix.config.ts, Vue/Tailwind-only consumer peers, and no evaluation of application expressions. Preserve deterministic actionable original-SFC diagnostics. Prefer plain functions and Node built-ins. Keep essential setup in README and detailed docs in apps/docs/content; no port/migration documents or nested AGENTS.md files. Preserve existing working-tree changes and completed ticket identities.
+
+## Implementation baseline
+
+Starting revision: b9d5aaa on main; clean worktree. Own README, introduction, tutorial and one incoming tutorial-variant reference. Documentation validation replaces artificial regression tests.

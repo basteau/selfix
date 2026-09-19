@@ -19,40 +19,23 @@ Use `"type": "module"` in your project's `package.json` so Node can load the con
 
 ## Define the theme and component
 
-Create `src/style.css` with four named colors:
+Use your existing Tailwind entry, or create `src/style.css` if you don't have one:
 
 ```css
 @import "tailwindcss";
-
-@theme {
-  --color-primary: #3456d1;
-  --color-on-primary: #ffffff;
-  --color-canvas: #f6f7f9;
-  --color-ink: #172033;
-}
 ```
 
-Use this stylesheet in your app too, for example with `import "./style.css"` in `src/main.ts`.
+Import it in your app, for example with `import "./style.css"` in `src/main.ts`. Keep your existing theme if you have one.
 
-Create `src/components/ui/Button.vue`. Its `variant` prop selects one of two color combinations:
+Create `src/components/ui/Button.vue` (or use a new filename if it already exists, updating the import below):
 
 ```vue
-<script setup lang="ts">
-withDefaults(defineProps<{ variant?: "primary" | "secondary" }>(), { variant: "primary" })
-</script>
-
 <template>
-  <button
-    type="button"
-    class="rounded-lg px-4 py-2 text-sm font-medium"
-    :class="variant === 'primary' ? 'bg-primary text-on-primary' : 'bg-canvas text-ink'"
-  >
-    <slot />
-  </button>
+  <button type="button" class="px-4 py-2"><slot /></button>
 </template>
 ```
 
-The Button owns its padding and colors. Callers choose a `variant` and use layout classes for placement.
+The Button owns its padding. The page will control where it sits.
 
 ## Configure and run the check
 
@@ -79,7 +62,7 @@ import Button from "./components/ui/Button.vue"
 </script>
 
 <template>
-  <Button variant="secondary" class="p-4">Save</Button>
+  <Button class="p-4">Save</Button>
 </template>
 ```
 
@@ -89,10 +72,10 @@ Run the check on this file:
 pnpm exec selfix src/Example.vue
 ```
 
-The check fails with `no-restyle` at line 6, column 31. The message starts with this excerpt:
+The check fails with `no-restyle` at line 6, column 11. The message starts with this excerpt:
 
 ```text
-src/Example.vue:6:31 error no-restyle "p-4" is not allowed on <Button>
+src/Example.vue:6:11 error no-restyle "p-4" is not allowed on <Button>
 ```
 
 `p-4` changes the Button's padding. The default contract lets the page control layout, but keeps padding inside the component.
@@ -102,7 +85,7 @@ src/Example.vue:6:31 error no-restyle "p-4" is not allowed on <Button>
 Replace the Button line with:
 
 ```vue
-<Button variant="secondary" class="mt-4 w-full">Save</Button>
+<Button class="mt-4 w-full">Save</Button>
 ```
 
 Run `pnpm exec selfix src/Example.vue` again. It exits with code `0`:
@@ -115,6 +98,6 @@ The Button keeps its padding. The page can still give it a top margin and full w
 
 ## Next steps
 
-Add `"lint:design": "selfix src"` to your existing `package.json` scripts. Run `pnpm run lint:design` to check the whole source directory after UI changes.
+All six rules are enabled by default, including the rule against `<style>` blocks. In an existing app, follow [Adoption](adoption.md) to introduce them gradually before checking every file.
 
-All six rules are enabled by default, including the rule against `<style>` blocks. Follow [Adoption](adoption.md) to introduce them gradually in an existing app, or [configure a contract](configuration.md#component-contracts) when a component needs more freedom.
+When you’re ready, run `pnpm exec selfix src` to check the source directory. To give a component more freedom, [configure a contract](configuration.md#component-contracts).

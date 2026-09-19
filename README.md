@@ -12,7 +12,7 @@ A shared Button shouldn't need its padding and colors redefined on every page. s
 <Button class="mt-4 w-full">Save</Button>
 ```
 
-Tell selfix which components to protect and which Tailwind theme to use. It reports findings in your `.vue` files, with guidance for developers and coding agents. It also checks raw colors, arbitrary values, inline styles, unknown classes, and unreadable class expressions.
+Tell selfix which components to protect and which Tailwind theme to use. It points to the offending class in your `.vue` file and explains what to change. It also checks raw colors, arbitrary values, inline styles, unknown classes, and unreadable class expressions.
 
 Built for **Vue 3 and Tailwind CSS 4**. Works with your own components. No UI kit, class helper, ESLint, or Oxlint required.
 

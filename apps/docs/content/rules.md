@@ -5,7 +5,7 @@ description: Choose which styling habits to catch and how to correct them.
 
 selfix has six rules. All start at `"error"`; you can turn each off, make it a warning, or configure exceptions. Use the [adoption guide](adoption.md) to start with one rule.
 
-The examples use the [tutorial theme](getting-started.md#define-the-theme-and-component). `Button` is a [recognized component](configuration.md#component-recognition). Each section describes one rule; passing it does not bypass the others.
+The examples assume your Tailwind theme defines `--color-primary` and `--color-on-primary`. `Button` is a [recognized component](configuration.md#component-recognition). Each section describes one rule; passing it does not bypass the others.
 
 ## no-restyle
 
