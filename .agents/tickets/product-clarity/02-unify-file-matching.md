@@ -1,6 +1,6 @@
 # 02: Make file matching consistent
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -9,11 +9,11 @@ Give exclusion and file-override patterns one understandable model, including ex
 
 ## Acceptance criteria
 
-- [ ] Approve the exact pattern grammar, root, directory semantics, and compatibility policy before implementation. Use before/after examples for generated, src/generated, src/**/*.vue, dotfiles, and zero-directory ** matches.
-- [ ] Use one tested file-pattern model for user exclusions and overrides. State how CLI input globs relate to it; assess discrepancies without unnecessarily replacing Node glob discovery.
-- [ ] Keep generated/dependency-directory skipping, deterministic deduplication, symlink traversal rules, original diagnostic paths, and empty-scan failures intact. Exclusions skip every rule and cannot be undone by overrides.
-- [ ] Validate unsupported patterns with actionable errors. Do not silently reinterpret an old exclusion into a broader or narrower scan; apply the approved compatibility decision explicitly.
-- [ ] Update validation, CLI selection, shared matching code, examples, and documentation together without adding runtime dependencies.
+- [x] Approve the exact pattern grammar, root, directory semantics, and compatibility policy before implementation. Use before/after examples for generated, src/generated, src/**/*.vue, dotfiles, and zero-directory ** matches.
+- [x] Use one tested file-pattern model for user exclusions and overrides. State how CLI input globs relate to it; assess discrepancies without unnecessarily replacing Node glob discovery.
+- [x] Keep generated/dependency-directory skipping, deterministic deduplication, symlink traversal rules, original diagnostic paths, and empty-scan failures intact. Exclusions skip every rule and cannot be undone by overrides.
+- [x] Validate unsupported patterns with actionable errors. Do not silently reinterpret an old exclusion into a broader or narrower scan; apply the approved compatibility decision explicitly.
+- [x] Update validation, CLI selection, shared matching code, examples, and documentation together without adding runtime dependencies.
 
 ## Verification
 
@@ -36,3 +36,7 @@ Approved replacement: exclusions use the existing override glob grammar, rooted 
 ## Implementation baseline
 
 Starting revision: 67d0987 on main; clean worktree. Own exclusion matching, shared validation, CLI regression tests, affected docs and this ticket.
+
+## Completion
+
+Implementation: 9c53841. Public CLI tests failed with old matching, then all 42 focused tests passed. pnpm check passed (482 tests, playground, docs links/build); git diff --check passed. Independent Standards and Spec reviews: no findings. Breaking shorthand change documented; no release or push.
