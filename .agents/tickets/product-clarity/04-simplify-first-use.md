@@ -1,6 +1,6 @@
 # 04: Reduce the first-use example
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -9,11 +9,11 @@ Give a new reader one short, runnable experience: protect a Button, catch a padd
 
 ## Acceptance criteria
 
-- [ ] Reduce Getting started to one small Button, minimum Tailwind setup, one rejection, and one correction. Remove four-color/two-variant setup that the padding lesson does not need.
-- [ ] Keep prerequisites, exact file paths/imports/config, executable commands, and expected outcomes sufficient for a reader with an existing Vue/Tailwind project. Do not overwrite existing app files implicitly.
-- [ ] Explain component-owned appearance and page-owned placement with one concrete example. Teach variants in the contract discussion only when useful.
-- [ ] Keep essential install/config/run information in README and detailed instructions in apps/docs/content. Preserve brief attribution and the standalone selfix identity.
-- [ ] Keep all-six-rule defaults and the style-block implication visible before expanding to a whole-project scan. Link gradual adoption without inserting reference detours.
+- [x] Reduce Getting started to one small Button, minimum Tailwind setup, one rejection, and one correction. Remove four-color/two-variant setup that the padding lesson does not need.
+- [x] Keep prerequisites, exact file paths/imports/config, executable commands, and expected outcomes sufficient for a reader with an existing Vue/Tailwind project. Do not overwrite existing app files implicitly.
+- [x] Explain component-owned appearance and page-owned placement with one concrete example. Teach variants in the contract discussion only when useful.
+- [x] Keep essential install/config/run information in README and detailed instructions in apps/docs/content. Preserve brief attribution and the standalone selfix identity.
+- [x] Keep all-six-rule defaults and the style-block implication visible before expanding to a whole-project scan. Link gradual adoption without inserting reference detours.
 
 ## Verification
 
@@ -30,3 +30,7 @@ Keep one publishable package, two private apps, standalone selfix.config.ts, Vue
 ## Implementation baseline
 
 Starting revision: b9d5aaa on main; clean worktree. Own README, introduction, tutorial and one incoming tutorial-variant reference. Documentation validation replaces artificial regression tests.
+
+## Completion
+
+Implementation: b44de7d. Executed exact tutorial in a temporary consumer: no-restyle at 6:11, exit1; correction and full source scan exit0. Local/repository links and anchors passed; pnpm check passed (489 tests, docs/build/playground). Both reviewers found the incoming rules-theme prerequisite; fixed and re-reviewed with no remaining findings. Removed unrelated theme colors and variants from first use.
