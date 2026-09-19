@@ -1,6 +1,6 @@
 # 03: Simplify policy precedence
 
-Status: in-progress
+Status: done
 Blocked by: none
 
 ## Goal
@@ -9,11 +9,11 @@ Reduce the rules a user must learn to predict an effective policy. Resolve overr
 
 ## Acceptance criteria
 
-- [ ] Before implementation, approve a before/after decision table for severity-only settings, option-bearing settings, missing fields, empty lists, and multiple matches. Include compatibility costs and concrete examples of changed enforcement.
-- [ ] Choose one explainable option-update model. Recommended direction to evaluate: severity changes only severity; explicitly supplied option fields replace those fields, with clear reset behavior. Compare this with the current whole-options replacement before selecting it.
-- [ ] Assess first-match contracts/classProps versus ordered file overrides. Record which distinctions earn their complexity; do not force a universal merge rule without evidence from actual callers.
-- [ ] Implement only the approved simplifications and update config validation/types, callers, messages, examples, and documentation in the same change.
-- [ ] Preserve explicit deny precedence, independent rules, original locations, component recognition boundaries, and failure behavior. Demonstrate that changes do not silently weaken policies.
+- [x] Before implementation, approve a before/after decision table for severity-only settings, option-bearing settings, missing fields, empty lists, and multiple matches. Include compatibility costs and concrete examples of changed enforcement.
+- [x] Choose one explainable option-update model. Recommended direction to evaluate: severity changes only severity; explicitly supplied option fields replace those fields, with clear reset behavior. Compare this with the current whole-options replacement before selecting it.
+- [x] Assess first-match contracts/classProps versus ordered file overrides. Record which distinctions earn their complexity; do not force a universal merge rule without evidence from actual callers.
+- [x] Implement only the approved simplifications and update config validation/types, callers, messages, examples, and documentation in the same change.
+- [x] Preserve explicit deny precedence, independent rules, original locations, component recognition boundaries, and failure behavior. Demonstrate that changes do not silently weaken policies.
 
 ## Verification
 
@@ -36,3 +36,7 @@ Approved replacement: severity-only overrides change severity only; option-beari
 ## Implementation baseline
 
 Starting revision: dca5ed8 on main; clean worktree. Own policy option updates, focused public API tests, affected docs and this ticket.
+
+## Completion
+
+Implementation: a306a18. Focused tests first failed on dropped options, then passed. pnpm check passed (489 tests, playground, docs links/build); git diff --check passed. Standards: no findings. Spec: clarified rule-level message reset versus preserved contract messages; re-review confirmed resolved. Arrays/maps replace as units; first-match component policies remain useful selection boundaries, while file overrides layer scope-specific changes. No release or push.
