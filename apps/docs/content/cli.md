@@ -24,7 +24,7 @@ Quote globs so selfix receives the pattern itself. Duplicate files are checked o
 
 Directories named `node_modules`, `.git`, `dist`, `coverage`, `.nuxt`, and `.output` are skipped. Directory traversal also skips symbolic links.
 
-To skip more files, add `exclude` entries to the config. These aren't globs: `generated` matches a path segment; `src/generated` matches that config-relative path and its descendants. Exclusions skip all rules. Use [file overrides](configuration.md#per-file-rule-overrides) to relax individual rules instead.
+To skip more files, add `exclude` entries to the config. Use the same config-relative globs as file overrides: `**/generated/**` skips generated files at any depth; `src/generated/**` skips that directory's contents. `*` and `?` stay within one path segment; `**` spans zero or more directories, including dot directories. Exact `.vue` paths also work. Bare directory names aren't accepted. CLI input globs use Node's glob syntax and resolve from your working directory. Exclusions skip all rules. Use [file overrides](configuration.md#per-file-rule-overrides) to relax individual rules instead.
 
 ### Paths
 

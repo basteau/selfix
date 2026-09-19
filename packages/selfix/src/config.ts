@@ -83,7 +83,7 @@ export interface Config {
   ignoreImports?: string[]
   /** Regexes for globally registered components without a local import. */
   components?: string[]
-  /** Directory names or project-relative path prefixes excluded by the CLI. */
+  /** Config-relative file globs excluded by the CLI. */
   exclude?: string[]
   note?: string
   rules?: Partial<Record<RuleName, RuleSetting>>
@@ -145,7 +145,7 @@ export function filePattern(value: string): RegExp {
     )
   )
     throw new Error(
-      `Invalid override file pattern: ${value}. Use relative paths with *, **, or ?; ** must occupy a whole segment.`,
+      `Invalid file pattern: ${value}. Use relative paths with *, **, or ?; ** must occupy a whole segment.`,
     )
   const regex = segments
     .map((segment, index) => {
@@ -302,6 +302,16 @@ export function validateConfig(config: unknown): asserts config is Config {
     strings(obj[key], key)
     if (["componentImports", "ignoreImports", "components"].includes(key))
       (obj[key] as string[]).forEach((item) => pattern(item, key))
+  }
+  for (const entry of (obj.exclude ?? []) as string[]) {
+    filePattern(entry)
+    const clean = entry.replace(/^\.\//, "")
+    if (!/[?*]/.test(clean) && !clean.endsWith(".vue")) {
+      const suggestion = clean.includes("/") ? `${clean}/**` : `**/${clean}/**`
+      throw new Error(
+        `exclude entry "${entry}" is a directory shorthand. Use "${suggestion}" to exclude its contents.`,
+      )
+    }
   }
   if (obj.rules !== undefined) validateRules(obj.rules)
   if (obj.overrides !== undefined) {

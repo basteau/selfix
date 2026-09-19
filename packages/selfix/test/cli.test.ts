@@ -43,7 +43,7 @@ describe("CLI", () => {
     await writeFile(
       path.join(dir, "selfix.config.ts"),
       `export default {
-      css:'theme.css', exclude:['src/ignored'],
+      css:'theme.css', exclude:['src/ignored/**'],
       overrides:[{files:['src/ui/**/*.vue'],rules:{'no-inline-styles':'off','no-raw-colors':'warn'}}]
     }`,
     )
@@ -85,7 +85,7 @@ describe("CLI", () => {
       `export default {css:'theme.css', overrides:[{files:['../**'],rules:{'no-inline-styles':'off'}}]}`,
     )
     expect(await invoke(["--config", "../invalid.config.ts"], path.join(dir, "src"))).toMatchObject(
-      { code: 2, stderr: expect.stringContaining("Invalid override file pattern") },
+      { code: 2, stderr: expect.stringContaining("Invalid file pattern") },
     )
   })
   it("discovers component sources from the config directory, with root override and opt-out", async () => {
@@ -210,7 +210,7 @@ describe("CLI", () => {
     await writeFile(path.join(dir, "Page.vue"), '<template><div class="p-4" /></template>')
     await writeFile(
       path.join(dir, "selfix.config.ts"),
-      'export default { css: "theme.css", exclude: ["generated"] }',
+      'export default { css: "theme.css", exclude: ["**/generated/**"] }',
     )
     const result = await invoke([], dir)
     expect(result.code).toBe(0)
@@ -272,4 +272,83 @@ describe("CLI", () => {
     await writeFile(path.join(dir, "broken.ts"), "export default { css:")
     expect((await invoke(["--config", "broken.ts"], dir)).code).toBe(2)
   })
+})
+
+it("uses config-relative full-path globs for exclusions, including dot and zero-directory matches", async () => {
+  const dir = await project()
+  const files = [
+    "Page.vue",
+    "generated/Bad.vue",
+    "src/generated/Bad.vue",
+    "src/.hidden/Skip1.vue",
+    "src/Skip2.vue",
+    "src/Keep.vue",
+  ]
+  for (const file of files) {
+    await mkdir(path.dirname(path.join(dir, file)), { recursive: true })
+    await writeFile(
+      path.join(dir, file),
+      file.endsWith("Keep.vue") || file === "Page.vue"
+        ? "<template><div /></template>"
+        : "<template><div></template>",
+    )
+  }
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {css:'theme.css',exclude:['**/generated/**','src/**/Skip?.vue'],overrides:[{files:['**/*.vue'],rules:{'no-inline-styles':'off'}}]}`,
+  )
+  expect(await invoke(["--config", "../selfix.config.ts", ".."], path.join(dir, "src"))).toEqual({
+    code: 0,
+    stdout: "Checked 2 Vue files: 0 errors, 0 warnings.\n",
+    stderr: "",
+  })
+  expect((await invoke(["generated/Bad.vue"], dir)).stderr).toContain("No Vue files found")
+  expect((await invoke(["**/*.vue"], dir)).code).toBe(0)
+})
+
+it.each([
+  ["generated", "**/generated/**"],
+  ["src/generated", "src/generated/**"],
+  ["src/{a,b}.vue", "relative paths"],
+  ["../*.vue", "relative paths"],
+])("rejects ambiguous or unsupported exclusion %s with guidance", async (pattern, guidance) => {
+  const dir = await project()
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {css:'theme.css',exclude:[${JSON.stringify(pattern)}]}`,
+  )
+  const result = await invoke([], dir)
+  expect(result.code).toBe(2)
+  expect(result.stderr).toContain(guidance)
+})
+
+it("keeps exact exclusions scoped to the config root, including explicit outside-root files", async () => {
+  const dir = await project()
+  await mkdir(path.join(dir, "app"))
+  await writeFile(
+    path.join(dir, "app/selfix.config.ts"),
+    `export default {css:'../theme.css',exclude:['**/Page.vue']}`,
+  )
+  for (const file of ["Page.vue", "app/Page.vue"])
+    await writeFile(path.join(dir, file), '<template><div style="color:red" /></template>')
+  const result = await invoke(
+    ["--config", "app/selfix.config.ts", "Page.vue", "app/Page.vue", "--format", "json"],
+    dir,
+  )
+  expect(result.code).toBe(1)
+  expect(JSON.parse(result.stdout)).toEqual([
+    expect.objectContaining({ file: path.join(dir, "Page.vue"), rule: "no-inline-styles" }),
+  ])
+})
+
+it("does not treat a matching directory as a file-prefix exclusion", async () => {
+  const dir = await project()
+  await mkdir(path.join(dir, "src/nested"), { recursive: true })
+  await writeFile(path.join(dir, "src/nested/Page.vue"), "<template><div /></template>")
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {css:'theme.css',exclude:['src/*']}`,
+  )
+  for (const input of ["src", "src/**/*.vue"])
+    expect((await invoke([input], dir)).stdout).toBe("Checked 1 Vue file: 0 errors, 0 warnings.\n")
 })

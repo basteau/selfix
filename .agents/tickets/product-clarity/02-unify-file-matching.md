@@ -1,6 +1,6 @@
 # 02: Make file matching consistent
 
-Status: ready
+Status: in-progress
 Blocked by: none
 
 ## Goal
@@ -32,3 +32,7 @@ Keep one publishable package, two private apps, standalone selfix.config.ts, Vue
 The user approved both the baseline commits and the proposed breaking designs, then authorized sequential implementation with clean per-ticket commits. This supersedes the earlier creation-only authorization and unresolved draft notes.
 
 Approved replacement: exclusions use the existing override glob grammar, rooted at the config directory. Match full relative paths. Use **/generated/** for the old bare generated directory and src/generated/** for the old src/generated prefix. Reject legacy non-glob directory shorthand with an actionable suggested replacement rather than silently changing its meaning; exact .vue file exclusions remain valid. Both models support *, **, ?, dotfiles and zero-directory **. Retain Node glob for CLI input selection and document its separate shell-facing role. Keep built-in generated-directory skips and failure behavior. Breaking change, no release/version bump.
+
+## Implementation baseline
+
+Starting revision: 67d0987 on main; clean worktree. Own exclusion matching, shared validation, CLI regression tests, affected docs and this ticket.

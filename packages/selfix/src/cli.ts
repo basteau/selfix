@@ -2,7 +2,7 @@ import { readFile, readdir, stat, glob } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { createLinter, type Config, type Diagnostic } from "./index.js"
-import { validateConfig } from "./config.js"
+import { filePattern, validateConfig } from "./config.js"
 
 const help = `Usage: selfix [files, directories, or quoted globs] [options]
 
@@ -88,7 +88,8 @@ export async function run(
     if (!cssPath && config.css) cssPath = path.resolve(configDir, config.css)
     if (!cssPath) throw new Error("Set css in selfix.config.ts or provide --css <file>.")
     const ignored = new Set(["node_modules", ".git", "dist", "coverage", ".nuxt", ".output"])
-    const excluded = (file: string) => {
+    const exclusions = (config.exclude ?? []).map(filePattern)
+    const excluded = (file: string, matchFiles = true) => {
       const rel = path.relative(configDir, file).split(path.sep).join("/")
       if (
         path
@@ -97,17 +98,19 @@ export async function run(
           .some((part) => ignored.has(part))
       )
         return true
-      return (config.exclude ?? []).some((entry) => {
-        const clean = entry.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/$/, "")
-        return clean.includes("/")
-          ? rel === clean || rel.startsWith(`${clean}/`)
-          : rel.split("/").includes(clean)
-      })
+      return (
+        matchFiles &&
+        rel !== ".." &&
+        !rel.startsWith("../") &&
+        !path.isAbsolute(rel) &&
+        exclusions.some((pattern) => pattern.test(rel))
+      )
     }
     const files = new Set<string>()
     const visit = async (file: string): Promise<void> => {
-      if (excluded(file)) return
+      if (excluded(file, false)) return
       const info = await stat(file)
+      if (!info.isDirectory() && excluded(file)) return
       if (info.isDirectory()) {
         for (const entry of await readdir(file, { withFileTypes: true })) {
           if (entry.isSymbolicLink()) continue
@@ -124,7 +127,7 @@ export async function run(
         let matched = false
         for await (const match of glob(input, {
           cwd,
-          exclude: (file) => excluded(path.resolve(cwd, file)),
+          exclude: (file) => excluded(path.resolve(cwd, file), false),
         })) {
           matched = true
           await visit(path.resolve(cwd, match))
