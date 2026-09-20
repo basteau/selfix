@@ -55,13 +55,13 @@ const rules = [
     </section>
 
     <section class="rules-section" aria-labelledby="rules-heading">
-      <div class="section-heading"><p class="eyebrow">A little structure. Less drift.</p><h2 id="rules-heading">Six rules for the details<br />that make a design system.</h2><p>Protect component styles, use your theme, and make every class checkable.</p></div>
+      <div class="section-heading"><h2 id="rules-heading">Six rules for the details<br />that make a design system.</h2><p>Protect component styles, use your theme, and make every class checkable.</p></div>
       <div class="rule-list">{rules.map(([name, description, example]) => <a class="rule-row" href={`${docs}/rules#${name}`}><h3>{name}</h3><p>{description}</p><code>{example}</code><span aria-hidden="true">↗</span></a>)}</div>
       <p class="section-note">All rules default to errors. <a href={`${docs}/adoption`}>Start with warnings and adopt one rule at a time <span aria-hidden="true">→</span></a></p>
     </section>
 
     <section class="setup-section" aria-labelledby="setup-heading">
-      <div class="section-heading"><p class="eyebrow">Small setup. Clear boundaries.</p><h2 id="setup-heading">Make it part of your workflow.</h2><p>Point selfix at your CSS entry and component imports. Run it on your Vue files.</p></div>
+      <div class="section-heading"><h2 id="setup-heading">Make it part of your workflow.</h2><p>Point selfix at your CSS entry and component imports. Run it on your Vue files.</p></div>
       <SetupPanel docs={docs} />
       <p class="section-note">selfix reads source without evaluating application expressions. <a href={`${docs}/analysis`}>Understand the analysis limits <span aria-hidden="true">↗</span></a></p>
     </section>

@@ -65,7 +65,7 @@
   scroll-margin-top: 6rem;
 }
 .hero {
-  padding: 80px 48px 0;
+  padding: 88px 48px 48px;
   text-align: center;
 }
 .landing .eyebrow {
@@ -94,6 +94,7 @@
   color: var(--blume-muted-foreground);
   font-size: 19px;
   line-height: 1.65;
+  text-wrap: pretty;
 }
 .hero-actions {
   display: flex;
@@ -121,6 +122,10 @@
   background: var(--blume-foreground);
   border-color: var(--blume-foreground);
 }
+.hero-actions .action:not(.primary) {
+  border-color: transparent;
+  background: transparent;
+}
 .landing .install {
   display: flex;
   justify-content: center;
@@ -143,8 +148,7 @@
   grid-template-columns: 1.1fr 1fr;
   text-align: left;
   border: 1px solid var(--blume-border);
-  border-bottom: 0;
-  border-radius: 10px 10px 0 0;
+  border-radius: 10px;
   overflow: hidden;
   background: var(--blume-code-background);
 }
@@ -155,6 +159,9 @@
 }
 .example-source {
   border-right: 1px solid var(--blume-border);
+}
+.example-result {
+  background: var(--blume-background);
 }
 .panel-heading {
   display: flex;
@@ -229,6 +236,7 @@
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   border-block: 1px solid var(--blume-border);
+  background: var(--blume-code-background);
 }
 .principles > div {
   padding: 32px;
@@ -242,7 +250,7 @@
   color: var(--blume-muted-foreground);
 }
 .landing .principles h2 {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   margin: 18px 0 10px;
   letter-spacing: -0.025em;
@@ -263,7 +271,7 @@
 }
 .rules-section,
 .setup-section {
-  padding: 72px 48px;
+  padding: 88px 48px;
   border-bottom: 1px solid var(--blume-border);
 }
 .section-heading {
@@ -275,7 +283,6 @@
   line-height: 1.2;
   letter-spacing: -0.04em;
   font-weight: 600;
-  margin-top: 14px;
 }
 .landing .section-heading > p:last-child {
   margin-top: 18px;
@@ -294,16 +301,17 @@
 }
 .rule-row h3 {
   font-family: var(--blume-font-mono);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blume-foreground);
 }
 .rule-row p {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.7;
   color: var(--blume-muted-foreground);
 }
 .rule-row code {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--blume-muted-foreground);
   overflow-wrap: anywhere;
 }
@@ -363,6 +371,7 @@
   align-items: center;
   gap: 32px;
   padding: 48px;
+  background: var(--landing-accent-soft);
 }
 .closing h2 {
   font-size: 22px;
@@ -434,7 +443,7 @@
 }
 @media (max-width: 55rem) {
   .hero {
-    padding: 64px 24px 0;
+    padding: 64px 24px 32px;
   }
   .example {
     grid-template-columns: 1fr;
