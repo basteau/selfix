@@ -758,8 +758,15 @@ function cn() { throw new Error('never run') }
     ])
   })
 
-  it("enforces all six rules on Vue", async () => {
-    const linter = await createLinter({ css })
+  it("enforces all seven rules on Vue", async () => {
+    const linter = await createLinter({
+      css,
+      config: {
+        rules: {
+          "no-restricted-components": ["error", { components: [{ name: "Button" }] }],
+        },
+      },
+    })
     const result = linter.lint(
       button(
         'class="p-[13px] bg-red-500 rounded-huge" :class="`text-${size}`" style="padding: 1px"',

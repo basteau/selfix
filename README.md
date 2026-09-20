@@ -43,7 +43,7 @@ Run from the project root:
 pnpm exec selfix src
 ```
 
-All six rules start as errors, including the rule against SFC `<style>` blocks. For an existing app, [start with warnings](https://github.com/basteau/selfix/blob/main/apps/docs/content/adoption.md). For a complete example with a theme, Button, and first correction, follow [Getting started](https://github.com/basteau/selfix/blob/main/apps/docs/content/getting-started.md).
+All seven rules start as errors (component restrictions require a configured list), including the rule against SFC `<style>` blocks. For an existing app, [start with warnings](https://github.com/basteau/selfix/blob/main/apps/docs/content/adoption.md). For a complete example with a theme, Button, and first correction, follow [Getting started](https://github.com/basteau/selfix/blob/main/apps/docs/content/getting-started.md).
 
 selfix leaves your source unchanged. Fix a finding using component props, theme classes, or an explicit exception, then rerun the check.
 

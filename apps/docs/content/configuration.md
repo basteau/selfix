@@ -14,7 +14,7 @@ export default defineConfig({
 })
 ```
 
-This protects imports such as `./components/ui/Button.vue`. All six rules default to errors.
+This protects imports such as `./components/ui/Button.vue`. All seven rules default to errors.
 
 ## Configuration file
 
@@ -47,6 +47,10 @@ Contracts use local import names: an imported `ActionButton` also covers `<actio
 
 Use `pnpm exec selfix src --doctor` to verify which setting recognizes each usage and whether file overrides leave `no-restyle` active. Definition discovery is reported separately; see [doctor reports](cli.md#diagnose-component-protection).
 
+## Component restrictions
+
+Configure exact banned names and optional replacement guidance with [`no-restricted-components`](rules.md#no-restricted-components). Its `components` option is a list of `{ name, replacement?, message? }` entries, distinct from top-level recognition regexes. The list defaults to empty. Severity-only overrides preserve the list; a supplied list replaces it, including `[]` to clear it.
+
 ## Shared policy
 
 Set a rule to `"off"`, `"warn"`, or `"error"`. To add options, use `[severity, options]`:
@@ -59,7 +63,7 @@ rules: {
 },
 ```
 
-This allows layout utilities but bans `fixed`.
+This allows layout utilities but bans `fixed`. The following shared options apply to styling rules; component restrictions use their separate options above.
 
 | Option      | Meaning                                                                                     |
 | ----------- | ------------------------------------------------------------------------------------------- |
@@ -218,7 +222,7 @@ Missing explicit mappings, malformed metadata, and invalid resolved components f
 | `components`       | `[]`. Component-name regular expressions.                                                |
 | `componentImports` | `[]`. Additional import-source regular expressions.                                      |
 | `ignoreImports`    | `[]`. Imports excluded from recognition.                                                 |
-| `rules`            | All six rules at `"error"`.                                                              |
+| `rules`            | All seven rules at `"error"`; component restrictions default to an empty list.           |
 | `overrides`        | `[]`. Per-file rule settings.                                                            |
 | `classProps`       | `[]`. Additional props containing classes.                                               |
 | `cssAliases`       | `{}`. Exact CSS import mappings.                                                         |

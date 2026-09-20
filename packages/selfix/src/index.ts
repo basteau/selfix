@@ -1,7 +1,7 @@
 import path from "node:path"
 import { createProject, type ComponentDefinition } from "./project.js"
 import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
-import { collectVue, type ComponentUsage } from "./vue.js"
+import { collectVue, resolveComponentAlias, type ComponentUsage } from "./vue.js"
 import {
   ruleNames,
   validateLinterConfig,
@@ -9,11 +9,15 @@ import {
   type LinterConfig,
   type RuleName,
   type RuleOptions,
+  type RestrictedComponentOptions,
   type Severity,
 } from "./config.js"
 
 export { defineConfig, ruleNames } from "./config.js"
 export type {
+  ComponentRestriction,
+  RestrictedComponentOptions,
+  Rules,
   ClassProps,
   FileOverride,
   ProjectOptions,
@@ -51,6 +55,11 @@ export interface LinterOptions {
   /** Origin for stylesheet imports, relative to root; defaults to root. */
   cssBase?: string
   config?: LinterConfig
+}
+
+function componentName(name: string): string {
+  const camel = name.replace(/-(\w)/gu, (_, letter: string) => letter.toUpperCase())
+  return camel.charAt(0).toUpperCase() + camel.slice(1)
 }
 
 function baseClass(token: string): string {
@@ -164,7 +173,11 @@ export async function createLinter(options: LinterOptions) {
     : undefined
   const settings = ruleNames.map((name) => {
     const setting = config.rules?.[name] ?? "error"
-    const [severity, options] = Array.isArray(setting) ? setting : [setting, {}]
+    const [severity, options]: [Severity, RuleOptions & RestrictedComponentOptions] = Array.isArray(
+      setting,
+    )
+      ? setting
+      : [setting, {}]
     return {
       name,
       severity,
@@ -327,8 +340,31 @@ export async function createLinter(options: LinterOptions) {
       if (collected.fatal)
         return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
       const effective = effectiveSettings(filename)
-      for (const { name, severity, policy } of effective) {
+      for (const { name, severity, policy, options } of effective) {
         if (severity === "off") continue
+        if (name === "no-restricted-components") {
+          const restrictions = options.components ?? []
+          if (!restrictions.length) continue
+          for (const site of collected.usages) {
+            if (site.unsupported) {
+              emit("parse-error", "error", site.offset, site.unsupported, site.component)
+              continue
+            }
+            const restriction = restrictions.find((entry) => {
+              const alias = resolveComponentAlias(entry.name, collected.imports)
+              if (alias || site.importSource !== undefined)
+                return alias?.local === site.component && site.importSource !== undefined
+              return componentName(entry.name) === componentName(site.component)
+            })
+            if (!restriction) continue
+            const message =
+              `<${site.component}> is restricted.` +
+              (restriction.replacement ? ` Use <${restriction.replacement}> instead.` : "") +
+              (restriction.message ? ` ${restriction.message}` : "")
+            emit(name, severity, site.offset, message, site.component)
+          }
+          continue
+        }
         const report = (
           site: { component: string; offset: number; prop?: string; slot?: string },
           selected: ReturnType<typeof preparePolicy>,

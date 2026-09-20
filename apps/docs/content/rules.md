@@ -3,9 +3,35 @@ title: Rules
 description: Choose which styling habits to catch and how to correct them.
 ---
 
-selfix has six rules. All start at `"error"`; you can turn each off, make it a warning, or configure exceptions. Use the [adoption guide](adoption.md) to start with one rule.
+selfix has seven rules. All start at `"error"`; you can turn each off, make it a warning, or configure exceptions. Use the [adoption guide](adoption.md) to start with one rule.
 
 The color examples use the theme below. `Button` is a [recognized component](configuration.md#component-recognition). Each section describes one rule; passing it does not bypass the others.
+
+## no-restricted-components
+
+Ban exact component names independently of styling recognition, classes, or definition discovery:
+
+```ts
+rules: {
+  "no-restricted-components": ["error", {
+    components: [{
+      name: "CustomButton",
+      replacement: "UButton",
+      message: "Use our standard button for consistent behavior.",
+    }],
+  }],
+},
+```
+
+`<CustomButton />` reports: `<CustomButton> is restricted. Use <UButton> instead. Use our standard button for consistent behavior.` The finding points to the opening tag, includes component metadata, and appends the global `note` when present. Styling findings still report independently.
+
+Each entry requires a nonempty exact `name`; `replacement` and `message` are optional nonempty strings. Names are not regexes or class patterns. Unknown options are rejected. An omitted or empty `components` list bans nothing, including under the default error severity. Duplicate matching entries use the first entry's guidance.
+
+Matching uses local imported names or global/auto-imported names, with PascalCase and kebab-case equivalents. Acronyms remain distinct: `URLButton` matches `u-r-l-button`, not `url-button`. When different local imports compete, Vue’s exact, camelized, then PascalCase lookup determines the binding; a lowercase import and a distinct PascalCase global remain separate. A restriction on `CustomButton` does not follow `import { CustomButton as OtherButton }`; restrict `OtherButton` separately. Type-only imports do not establish runtime aliases. Native elements and literal `v-pre` content are excluded.
+
+The rule supports `off`, `warn`, `error`, and [file overrides](configuration.md#per-file-rule-overrides). A severity-only override preserves restrictions. A supplied `components` list replaces the inherited list; `[]` clears it. Styling options such as `allow`, `deny`, and `contracts` do not apply.
+
+When the effective list is nonempty and the rule is enabled, dynamic components, namespace components, and `is="vue:…"` usages produce `parse-error` coverage diagnostics. These are always errors, even when restrictions are warnings; the CLI exits with status 1. Disabling the rule or clearing the list removes this rule's coverage requirement. No expressions are evaluated or resolved. Direct restriction warnings use the normal warning limit; both text and JSON output include findings. selfix recommends replacements without rewriting imports, props, events, slots, or source.
 
 ## no-restyle
 

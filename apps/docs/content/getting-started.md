@@ -98,6 +98,6 @@ The Button keeps its padding. The page can still give it a top margin and full w
 
 ## Next steps
 
-All six rules are enabled by default, including the rule against `<style>` blocks. In an existing app, follow [Adoption](adoption.md) to introduce them gradually before checking every file.
+All seven rules are enabled by default (component restrictions require a configured list), including the rule against `<style>` blocks. In an existing app, follow [Adoption](adoption.md) to introduce them gradually before checking every file.
 
 When you’re ready, run `pnpm exec selfix src` to check the source directory. To give a component more freedom, [configure a contract](configuration.md#component-contracts).

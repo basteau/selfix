@@ -12,6 +12,7 @@ export const categories = [
 export type Category = (typeof categories)[number]
 
 export const ruleNames = [
+  "no-restricted-components",
   "no-restyle",
   "no-raw-colors",
   "no-arbitrary-values",
@@ -36,12 +37,26 @@ export interface RuleOptions {
   contracts?: Contract[]
   message?: Message
 }
+/** An exact local or global component name, with optional correction guidance. */
+export interface ComponentRestriction {
+  name: string
+  replacement?: string
+  message?: string
+}
+export interface RestrictedComponentOptions {
+  components?: ComponentRestriction[]
+}
 /** File overrides preserve omitted options; supplied lists/maps replace as units. */
-export type RuleSetting = Severity | [Severity, RuleOptions]
+export type RuleSetting<Options = RuleOptions> = Severity | [Severity, Options]
+export type Rules = {
+  [Name in RuleName]?: RuleSetting<
+    Name extends "no-restricted-components" ? RestrictedComponentOptions : RuleOptions
+  >
+}
 export interface FileOverride {
   /** Config-relative file patterns; all matching entries apply in order. */
   files: string[]
-  rules: Partial<Record<RuleName, RuleSetting>>
+  rules: Rules
 }
 export interface ClassProps {
   /** Regular expression matching the collected component name. First match wins. */
@@ -87,7 +102,7 @@ export interface Config {
   /** Config-relative file globs excluded by the CLI. */
   exclude?: string[]
   note?: string
-  rules?: Partial<Record<RuleName, RuleSetting>>
+  rules?: Rules
   overrides?: FileOverride[]
 }
 
@@ -338,7 +353,24 @@ function validateRules(value: unknown) {
       throw new Error(`Invalid severity for ${name}. Use off, warn, or error.`)
     if (Array.isArray(setting)) {
       if (setting.length !== 2) throw new Error(`${name} must be [severity, options].`)
-      options(setting[1], name)
+      if (name === "no-restricted-components") {
+        const obj = record(setting[1], name)
+        keys(obj, ["components"], name)
+        if (obj.components !== undefined) {
+          if (!Array.isArray(obj.components))
+            throw new Error(`${name}.components must be an array.`)
+          obj.components.forEach((value, index) => {
+            const label = `${name}.components[${index}]`
+            const entry = record(value, label)
+            keys(entry, ["name", "replacement", "message"], label)
+            for (const key of ["name", "replacement", "message"]) {
+              if (key !== "name" && entry[key] === undefined) continue
+              if (typeof entry[key] !== "string" || !entry[key].trim())
+                throw new Error(`${label}.${key} must be a non-empty string.`)
+            }
+          })
+        }
+      } else options(setting[1], name)
     }
   }
 }

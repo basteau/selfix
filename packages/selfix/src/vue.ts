@@ -963,9 +963,6 @@ function collectImportAliases(statement: ImportDeclarationNode, aliases: Compone
   for (const specifier of statement.specifiers) {
     if (specifier.type === "ImportSpecifier" && specifier.importKind === "type") continue
     const local = specifier.local.name
-    if (!isLikelyComponent(local)) {
-      continue
-    }
     const imported =
       specifier.type === "ImportDefaultSpecifier"
         ? "default"
@@ -1021,15 +1018,14 @@ function splitClasses(value: string): string[] {
   return value.trim().split(/\s+/u).filter(Boolean)
 }
 
-function resolveComponentAlias(tag: string, aliases: ComponentAliases): ComponentAlias | undefined {
+export function resolveComponentAlias(
+  tag: string,
+  aliases: ComponentAliases,
+): ComponentAlias | undefined {
   // Match Vue's exact, camelized, then PascalCase binding lookup.
   const camelName = tag.replace(/-(\w)/gu, (_, letter: string) => letter.toUpperCase())
   const pascalName = camelName.charAt(0).toUpperCase() + camelName.slice(1)
   return aliases.get(tag) ?? aliases.get(camelName) ?? aliases.get(pascalName)
-}
-
-function isLikelyComponent(value: string): boolean {
-  return /^[A-Z]/u.test(value)
 }
 
 function dedupe(values: string[]): string[] {

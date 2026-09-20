@@ -54,14 +54,14 @@ Parsing and unsupported-input problems return `parse-error` diagnostics. Invalid
 
 A diagnostic is one reported finding. API and JSON consumers receive these fields:
 
-| Field            | Value                                    |
-| ---------------- | ---------------------------------------- |
-| `file`           | The affected Vue file.                   |
-| `rule`           | One of the six rules, or `parse-error`.  |
-| `severity`       | `warn` or `error`.                       |
-| `message`        | Explanation and guidance.                |
-| `line`, `column` | One-based position in the original file. |
-| `offset`         | Zero-based JavaScript string position.   |
+| Field            | Value                                     |
+| ---------------- | ----------------------------------------- |
+| `file`           | The affected Vue file.                    |
+| `rule`           | One of the seven rules, or `parse-error`. |
+| `severity`       | `warn` or `error`.                        |
+| `message`        | Explanation and guidance.                 |
+| `line`, `column` | One-based position in the original file.  |
+| `offset`         | Zero-based JavaScript string position.    |
 
 Optional fields are `component`, `className`, `prop`, `slot`, and `definition`. Class findings point to their containing attribute or binding. Findings within a file sort by offset, then rule name.
 
