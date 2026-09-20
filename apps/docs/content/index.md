@@ -1,7 +1,9 @@
 ---
 title: Introduction
-description: Keep your Vue components consistent as your app grows.
+description: selfix - a linter for your design system
 ---
+
+**selfix - a linter for your design system**
 
 You build a Button with the right padding and colors. Then a page adds `p-4`. Another adds `bg-red-500`. The same component starts looking different everywhere.
 

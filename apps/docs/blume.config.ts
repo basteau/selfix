@@ -4,7 +4,8 @@ import { markdownLinks } from "./markdown-links.js"
 
 export default defineConfig({
   title: "selfix",
-  description: "Design-system linting for Vue 3 and Tailwind CSS 4.",
+  description: "selfix - a linter for your design system",
+  logo: { image: "/logo.svg", text: "selfix" },
   content: { root: "content" },
   basePath: "/docs",
   integrations: [
@@ -30,8 +31,8 @@ export default defineConfig({
       fonts: [
         { name: "Spline Sans", src: "public/fonts/spline-sans/SplineSans[wght].ttf", weight: 500 },
       ],
-      logo: false,
-      titles: { "/": "Keep your Vue components consistent." },
+      logo: "public/logo.svg",
+      titles: { "/": "selfix - a linter for your design system" },
       palette: {
         accent: "#42b883",
         background: "#ffffff",
