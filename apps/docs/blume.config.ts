@@ -52,5 +52,5 @@ export default defineConfig({
     ],
   },
   ai: { llmsTxt: true },
-  deployment: { output: "static", site: process.env.SITE_URL || "https://selfix.dev" },
+  deployment: { output: "static", site: process.env.SITE_URL || "https://selfix.exe.xyz" },
 })

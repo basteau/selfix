@@ -87,7 +87,9 @@ Run a persistent static web server on the VM with its document root set to the d
 
 Select port 8000 with `ssh exe.dev share port <vm> 8000`. Make the site public with `ssh exe.dev share set-public <vm>` once it is ready. Both commands and their visibility behavior are documented under [share](https://exe.dev/docs/cli-share).
 
-Point `selfix.dev` at the chosen `vmname.exe.xyz` using the apex DNS method supported by your DNS provider, then register it with `ssh exe.dev domain add <vm> selfix.dev`. Follow the provider's custom-domain instructions for apex records and certificate validation. When using a custom domain, set `SITE_URL` to its HTTPS origin. You can use `https://selfix.exe.xyz` without custom-domain setup. Verify HTTPS and the hostname before enabling automation; an unregistered hostname is rejected by exe.dev.
+The public site is [selfix.exe.xyz](https://selfix.exe.xyz), also the default build origin. On 20 September 2026, its homepage and getting-started guide responded successfully over HTTPS; `selfix.dev` returned DNS NXDOMAIN and is not the public launch URL.
+
+To use `selfix.dev` later, point it at the chosen `vmname.exe.xyz` using the apex DNS method supported by your DNS provider, then register it with `ssh exe.dev domain add <vm> selfix.dev`. Follow the provider's custom-domain instructions for apex records and certificate validation. Once HTTPS works, set `SITE_URL` to its HTTPS origin. Verify the hostname before enabling automation; an unregistered hostname is rejected by exe.dev.
 
 ### Deployment credentials and activation
 

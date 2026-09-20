@@ -56,10 +56,10 @@ Linux, Node 24.21.0; baseline `b56a75cd81d47fb868feec72c67bc6b755c049b1` (ticket
 
 Both specified fixtures emitted 1,000 findings. Three warmups preceded nine measured calls per implementation; setup/construction and diagnostic equality assertions were excluded from timing. Complete diagnostics were deeply equal before/after and on every measured call.
 
-| Fixture | Before median (range), ms | After median (range), ms | Resolution calls before → after |
-| --- | --- | --- | --- |
-| Recursive, 80 declarations with size/variant props | 69.10 (67.65–78.61) | 3.74 (3.31–4.17) | 1,000 → 1 |
-| Barrel, 500 explicit exports | 8.92 (8.40–10.55) | 3.75 (3.11–6.00) | 1,000 → 1 |
+| Fixture                                            | Before median (range), ms | After median (range), ms | Resolution calls before → after |
+| -------------------------------------------------- | ------------------------- | ------------------------ | ------------------------------- |
+| Recursive, 80 declarations with size/variant props | 69.10 (67.65–78.61)       | 3.74 (3.31–4.17)         | 1,000 → 1                       |
+| Barrel, 500 explicit exports                       | 8.92 (8.40–10.55)         | 3.75 (3.11–6.00)         | 1,000 → 1                       |
 
 Separate temporary instrumented copies counted resolver entry without substituting parsing or filesystem behavior. Missing metadata also fell from 1,000 resolutions to one. Allowed classes, classless usages, and an inline-style-only finding each performed zero resolutions before and after. These are synthetic measurements, not timing thresholds or general application performance promises. Source freshness and mutation contracts are separately covered by public-linter regressions.
 

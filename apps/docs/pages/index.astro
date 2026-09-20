@@ -7,6 +7,7 @@ import "../styles/landing.css"
 const base = import.meta.env.BASE_URL.replace(/\/$/, "")
 const docs = `${base}/docs`
 const rules = [
+  ["no-restricted-components", "Replace components your project has restricted.", "<CustomButton />"],
   ["no-restyle", "Keep component appearance inside its contract.", "p-4"],
   ["no-raw-colors", "Use the colors named in your design system.", "bg-red-500"],
   ["no-arbitrary-values", "Stay on your spacing and sizing scales.", "p-[13px]"],
@@ -55,7 +56,7 @@ const rules = [
     </section>
 
     <section class="rules-section" aria-labelledby="rules-heading">
-      <div class="section-heading"><h2 id="rules-heading">Six rules for the details<br />that make a design system.</h2><p>Protect component styles, use your theme, and make every class checkable.</p></div>
+      <div class="section-heading"><h2 id="rules-heading">Seven rules for the details<br />that make a design system.</h2><p>Protect component styles, use your theme, and make every class checkable.</p></div>
       <div class="rule-list">{rules.map(([name, description, example]) => <a class="rule-row" href={`${docs}/rules#${name}`}><h3>{name}</h3><p>{description}</p><code>{example}</code><span aria-hidden="true">↗</span></a>)}</div>
       <p class="section-note">All rules default to errors. <a href={`${docs}/adoption`}>Start with warnings and adopt one rule at a time <span aria-hidden="true">→</span></a></p>
     </section>
