@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.1
+
+[compare changes](https://github.com/basteau/selfix/compare/v2.1.0...v2.1.1)
+
+### 🩹 Fixes
+
+- **docs:** Use SITE_URL for builds and deployment checks ([4d7437a](https://github.com/basteau/selfix/commit/4d7437a))
+
 ## v2.1.0
 
 Adds doctor reports for component protection, component-name restrictions with replacement guidance, and faster prepared Nuxt component lookup. Website deployment now follows release tags and checks credentials before building.
