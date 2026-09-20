@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.1.0
+
+Adds doctor reports for component protection, component-name restrictions with replacement guidance, and faster prepared Nuxt component lookup. Website deployment now follows release tags and checks credentials before building.
+
+[compare changes](https://github.com/basteau/selfix/compare/v2.0.0...v2.1.0)
+
+### 🚀 Enhancements
+
+- **cli:** Explain component protection with doctor reports ([e6b217a](https://github.com/basteau/selfix/commit/e6b217a))
+- **docs:** Add landing page and website deployment ([a8846ca](https://github.com/basteau/selfix/commit/a8846ca))
+- **rules:** Restrict component names with replacement guidance ([f4f2c84](https://github.com/basteau/selfix/commit/f4f2c84))
+
+### 🩹 Fixes
+
+- **docs:** Deploy release tags after credential checks ([9824e6e](https://github.com/basteau/selfix/commit/9824e6e))
+
+### 💅 Refactors
+
+- **project:** Index prepared Nuxt component names ([a7c8370](https://github.com/basteau/selfix/commit/a7c8370))
+
 ## v2.0.0
 
 This release simplifies API paths, file matching, and rule overrides, with shorter developer guides and a new Blume documentation site.
