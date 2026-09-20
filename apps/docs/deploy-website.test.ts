@@ -108,3 +108,65 @@ test("repeated deployments preserve the live release and its rollback target", (
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+function workflowStep(name: string) {
+  const workflow = readFileSync(join(root, ".github/workflows/website.yml"), "utf8")
+  return workflow
+    .split(`- name: ${name}\n`)[1]!
+    .split("run: |\n")[1]!
+    .split(/\n(?= {0,8}\S)/)[0]!
+    .replaceAll(/^ {10}/gm, "")
+}
+
+test.each(["EXE_SSH_KEY", "EXE_HOST", "EXE_KNOWN_HOSTS"])(
+  "website preflight fails when %s is unavailable",
+  (missing) => {
+    const result = spawnSync("bash", ["-e", "-c", workflowStep("Check deployment credentials")], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        EXE_SSH_KEY: "test",
+        EXE_HOST: "site.exe.xyz",
+        EXE_KNOWN_HOSTS: "test",
+        [missing]: "",
+      },
+    })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain(`Set ${missing} in the website environment`)
+  },
+)
+
+test("website preflight accepts only release tags whose commits are on main", () => {
+  const directory = mkdtempSync(join(tmpdir(), "selfix-website-ref-"))
+  try {
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", args, { cwd: directory, encoding: "utf8" })
+      expect(result.status, result.stderr).toBe(0)
+      return result.stdout.trim()
+    }
+    git("init", "--initial-branch=main")
+    git("config", "user.name", "Website test")
+    git("config", "user.email", "website@example.com")
+    git("-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial")
+    const release = git("rev-parse", "HEAD")
+    git("-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "later main commit")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    git("checkout", "--detach", release)
+    const check = (ref: string) =>
+      spawnSync("bash", ["-e", "-c", workflowStep("Verify release tag is on main")], {
+        cwd: directory,
+        encoding: "utf8",
+        env: { ...process.env, GITHUB_REF: ref },
+      })
+    expect(check("refs/tags/v1.0.0").status).toBe(0)
+    expect(check("refs/tags/v1.0.1-beta.0").status).toBe(0)
+    expect(check("refs/heads/main").stderr).toContain("requires a v* tag")
+    expect(check("refs/tags/other").status).not.toBe(0)
+    git("-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "off main")
+    const rejected = check("refs/tags/v1.0.0")
+    expect(rejected.status).not.toBe(0)
+    expect(rejected.stderr).toContain("release commit must be on main")
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

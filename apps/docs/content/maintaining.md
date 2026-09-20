@@ -77,7 +77,7 @@ To publish the site, run `pnpm docs:build` and host `apps/docs/dist`. Set `DOCS_
 
 ## Website operations on exe.dev
 
-The Website workflow builds on updates to `main` and manual runs. It installs the pinned workspace dependencies, runs `pnpm check`, builds with `DOCS_SITE_URL=https://selfix.dev`, and saves the checked static artifact. Deployment is separate from npm release tags. It remains disabled until the repository variable `EXE_DEPLOY_ENABLED` is `true` and the `website` environment is configured.
+The Website workflow runs on pushed `v*` tags, matching the package publishing trigger. Manual runs must also select a `v*` tag. Before building, it fails if the `website` environment is missing `EXE_SSH_KEY`, `EXE_HOST`, or `EXE_KNOWN_HOSTS`, and verifies that the tagged commit belongs to `main`’s history. It then installs the pinned workspace dependencies, runs `pnpm check`, builds with `DOCS_SITE_URL=https://selfix.dev`, saves the checked static artifact, and deploys it. No deployment toggle is required. Website deployment and npm publishing run independently; neither waits for the other to succeed.
 
 ### Prepare the serving environment
 
@@ -97,7 +97,7 @@ Create a dedicated SSH key and register its public half using exe.dev's [SSH key
 - Secret `EXE_SSH_KEY`: the private deployment key, never committed.
 - Secret `EXE_KNOWN_HOSTS`: independently verified host-key entries for that destination. Do not disable host-key checking or trust an unauthenticated scan on every run.
 
-Restrict the environment to `main`. Set the repository variable `EXE_DEPLOY_ENABLED=true` only after the first private serving check and domain setup. The workflow uploads the exact build artifact over SCP, extracts it into `~/selfix-site/releases/<commit>.<suffix>`, preserves the previous symlink, and atomically switches `current` on the Linux VM. Repeating the active commit preserves both the live files and the previous rollback target. It verifies the deployed commit marker, landing page, docs index, and getting-started route over HTTPS.
+Configure the `website` environment to allow `v*` tags instead of restricting it to the `main` branch; the workflow checks commit ancestry itself. Complete the private serving check and domain setup before pushing a release tag. The obsolete `EXE_DEPLOY_ENABLED` repository variable can be removed. The workflow uploads the exact build artifact over SCP, extracts it into `~/selfix-site/releases/<commit>.<suffix>`, preserves the previous symlink, and atomically switches `current` on the Linux VM. Repeating the active commit preserves both the live files and the previous rollback target. It verifies the deployed commit marker, landing page, docs index, and getting-started route over HTTPS.
 
 A failed upload leaves the active release untouched. A failed post-switch HTTP check fails the workflow and requires investigation or rollback. No live authentication, domain, or deployment smoke test has been performed without the target account configuration.
 
