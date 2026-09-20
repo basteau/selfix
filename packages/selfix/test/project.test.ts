@@ -398,3 +398,97 @@ it.each([
 ])("validates project configuration: %j", (config) => {
   expect(() => defineConfig(config as never)).toThrow()
 })
+
+it("preserves prepared name candidate counts, import precedence, and explicit overrides", () => {
+  const { root, write } = fixture()
+  const file = write("Button.vue", component("generated"))
+  const override = write("Override.vue", component("override"))
+  write(
+    ".nuxt/components.d.ts",
+    ["UiButton", "lowercase", "Foo", "foo", "AB", "aB", "Named"]
+      .map(
+        (name) =>
+          `export const ${name}: typeof import('../Button.vue')['${name === "Named" ? "named" : "default"}'];`,
+      )
+      .join("\n"),
+  )
+  const project = createProject({ root })
+  for (const name of ["UiButton", "ui-button", "lowercase", "Foo", "AB", "aB"])
+    expect(project.resolve(name, undefined, "Page.vue")?.file).toBe(file)
+  for (const name of ["foo", "a-b", "Unknown", "Named"])
+    expect(project.resolve(name, undefined, "Page.vue")).toBeUndefined()
+  const imported = { local: "UiButton", importSource: "./Override.vue", imported: "default" }
+  expect(project.resolve("UiButton", imported, "Page.vue")?.file).toBe(override)
+  const explicit = createProject({
+    root,
+    components: { foo: "Override.vue", UiButton: "Button.vue" },
+  })
+  expect(explicit.resolve("foo", undefined, "Page.vue")?.file).toBe(override)
+  expect(explicit.resolve("UiButton", imported, "Page.vue")?.file).toBe(file)
+})
+
+it("keeps prepared metadata snapshots isolated across lint and classless doctor usages", async () => {
+  const { root, write } = fixture()
+  const first = write("First.vue", component("first"))
+  const second = write("Second.vue", component("second"))
+  const metadata = (file: string) =>
+    write(
+      ".nuxt/components.d.ts",
+      `export const UiButton: typeof import('../${file}.vue')['default'];`,
+    )
+  metadata("First")
+  const options = {
+    css: '@import "tailwindcss";',
+    config: {
+      components: ["^UiButton$", "^ui-button$"],
+      classProps: [{ pattern: "^UiButton$", props: { ui: "slot-map" as const } }],
+      project: { root },
+    },
+  }
+  const before = await createLinter(options)
+  const source = "<template>\n<UiButton :ui=\"{base: 'p-4'}\" />\n<ui-button />\n</template>"
+  const page = path.join(root, "Page.vue")
+  const findings = before.lint(source, page)
+  const doctor = before.doctor(source, page)
+  expect(findings).toHaveLength(1)
+  expect(findings[0]).toMatchObject({
+    rule: "no-restyle",
+    severity: "error",
+    component: "UiButton",
+    prop: "ui",
+    slot: "base",
+    line: 2,
+    column: 11,
+    definition: { file: first, props: { size: ["first"] } },
+  })
+  expect(doctor.usages.map((usage) => usage.definition)).toEqual([first, first])
+  expect(doctor.issues).toEqual([])
+  metadata("Second")
+  const after = await createLinter(options)
+  expect(after.lint(source, page)[0].definition?.file).toBe(second)
+  expect(after.doctor(source, page).usages.map((usage) => usage.definition)).toEqual([
+    second,
+    second,
+  ])
+  expect(before.lint(source, page)).toEqual(findings)
+  expect(before.doctor(source, page)).toEqual(doctor)
+})
+
+it("preserves prepared source failures and explicit recovery", () => {
+  const { root, write } = fixture()
+  const file = write("Override.vue", component("override"))
+  write(
+    ".nuxt/components.d.ts",
+    "export const UiButton: typeof import('../Missing.vue')['default'];",
+  )
+  expect(() => createProject({ root })).toThrow(/UiButton is missing:.*Missing.vue.*nuxt prepare/)
+  expect(
+    createProject({ root, components: { UiButton: "Override.vue" } }).resolve(
+      "UiButton",
+      undefined,
+      "Page.vue",
+    )?.file,
+  ).toBe(file)
+  write(".nuxt/components.d.ts", "export const UiButton: typeof import('../Missing.vue')['named'];")
+  expect(createProject({ root }).resolve("UiButton", undefined, "Page.vue")).toBeUndefined()
+})

@@ -352,6 +352,13 @@ export function createProject(options: ProjectOptions) {
   const generated = nuxt
     ? preparedComponents(nuxtFile)
     : new Map<string, { source: string; name: string }>()
+  const generatedNames = new Map<string, { source: string; name: string } | undefined>()
+  for (const [name, mapping] of generated) {
+    // Count each declaration once, even when its exact and normalized names coincide.
+    // Collisions stay ambiguous even when declarations point to the same source.
+    for (const candidate of new Set([name, name.replace(/\B([A-Z])/g, "-$1").toLowerCase()]))
+      generatedNames.set(candidate, generatedNames.has(candidate) ? undefined : mapping)
+  }
   const config = options.tsconfig
     ? path.resolve(root, options.tsconfig)
     : ["tsconfig.json", "jsconfig.json", ...(nuxt ? [".nuxt/tsconfig.json"] : [])]
@@ -580,13 +587,8 @@ export function createProject(options: ProjectOptions) {
       const mapped = explicit.get(component)
       if (mapped) return definition(mapped, input)
       if (!imported) {
-        const candidates = [...generated].filter(
-          ([name]) =>
-            name === component || name.replace(/\B([A-Z])/g, "-$1").toLowerCase() === component,
-        )
-        if (candidates.length !== 1) return undefined
-        const target = candidates[0][1]
-        return target.name === "default" ? definition(target.source, input) : undefined
+        const target = generatedNames.get(component)
+        return target?.name === "default" ? definition(target.source, input) : undefined
       }
       const file = resolveImport(imported.importSource, path.resolve(root, filename))
       return file ? resolveExport(file, imported.imported, input) : undefined
