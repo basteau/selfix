@@ -15,6 +15,7 @@ jobs:
     steps:
       - name: Check deployment credentials
         env:
+          SITE_URL: ${{ vars.SITE_URL }}
           EXE_HOST: ${{ vars.EXE_HOST }}
           EXE_SSH_KEY: ${{ secrets.EXE_SSH_KEY }}
           EXE_KNOWN_HOSTS: ${{ secrets.EXE_KNOWN_HOSTS }}
@@ -22,6 +23,7 @@ jobs:
           : "${EXE_SSH_KEY:?Set EXE_SSH_KEY in the website environment}"
           : "${EXE_HOST:?Set EXE_HOST in the website environment}"
           : "${EXE_KNOWN_HOSTS:?Set EXE_KNOWN_HOSTS in the website environment}"
+          : "${SITE_URL:?Set SITE_URL in the website environment}"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
@@ -33,6 +35,7 @@ jobs:
   build:
     needs: preflight
     runs-on: ubuntu-latest
+    environment: website
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -46,7 +49,7 @@ jobs:
       - run: pnpm check
       - run: pnpm docs:build
         env:
-          DOCS_SITE_URL: https://selfix.dev
+          SITE_URL: ${{ vars.SITE_URL }}
       - name: Stamp verified artifact
         run: |
           mkdir -p apps/docs/dist/.well-known
@@ -71,6 +74,7 @@ jobs:
           path: apps/docs/dist
       - name: Deploy verified static files
         env:
+          SITE_URL: ${{ vars.SITE_URL }}
           EXE_HOST: ${{ vars.EXE_HOST }}
           EXE_SSH_KEY: ${{ secrets.EXE_SSH_KEY }}
           EXE_KNOWN_HOSTS: ${{ secrets.EXE_KNOWN_HOSTS }}

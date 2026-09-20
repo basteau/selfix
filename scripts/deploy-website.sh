@@ -4,6 +4,7 @@ set -euo pipefail
 : "${EXE_SSH_KEY:?Set the dedicated deployment key}"
 : "${EXE_KNOWN_HOSTS:?Set independently verified SSH host keys}"
 : "${GITHUB_SHA:?Set the checked commit}"
+: "${SITE_URL:?Set the public website URL}"
 [[ "$EXE_HOST" =~ ^([a-z_][a-z0-9_-]*@)?[a-z0-9][a-z0-9-]*\.exe\.xyz$ ]] || { echo 'Invalid exe.dev SSH target' >&2; exit 1; }
 [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid commit SHA' >&2; exit 1; }
 [[ "$(cat apps/docs/dist/.well-known/selfix-release.txt)" == "$GITHUB_SHA" ]] || { echo 'Artifact does not match checked commit' >&2; exit 1; }
@@ -52,7 +53,7 @@ for (const [route, expected] of [
   ['/docs/', 'selfix'],
   ['/docs/getting-started', 'Reproduce a finding'],
 ]) {
-  const response = await fetch(`https://selfix.dev${route}`, { signal: AbortSignal.timeout(30000), cache: 'no-store' })
+  const response = await fetch(new URL(route, process.env.SITE_URL), { signal: AbortSignal.timeout(30000), cache: 'no-store' })
   assert(response.ok, `${route}: HTTP ${response.status}`)
   assert((await response.text()).includes(expected), `${route}: unexpected content; use the documented rollback`)
 }

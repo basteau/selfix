@@ -73,11 +73,11 @@ pnpm docs:check    # Validate links and build the site
 
 Use sibling links such as `configuration.md#component-recognition`. They work on GitHub and become page routes on the site. Root-relative `.md` links are raw downloads. Use GitHub URLs for repository files outside the content directory.
 
-To publish the site, run `pnpm docs:build` and host `apps/docs/dist`. Set `DOCS_SITE_URL` to the production URL for canonical URLs and sitemaps. For a subdirectory deployment, also set `deployment.base` in the Blume config. Search and Markdown/LLM exports are included in the build.
+To publish the site, run `pnpm docs:build` and host `apps/docs/dist`. Set `SITE_URL` to the production URL for canonical URLs and sitemaps. For a subdirectory deployment, also set `deployment.base` in the Blume config. Search and Markdown/LLM exports are included in the build.
 
 ## Website operations on exe.dev
 
-The Website workflow runs on pushed `v*` tags, matching the package publishing trigger. Manual runs must also select a `v*` tag. Before building, it fails if the `website` environment is missing `EXE_SSH_KEY`, `EXE_HOST`, or `EXE_KNOWN_HOSTS`, and verifies that the tagged commit belongs to `main`’s history. It then installs the pinned workspace dependencies, runs `pnpm check`, builds with `DOCS_SITE_URL=https://selfix.dev`, saves the checked static artifact, and deploys it. No deployment toggle is required. Website deployment and npm publishing run independently; neither waits for the other to succeed.
+The Website workflow runs on pushed `v*` tags, matching the package publishing trigger. Manual runs must also select a `v*` tag. Before building, it fails if the `website` environment is missing `EXE_SSH_KEY`, `EXE_HOST`, `EXE_KNOWN_HOSTS`, or `SITE_URL`, and verifies that the tagged commit belongs to `main`’s history. It then installs the pinned workspace dependencies, runs `pnpm check`, builds with the configured `SITE_URL`, saves the checked static artifact, and deploys it. No deployment toggle is required. Website deployment and npm publishing run independently; neither waits for the other to succeed.
 
 ### Prepare the serving environment
 
@@ -87,12 +87,13 @@ Run a persistent static web server on the VM with its document root set to the d
 
 Select port 8000 with `ssh exe.dev share port <vm> 8000`. Make the site public with `ssh exe.dev share set-public <vm>` once it is ready. Both commands and their visibility behavior are documented under [share](https://exe.dev/docs/cli-share).
 
-Point `selfix.dev` at the chosen `vmname.exe.xyz` using the apex DNS method supported by your DNS provider, then register it with `ssh exe.dev domain add <vm> selfix.dev`. Follow the provider's custom-domain instructions for apex records and certificate validation. Verify HTTPS and the hostname before enabling automation; an unregistered hostname is rejected by exe.dev.
+Point `selfix.dev` at the chosen `vmname.exe.xyz` using the apex DNS method supported by your DNS provider, then register it with `ssh exe.dev domain add <vm> selfix.dev`. Follow the provider's custom-domain instructions for apex records and certificate validation. When using a custom domain, set `SITE_URL` to its HTTPS origin. You can use `https://selfix.exe.xyz` without custom-domain setup. Verify HTTPS and the hostname before enabling automation; an unregistered hostname is rejected by exe.dev.
 
 ### Deployment credentials and activation
 
 Create a dedicated SSH key and register its public half using exe.dev's [SSH key management](https://exe.dev/docs/cli-ssh-key). Use a VM-scoped tag where configured, and verify that the key can reach only the intended deployment VM. Store these values in the GitHub `website` environment:
 
+- Variable `SITE_URL`: the public HTTPS origin, currently `https://selfix.exe.xyz`. Both the build (canonical URLs and sitemaps) and post-deployment checks use this value. It is separate from the SSH destination.
 - Variable `EXE_HOST`: the tested SSH destination, such as `vmname.exe.xyz` or `exedev@vmname.exe.xyz`.
 - Secret `EXE_SSH_KEY`: the private deployment key, never committed.
 - Secret `EXE_KNOWN_HOSTS`: independently verified host-key entries for that destination. Do not disable host-key checking or trust an unauthenticated scan on every run.

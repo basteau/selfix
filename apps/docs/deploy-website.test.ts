@@ -23,6 +23,7 @@ test.each(["-oProxyCommand=bad", "host.example.com", "vm.exe.xyz; echo bad"])(
       encoding: "utf8",
       env: {
         ...process.env,
+        SITE_URL: "https://selfix.exe.xyz",
         EXE_HOST: host,
         EXE_SSH_KEY: "test",
         EXE_KNOWN_HOSTS: "test",
@@ -39,6 +40,7 @@ test("rejects a malformed commit before invoking SSH", () => {
     encoding: "utf8",
     env: {
       ...process.env,
+      SITE_URL: "https://selfix.exe.xyz",
       EXE_HOST: "site.exe.xyz",
       EXE_SSH_KEY: "test",
       EXE_KNOWN_HOSTS: "test",
@@ -118,7 +120,7 @@ function workflowStep(name: string) {
     .replaceAll(/^ {10}/gm, "")
 }
 
-test.each(["EXE_SSH_KEY", "EXE_HOST", "EXE_KNOWN_HOSTS"])(
+test.each(["EXE_SSH_KEY", "EXE_HOST", "EXE_KNOWN_HOSTS", "SITE_URL"])(
   "website preflight fails when %s is unavailable",
   (missing) => {
     const result = spawnSync("bash", ["-e", "-c", workflowStep("Check deployment credentials")], {
@@ -126,6 +128,7 @@ test.each(["EXE_SSH_KEY", "EXE_HOST", "EXE_KNOWN_HOSTS"])(
       env: {
         ...process.env,
         EXE_SSH_KEY: "test",
+        SITE_URL: "https://selfix.exe.xyz",
         EXE_HOST: "site.exe.xyz",
         EXE_KNOWN_HOSTS: "test",
         [missing]: "",
@@ -170,3 +173,34 @@ test("website preflight accepts only release tags whose commits are on main", ()
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+test.each(["https://selfix.exe.xyz", "https://docs.example.com/"])(
+  "deployment checks use SITE_URL %s for every route",
+  (siteUrl) => {
+    const script = readFileSync(join(root, "scripts/deploy-website.sh"), "utf8")
+      .split("<<'NODE'\n")[1]!
+      .split("\nNODE")[0]!
+    const result = spawnSync(process.execPath, ["--input-type=module"], {
+      encoding: "utf8",
+      env: { ...process.env, SITE_URL: siteUrl, GITHUB_SHA: "a".repeat(40) },
+      input: `
+        const requested = []
+        globalThis.fetch = async (url) => {
+          requested.push(String(url))
+          return {
+            ok: true,
+            text: async () => process.env.GITHUB_SHA + ' selfix-landing selfix Reproduce a finding',
+          }
+        }
+        ${script}
+        console.log(JSON.stringify(requested))
+      `,
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual(
+      ["/.well-known/selfix-release.txt", "/", "/docs/", "/docs/getting-started"].map(
+        (route) => `${siteUrl.replace(/\/$/, "")}${route}`,
+      ),
+    )
+  },
+)
