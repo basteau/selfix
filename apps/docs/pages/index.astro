@@ -1,0 +1,73 @@
+---
+import PageLayout from "blume/components/layout/PageLayout.astro"
+import data from "blume:data"
+import SetupPanel from "../components/SetupPanel.astro"
+import "../styles/landing.css"
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "")
+const docs = `${base}/docs`
+const rules = [
+  ["no-restyle", "Keep component appearance inside its contract.", "p-4"],
+  ["no-raw-colors", "Use the colors named in your design system.", "bg-red-500"],
+  ["no-arbitrary-values", "Stay on your spacing and sizing scales.", "p-[13px]"],
+  ["no-inline-styles", "Keep styling in your Tailwind utilities.", 'style="padding:1rem"'],
+  ["no-unknown-classes", "Catch utilities missing from your theme.", "bg-prmary"],
+  ["require-static-classes", "Write complete class names that can be checked.", 'mt-${spacing}'],
+]
+---
+<PageLayout
+  site={{ title: data.config.title, description: data.config.description }}
+  logo={data.config.logo}
+  navigation={data.navigation}
+  themeMode={data.config.theme.mode}
+  fontCssVars={data.fontCssVars}
+  favicon={data.config.favicon}
+  searchEnabled={data.config.search.enabled}
+  siteUrl={data.config.site}
+  ogEnabled={data.config.og.enabled}
+  page={{ title: "selfix — Keep your Vue components consistent", route: "/" }}
+>
+  <div class="landing" id="selfix-landing">
+    <section class="hero" aria-labelledby="hero-heading">
+      <a class="eyebrow" href={`${docs}/getting-started`}><span class="status-dot" aria-hidden="true"></span> Vue 3 + Tailwind CSS 4 <span aria-hidden="true">→</span></a>
+      <h1 id="hero-heading">Keep your Vue<br />components consistent.</h1>
+      <p class="hero-description">Your components set the standard.<br class="desktop-break" /> selfix catches the styling that drifts away.</p>
+      <div class="hero-actions"><a class="action primary" href={`${docs}/getting-started`}>Get started <span aria-hidden="true">→</span></a><a class="action" href="https://github.com/basteau/selfix">View on GitHub <span aria-hidden="true">↗</span></a></div>
+      <p class="install"><span aria-hidden="true">$</span> <code id="install-command">pnpm add -D selfix</code><button type="button" data-copy="install-command" aria-label="Copy install command" hidden>Copy</button></p>
+      <figure class="example" aria-label="A styling override and its correction">
+        <div class="example-source">
+          <div class="panel-heading"><span>src/Example.vue</span><span class="file-type">Vue</span></div>
+          <pre tabindex="0" aria-label="Source example"><code><span class="code-muted">&lt;script setup lang="ts"&gt;</span>{'\n'}import Button from <span class="code-string">"./components/ui/Button.vue"</span>{'\n'}<span class="code-muted">&lt;/script&gt;</span>{'\n\n'}<span class="code-muted">&lt;template&gt;</span>{'\n'}{'  '}&lt;Button class=<mark>"p-4"</mark>&gt;Save&lt;/Button&gt;{'\n'}<span class="code-muted">&lt;/template&gt;</span></code></pre>
+        </div>
+        <div class="example-result">
+          <div class="panel-heading"><span>selfix src</span><span class="diagnostic-label">1 error</span></div>
+          <div class="diagnostic"><p class="code-muted">src/Example.vue:6:11</p><p><strong>no-restyle</strong></p><p><code>"p-4" is not allowed on &lt;Button&gt;</code></p><p class="diagnostic-help">The component owns its padding.<br />The page can still control its placement.</p></div>
+          <div class="correction"><span class="correction-label">✓ Allowed layout</span><code>&lt;Button class="mt-4 w-full"&gt;</code></div>
+        </div>
+        <figcaption>Findings point to the original Vue file. You make the correction; selfix checks it.</figcaption>
+      </figure>
+    </section>
+
+    <section class="principles" aria-label="Works with your project">
+      <div><span class="section-number">01</span><h2>Your components.</h2><p>Protect the component imports you choose. Keep the UI you already built.</p><a href={`${docs}/configuration#component-recognition`}>Component recognition <span aria-hidden="true">↗</span></a></div>
+      <div><span class="section-number">02</span><h2>Your Tailwind theme.</h2><p>Check utilities against your actual CSS entry, using Tailwind’s compiler.</p><a href={`${docs}/themes`}>Theme loading <span aria-hidden="true">↗</span></a></div>
+      <div><span class="section-number">03</span><h2>One standalone check.</h2><p>Run locally, in CI, or after agent changes. No UI kit or linter integration required.</p><a href={`${docs}/agent-setup`}>Agent setup <span aria-hidden="true">↗</span></a></div>
+    </section>
+
+    <section class="rules-section" aria-labelledby="rules-heading">
+      <div class="section-heading"><p class="eyebrow">A little structure. Less drift.</p><h2 id="rules-heading">Six rules for the details<br />that make a design system.</h2><p>Protect component styles, use your theme, and make every class checkable.</p></div>
+      <div class="rule-list">{rules.map(([name, description, example]) => <a class="rule-row" href={`${docs}/rules#${name}`}><h3>{name}</h3><p>{description}</p><code>{example}</code><span aria-hidden="true">↗</span></a>)}</div>
+      <p class="section-note">All rules default to errors. <a href={`${docs}/adoption`}>Start with warnings and adopt one rule at a time <span aria-hidden="true">→</span></a></p>
+    </section>
+
+    <section class="setup-section" aria-labelledby="setup-heading">
+      <div class="section-heading"><p class="eyebrow">Small setup. Clear boundaries.</p><h2 id="setup-heading">Make it part of your workflow.</h2><p>Point selfix at your CSS entry and component imports. Run it on your Vue files.</p></div>
+      <SetupPanel docs={docs} />
+      <p class="section-note">selfix reads source without evaluating application expressions. <a href={`${docs}/analysis`}>Understand the analysis limits <span aria-hidden="true">↗</span></a></p>
+    </section>
+    <section class="closing" aria-label="Get started"><div><h2>Keep the system in your design system.</h2><p>Start with one component. Make the next change with confidence.</p></div><a class="action primary" href={`${docs}/getting-started`}>Get started <span aria-hidden="true">→</span></a></section>
+    <p class="sr-only" id="copy-status" role="status"></p>
+  </div>
+  <footer slot="footer" class="landing-footer"><a class="footer-brand" href={`${base}/`}>selfix</a><p>Independent. Open source. <a href="https://github.com/basteau/selfix/blob/main/LICENSE">MIT licensed.</a><br />Inspired by <a href="https://github.com/shadcn-ui/lint">shadcn/lint</a>.</p><nav aria-label="Footer"><a href={docs}>Documentation</a><a href="https://github.com/basteau/selfix">GitHub ↗</a></nav></footer>
+  <script src="../scripts/landing.js"></script>
+</PageLayout>

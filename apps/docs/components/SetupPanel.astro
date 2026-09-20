@@ -1,0 +1,8 @@
+---
+const { docs } = Astro.props
+const configuration = 'import { defineConfig } from "selfix"\n\nexport default defineConfig({\n  css: "src/style.css",\n  ui: ["./components/ui"],\n})'
+---
+<div class="setup-panel">
+  <div class="setup-instructions"><h3>From install to first finding.</h3><p>Use Node.js ≥22.18.0, Vue 3, and Tailwind CSS 4. Set <code>"type": "module"</code> in your package.json.</p><div class="command"><span aria-hidden="true">$</span><code id="setup-install">pnpm add -D selfix</code><button type="button" data-copy="setup-install" aria-label="Copy install command" hidden>Copy</button></div><div class="command"><span aria-hidden="true">$</span><code id="setup-run">pnpm exec selfix src</code><button type="button" data-copy="setup-run" aria-label="Copy run command" hidden>Copy</button></div><a class="setup-link" href={`${docs}/getting-started`}>Follow the getting started guide <span aria-hidden="true">→</span></a></div>
+  <div class="setup-config"><div class="panel-heading"><span>selfix.config.ts</span><button type="button" data-copy="setup-config" aria-label="Copy configuration" hidden>Copy</button></div><pre tabindex="0" aria-label="selfix configuration"><code id="setup-config">{configuration}</code></pre></div>
+</div>

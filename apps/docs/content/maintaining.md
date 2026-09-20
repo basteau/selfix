@@ -54,6 +54,8 @@ The fixture pins Nuxt 4.5.2, Nuxt UI 4.11.1, Tailwind CSS 4.3.3, and Vue 3.5.42.
 
 ## Documentation website
 
+The custom landing page is `apps/docs/pages/index.astro`; it uses Blume’s `PageLayout` for the header, fonts, theme, and metadata. The setup component, page styles, and copy interaction live beside it in `components`, `styles`, and `scripts`. Blume owns the framework and static build. `basePath: "/docs"` mounts documentation without moving the landing page or public assets.
+
 Edit pages in `apps/docs/content`. Add new pages to the sidebar in `apps/docs/blume.config.ts`.
 
 Write for the reader's next action. Introduce the problem with a concrete example, explain what to do, and show the expected result. Keep each paragraph to one idea. Put detailed matching rules in reference sections rather than interrupting tutorials with exceptions. Preserve limits that affect the reader's decision, and verify examples against the implementation.
@@ -72,6 +74,52 @@ pnpm docs:check    # Validate links and build the site
 Use sibling links such as `configuration.md#component-recognition`. They work on GitHub and become page routes on the site. Root-relative `.md` links are raw downloads. Use GitHub URLs for repository files outside the content directory.
 
 To publish the site, run `pnpm docs:build` and host `apps/docs/dist`. Set `DOCS_SITE_URL` to the production URL for canonical URLs and sitemaps. For a subdirectory deployment, also set `deployment.base` in the Blume config. Search and Markdown/LLM exports are included in the build.
+
+## Website operations on exe.dev
+
+The Website workflow builds on updates to `main` and manual runs. It installs the pinned workspace dependencies, runs `pnpm check`, builds with `DOCS_SITE_URL=https://selfix.dev`, and saves the checked static artifact. Deployment is separate from npm release tags. It remains disabled until the repository variable `EXE_DEPLOY_ENABLED` is `true` and the `website` environment is configured.
+
+### Prepare the serving environment
+
+Use a dedicated exe.dev VM. The provider supports [SSH file transfer](https://exe.dev/docs/faq/copy-files), a [configurable HTTP proxy with public access](https://exe.dev/docs/proxy), and [custom domains with automatic TLS](https://exe.dev/docs/cnames). These capabilities were checked against provider documentation during implementation; no VM or DNS changes were made.
+
+Run a persistent static web server on the VM with its document root set to the deployment user's `~/selfix-site/current`. For example, configure an existing nginx service to listen on port 8000, use that absolute document root, and resolve `try_files $uri $uri/ =404;`. Preserve correct JavaScript, CSS, font and PNG MIME types. Ensure `/.well-known/selfix-release.txt` is served. Enable the service on boot and test it locally before enabling deployment. This service setup is a maintainer prerequisite, not something the upload script installs.
+
+Select port 8000 with `ssh exe.dev share port <vm> 8000`. Make the site public with `ssh exe.dev share set-public <vm>` once it is ready. Both commands and their visibility behavior are documented under [share](https://exe.dev/docs/cli-share).
+
+Point `selfix.dev` at the chosen `vmname.exe.xyz` using the apex DNS method supported by your DNS provider, then register it with `ssh exe.dev domain add <vm> selfix.dev`. Follow the provider's custom-domain instructions for apex records and certificate validation. Verify HTTPS and the hostname before enabling automation; an unregistered hostname is rejected by exe.dev.
+
+### Deployment credentials and activation
+
+Create a dedicated SSH key and register its public half using exe.dev's [SSH key management](https://exe.dev/docs/cli-ssh-key). Use a VM-scoped tag where configured, and verify that the key can reach only the intended deployment VM. Store these values in the GitHub `website` environment:
+
+- Variable `EXE_HOST`: the tested SSH destination, such as `vmname.exe.xyz` or `exedev@vmname.exe.xyz`.
+- Secret `EXE_SSH_KEY`: the private deployment key, never committed.
+- Secret `EXE_KNOWN_HOSTS`: independently verified host-key entries for that destination. Do not disable host-key checking or trust an unauthenticated scan on every run.
+
+Restrict the environment to `main`. Set the repository variable `EXE_DEPLOY_ENABLED=true` only after the first private serving check and domain setup. The workflow uploads the exact build artifact over SCP, extracts it into `~/selfix-site/releases/<commit>.<suffix>`, preserves the previous symlink, and atomically switches `current` on the Linux VM. Repeating the active commit preserves both the live files and the previous rollback target. It verifies the deployed commit marker, landing page, docs index, and getting-started route over HTTPS.
+
+A failed upload leaves the active release untouched. A failed post-switch HTTP check fails the workflow and requires investigation or rollback. No live authentication, domain, or deployment smoke test has been performed without the target account configuration.
+
+### Recovery and rollback
+
+On the VM, inspect the previous target with `readlink ~/selfix-site/previous`. If it is the desired release, switch back atomically:
+
+```sh
+cd ~/selfix-site
+ln -s "$(readlink previous)" rollback.next
+mv -Tf rollback.next current
+```
+
+Verify the HTTPS landing page, `/docs/`, `/docs/getting-started`, and release marker again. Keep at least the current and previous release directories. Remove older releases only after confirming neither symlink refers to them. If the VM is lost, restore the static server configuration and redeploy a retained workflow artifact. Rotate compromised keys through exe.dev and GitHub before rerunning deployment.
+
+### Landing-page verification
+
+The landing page shares Blume’s typography and neutral theme, with restrained Vue green accents. Content and navigation remain available without JavaScript. The only custom browser behavior copies commands and configuration; it initializes after Astro navigation as well as a direct visit.
+
+The code example demonstrates documented selfix behavior. `landing-example.test.ts` checks its diagnostic location and correction against the linter. Deployment tests cover rejected inputs, repeat deployments, and incomplete releases without contacting a VM.
+
+For visual review, check desktop, 390px and 320px widths, light and dark themes, and 200% zoom. Verify keyboard focus, copy success and failure, and navigation from the landing page to docs and back. Check that code blocks scroll within their panels without causing page overflow.
 
 ## Releases
 

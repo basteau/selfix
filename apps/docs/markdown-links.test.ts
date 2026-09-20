@@ -2,6 +2,15 @@ import { satteri } from "@astrojs/markdown-satteri"
 import { expect, test } from "vitest"
 import { markdownLinks } from "./markdown-links.js"
 
+test("keeps sibling documentation links inside the docs mount", async () => {
+  const renderer = await satteri({ mdastPlugins: [markdownLinks("/docs")] }).createRenderer({
+    syntaxHighlight: false,
+  })
+  const result = await renderer.render("[Introduction](index.md) [Rules](rules.md#no-restyle)")
+  expect(result.code).toContain('href="/docs/"')
+  expect(result.code).toContain('href="/docs/rules#no-restyle"')
+})
+
 test("renders source links as site pages while preserving anchors and code examples", async () => {
   const renderer = await satteri({ mdastPlugins: [markdownLinks("/selfix/")] }).createRenderer({
     syntaxHighlight: false,

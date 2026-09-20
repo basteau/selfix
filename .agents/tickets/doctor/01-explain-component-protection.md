@@ -46,7 +46,6 @@ Run focused tests, pnpm check, and git diff --check during implementation. Recor
 - Baseline: `f6e22eae1b861c1df0377f562f0f543169d6761a` on `main`; no tracked changes, untracked `.agents/tickets/doctor/` and `.taste/`. User requested implementation of the next ready ticket. Preserve existing ticket content and unrelated `.taste/`.
 - Owned scope: Vue usage collection, shared recognition/effective settings, CLI doctor output, focused tests, documentation, and this ticket. No commit requested.
 
-
 ## Completion evidence
 
 - Implemented text-only `--doctor` using shared recognition and effective rule settings, Vue usage collection independent of class findings, and existing source discovery. Reports original locations, setup paths/counts, recognition reasons, severity/protection, separate definition state, advisories, and deduplicated exact-import suggestions. Preserves normal lint output and option behavior.
