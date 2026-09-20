@@ -339,6 +339,21 @@ export async function createLinter(options: LinterOptions) {
         emit("parse-error", "error", error.offset, error.message)
       if (collected.fatal)
         return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
+      // Source, filename, and import bindings are fixed for this invocation.
+      const definitions = new Map<string, ComponentDefinition | undefined>()
+      const definitionFor = (component: string) => {
+        if (!definitions.has(component))
+          definitions.set(
+            component,
+            project?.resolve(
+              component,
+              collected.imports.get(component),
+              path.resolve(root, filename),
+              source,
+            ),
+          )
+        return definitions.get(component)
+      }
       const effective = effectiveSettings(filename)
       for (const { name, severity, policy, options } of effective) {
         if (severity === "off") continue
@@ -393,15 +408,7 @@ export async function createLinter(options: LinterOptions) {
             site.prop === undefined
               ? ""
               : ` [prop ${JSON.stringify(site.prop)}${site.slot === undefined ? "" : `, slot ${JSON.stringify(site.slot)}`}]`
-          const definition =
-            name === "no-restyle"
-              ? project?.resolve(
-                  site.component,
-                  collected.imports.get(site.component),
-                  path.resolve(root, filename),
-                  source,
-                )
-              : undefined
+          const definition = name === "no-restyle" ? definitionFor(site.component) : undefined
           const details = definition
             ? ` Definition: ${definition.file}.` +
               (["size", "variant"] as const)
@@ -424,7 +431,7 @@ export async function createLinter(options: LinterOptions) {
             site.component,
             token || undefined,
             {
-              ...(definition ? { definition } : {}),
+              ...(definition ? { definition: structuredClone(definition) } : {}),
               ...(site.prop === undefined ? {} : { prop: site.prop }),
               ...(site.slot === undefined ? {} : { slot: site.slot }),
             },

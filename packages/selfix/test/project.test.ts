@@ -93,6 +93,147 @@ it("uses supplied source for self references without changing the snapshot or le
   ).toEqual(["disk"])
 })
 
+it("isolates repeated recursive definitions from other findings, editor revisions, and disk snapshots", async () => {
+  const { root, write } = fixture()
+  const file = write("Button.vue", component("disk"))
+  const linter = await createLinter({
+    css: '@import "tailwindcss";',
+    config: { components: ["^Button$"], project: { root, components: { Button: "Button.vue" } } },
+  })
+  const template = '<template><Button class="p-4 rounded" /><Button class="p-4" /></template>'
+  const source = component("editor") + template
+  const findings = linter.lint(source, file)
+  expect(findings).toHaveLength(3)
+  for (const finding of findings)
+    expect(finding.definition).toEqual({
+      file,
+      props: { size: ["editor"], variant: ["solid", "outline"] },
+    })
+  const untouched = structuredClone(findings)
+  findings[0].definition!.file = "changed.vue"
+  findings[0].definition!.props!.size!.push("changed")
+  findings[0].definition!.props!.variant = ["changed"]
+  expect(findings.slice(1)).toEqual(untouched.slice(1))
+  expect(linter.lint(source, file)).toEqual(untouched)
+  expect(
+    linter
+      .lint(component("next") + template, file)
+      .map((finding) => finding.definition?.props?.size),
+  ).toEqual([["next"], ["next"], ["next"]])
+  const imported = `<script setup>import Button from './Button.vue'</script>${template}`
+  expect(
+    linter
+      .lint(imported, path.join(root, "Page.vue"))
+      .map((finding) => finding.definition?.props?.size),
+  ).toEqual([["disk"], ["disk"], ["disk"]])
+})
+
+it("preserves repeated barrel findings and local policy identity across imports and filenames", async () => {
+  const { root, write } = fixture()
+  const first = write("Button.vue", component("first"))
+  const second = write("nested/Button.vue", component("second"))
+  write("barrel.ts", "export {default as Button} from './Button.vue'")
+  write("nested/barrel.ts", "export {default as Button} from './Button.vue'")
+  const config: Config = {
+    components: ["^Action$"],
+    classProps: [{ pattern: "^Action$", props: { contentClass: "class", ui: "slot-map" } }],
+    rules: {
+      "no-restyle": [
+        "warn",
+        {
+          contracts: [
+            { pattern: "^Action$", allow: [] },
+            { pattern: "^Button$", allow: ["*"] },
+          ],
+        },
+      ],
+    },
+  }
+  const linter = await createLinter({
+    css: '@import "tailwindcss";',
+    config: { ...config, project: { root } },
+  })
+  const sourceOnly = await createLinter({ css: '@import "tailwindcss";', config })
+  const source = `<script setup>import {Button as Action} from './barrel'</script>
+<template>
+<Action class="p-4 rounded" contentClass="p-4" :ui="{base: 'p-4', icon: 'rounded'}" />
+<Action class="p-4" />
+</template>`
+  const page = path.join(root, "Page.vue")
+  const findings = linter.lint(source, page)
+  const expectedLocations = [
+    { line: 3, column: 9 },
+    { line: 3, column: 9 },
+    { line: 3, column: 29, prop: "content-class" },
+    { line: 3, column: 48, prop: "ui", slot: "base" },
+    { line: 3, column: 48, prop: "ui", slot: "icon" },
+    { line: 4, column: 9 },
+  ]
+  expect(findings).toHaveLength(6)
+  findings.forEach((finding, index) => {
+    expect(finding).toMatchObject({
+      ...expectedLocations[index],
+      severity: "warn",
+      component: "Action",
+      definition: { file: first, props: { size: ["first"], variant: ["solid", "outline"] } },
+    })
+  })
+  expect(
+    findings.map(({ definition: _definition, message, ...finding }) => ({
+      ...finding,
+      message:
+        message.split(" Definition:")[0] +
+        (message.includes(" [prop ") ? " [prop " + message.split(" [prop ")[1] : ""),
+    })),
+  ).toEqual(sourceOnly.lint(source, page))
+  const untouched = structuredClone(findings)
+  findings[0].definition!.props!.size!.push("changed")
+  expect(findings.slice(1)).toEqual(untouched.slice(1))
+  expect(linter.lint(source, page)).toEqual(untouched)
+  for (const [input, filename] of [
+    [source.replace("'./barrel'", "'./nested/barrel'"), page],
+    [source, path.join(root, "nested/Page.vue")],
+  ]) {
+    const changed = linter.lint(input, filename)
+    expect(changed).toHaveLength(6)
+    expect(
+      changed.every(
+        (finding) =>
+          finding.definition?.file === second && finding.definition.props?.size?.[0] === "second",
+      ),
+    ).toBe(true)
+  }
+  write("Button.vue", component("new-project"))
+  const fresh = await createLinter({
+    css: '@import "tailwindcss";',
+    config: { ...config, project: { root } },
+  })
+  expect(fresh.lint(source, page)[0].definition?.props?.size).toEqual(["new-project"])
+  expect(linter.lint(source, page)).toEqual(untouched)
+})
+
+it.each(["missing", "cycle", "ambiguous"])(
+  "preserves repeated unavailable definitions through %s imports",
+  async (kind) => {
+    const { root, write } = fixture()
+    write("Button.vue", component("sm"))
+    if (kind === "cycle") write("barrel.ts", "export {Button} from './barrel'")
+    if (kind === "ambiguous")
+      write(
+        "barrel.ts",
+        "export {default as Button} from './Button.vue'; export {default as Button} from './Button.vue'",
+      )
+    const config = { components: ["^Action$"] }
+    const options = { css: '@import "tailwindcss";', config }
+    const linter = await createLinter({ ...options, config: { ...config, project: { root } } })
+    const sourceOnly = await createLinter(options)
+    const source = `<script setup>import {Button as Action} from './barrel'</script><template><Action class="p-4 rounded" /><Action class="p-4" /></template>`
+    const file = path.join(root, "Page.vue")
+    expect(linter.lint(source, file)).toHaveLength(3)
+    expect(linter.lint(source, file)).toEqual(sourceOnly.lint(source, file))
+  },
+)
+
 it.each([
   "const { defineProps } = something; defineProps<{size:'fake'}>()",
   "const [withDefaults] = something; withDefaults(defineProps<{size:'fake'}>(), {})",
