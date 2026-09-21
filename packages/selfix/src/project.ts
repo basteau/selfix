@@ -1,6 +1,6 @@
 // Static source-resolution approach informed by shadcn-ui/lint (MIT).
 // https://github.com/shadcn-ui/lint/tree/bf89dcb7f66a306c7ac4943065298902afdbd969/packages/lint/src/project
-import { readFileSync, readdirSync, statSync } from "node:fs"
+import { readFileSync, readdirSync, statSync, type Dirent } from "node:fs"
 import path from "node:path"
 import { createRequire } from "node:module"
 import { babelParse, parseSfc, type ComponentAlias } from "./vue.js"
@@ -322,16 +322,18 @@ export function createProject(options: ProjectOptions) {
     throw new Error(`Project root must be an existing directory: ${root}`)
   const sources = new Map<string, string>()
   const ignored = new Set(["node_modules", ".git", ".nuxt", ".output", "dist", "coverage"])
-  function snapshot(file: string) {
-    if (sources.has(file)) return
-    const stat = statSync(file, { throwIfNoEntry: false })
+  const directories = new Set<string>()
+  function snapshot(file: string, entryInfo?: Dirent) {
+    if (sources.has(file) || directories.has(file)) return
+    const stat = entryInfo ?? statSync(file, { throwIfNoEntry: false })
     if (!stat) return
     if (stat.isDirectory()) {
+      directories.add(file)
       for (const entry of readdirSync(file, { withFileTypes: true }).sort((a, b) =>
         a.name.localeCompare(b.name),
       )) {
         if (!entry.isSymbolicLink() && !ignored.has(entry.name))
-          snapshot(path.join(file, entry.name))
+          snapshot(path.join(file, entry.name), entry)
       }
     } else if (stat.isFile() && /\.(?:vue|[cm]?[jt]s)$/.test(file)) {
       sources.set(file, readFileSync(file, "utf8"))

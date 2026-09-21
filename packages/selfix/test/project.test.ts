@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs"
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, chmodSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -326,6 +326,63 @@ it("snapshots statically imported sources outside the project root", () => {
     ),
   ).toEqual({ file, props: { size: ["sm"], variant: ["solid", "outline"] } })
 })
+
+it("preserves overlapping alias snapshots and explicit symlinks without scanning nested symlinks", () => {
+  const { root, write } = fixture()
+  const file = write("app/src/Button.vue", component("sm"))
+  const external = write("shared/External.vue", component("external"))
+  write("app/Page.vue", `<script setup>import External from '../shared/External.vue'</script>`)
+  symlinkSync(path.join(root, "shared"), path.join(root, "app/linked"), "dir")
+  symlinkSync(file, path.join(root, "app/ButtonLink.vue"))
+  const options = {
+    root: path.join(root, "app"),
+    aliases: { "@/*": "./*", "ui/*": "./src/*", "buttons/*": "./src/*" },
+    components: { Linked: "./ButtonLink.vue" },
+  }
+  const project = createProject(options)
+  write("app/src/Button.vue", component("changed"))
+  write("shared/External.vue", component("changed"))
+  const resolve = (importSource: string) =>
+    project.resolve("Button", { local: "Button", importSource, imported: "default" }, "Page.vue")
+  for (const source of ["@/src/Button", "ui/Button", "buttons/Button"])
+    expect(resolve(source)).toEqual({
+      file,
+      props: { size: ["sm"], variant: ["solid", "outline"] },
+    })
+  expect(resolve("../shared/External.vue")?.file).toBe(external)
+  expect(resolve("../shared/External.vue")?.props?.size).toEqual(["external"])
+  expect(resolve("./linked/External.vue")).toBeUndefined()
+  expect(project.resolve("Linked", undefined, "Page.vue")?.props?.size).toEqual(["sm"])
+  expect(createProject(options).resolve("Linked", undefined, "Page.vue")?.props?.size).toEqual([
+    "changed",
+  ])
+  rmSync(path.join(root, "app/ButtonLink.vue"))
+  expect(() => createProject(options)).toThrow(/existing .vue file/)
+})
+
+it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+  "propagates unreadable captured sources and explicit alias directories",
+  () => {
+    const { root, write } = fixture()
+    const file = write("app/Button.vue", component("sm"))
+    write("shared/Other.vue", component("other"))
+    chmodSync(file, 0)
+    try {
+      expect(() => createProject({ root: path.join(root, "app") })).toThrow(/EACCES/)
+    } finally {
+      chmodSync(file, 0o600)
+    }
+    const shared = path.join(root, "shared")
+    chmodSync(shared, 0)
+    try {
+      expect(() => createProject({ root: path.join(root, "app"), aliases: { shared } })).toThrow(
+        /EACCES/,
+      )
+    } finally {
+      chmodSync(shared, 0o700)
+    }
+  },
+)
 
 it("probes extensionless explicit aliases and omits ambiguous targets", () => {
   const { root, write } = fixture()

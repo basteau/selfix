@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, readFile, rm, writeFile, symlink, chmod } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -36,6 +36,72 @@ async function invoke(args: string[], dir: string) {
 }
 
 describe("CLI", () => {
+  it("deduplicates overlapping selections and preserves explicit versus nested symlinks", async () => {
+    const dir = await project()
+    await mkdir(path.join(dir, "src"))
+    await mkdir(path.join(dir, "outside"))
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      `export default {css:'theme.css',project:false,components:['^Button$'],exclude:['src/Skip.vue']}`,
+    )
+    const source = '<template><Button class="p-4" /></template>'
+    await writeFile(path.join(dir, "src/Page.vue"), source)
+    await writeFile(path.join(dir, "src/Skip.vue"), source)
+    await writeFile(path.join(dir, "outside/Other.vue"), source)
+    await symlink(path.join(dir, "outside"), path.join(dir, "src/linked"), "dir")
+    await symlink(path.join(dir, "outside/Other.vue"), path.join(dir, "src/Link.vue"))
+    for (const mode of [[], ["--doctor"]]) {
+      const args = mode.length ? mode : ["--format", "json"]
+      const single = await invoke([...args, "src"], dir)
+      const overlapping = await invoke([...args, "src", "src/Page.vue", "src/*.vue"], dir)
+      // The glob explicitly selects Link.vue, unlike recursive enumeration.
+      const explicit = await invoke([...args, "src", "src/Link.vue"], dir)
+      expect(overlapping).toEqual(explicit)
+      expect(single.stderr).toBe("")
+      if (!mode.length) {
+        expect(
+          JSON.parse(single.stdout).map((item: { file: string }) => path.basename(item.file)),
+        ).toEqual(["Page.vue"])
+        expect(
+          JSON.parse(explicit.stdout).map((item: { file: string }) => path.basename(item.file)),
+        ).toEqual(["Link.vue", "Page.vue"])
+      } else {
+        expect(single.stdout).toContain("Page.vue")
+        expect(single.stdout).not.toContain("Link.vue")
+        expect(explicit.stdout).toContain("Link.vue")
+        expect(explicit.stdout).not.toContain("Skip.vue")
+      }
+      expect(await invoke([...args, "src/linked"], dir)).toEqual(
+        await invoke([...args, "src/linked/Other.vue"], dir),
+      )
+    }
+    await rm(path.join(dir, "outside/Other.vue"))
+    const unavailable = await invoke(["src/Link.vue"], dir)
+    expect(unavailable.code).toBe(2)
+    expect(unavailable.stderr).toMatch(/ENOENT|No files match/)
+  })
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "fails closed for unreadable requested directories and enumerated sources",
+    async () => {
+      const dir = await project()
+      const src = path.join(dir, "src")
+      const file = path.join(src, "Page.vue")
+      await mkdir(src)
+      await writeFile(file, "<template><div /></template>")
+      for (const target of [file, src]) {
+        await chmod(target, 0)
+        try {
+          const result = await invoke(["src"], dir)
+          expect(result.code).toBe(2)
+          expect(result.stderr).toContain("EACCES")
+          expect(result.stderr).toContain(target)
+        } finally {
+          await chmod(target, target === src ? 0o700 : 0o600)
+        }
+      }
+    },
+  )
+
   it("reports component restrictions in text/JSON and applies warning limits and coverage errors", async () => {
     const dir = await project()
     await writeFile(

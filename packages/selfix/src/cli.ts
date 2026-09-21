@@ -1,3 +1,4 @@
+import type { Dirent } from "node:fs"
 import { readFile, readdir, stat, glob } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
@@ -119,15 +120,15 @@ export async function run(
       )
     }
     const files = new Set<string>()
-    const visit = async (file: string): Promise<void> => {
+    const visit = async (file: string, entryInfo?: Dirent): Promise<void> => {
       if (excluded(file, false)) return
-      const info = await stat(file)
+      const info = entryInfo ?? (await stat(file))
       if (!info.isDirectory() && excluded(file)) return
       if (info.isDirectory()) {
         for (const entry of await readdir(file, { withFileTypes: true })) {
           if (entry.isSymbolicLink()) continue
           if (entry.isDirectory() || entry.name.endsWith(".vue"))
-            await visit(path.join(file, entry.name))
+            await visit(path.join(file, entry.name), entry)
         }
       } else if (file.endsWith(".vue")) files.add(file)
       else throw new Error(`Expected a .vue file or directory: ${file}`)
