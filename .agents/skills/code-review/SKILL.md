@@ -5,7 +5,7 @@ description: "Review a committed range or work-in-progress changes against proje
 
 # Code Review
 
-Read [issue tracker guidance](../to-tickets/issue-tracker.md). Review is read-only unless fixes were separately requested.
+Read [issue tracker guidance](../../../docs/agents/issue-tracker.md). Review is read-only unless fixes were separately requested.
 
 ## 1. Pin the review scope
 
@@ -15,13 +15,13 @@ Establish whether this is a committed-range review or a working-tree review. If 
 - **Working tree:** use the implementation's recorded starting revision when available; otherwise use `HEAD` for current local changes. `git diff <resolved-base> -- <scope>` includes the combined tracked committed, staged, and unstaged result relative to that base. Also inspect `git diff --cached` and `git diff` to understand the staged/unstaged split where relevant.
 - **Untracked files:** list them with `git ls-files --others --exclude-standard` and read the relevant files explicitly; ordinary Git diffs omit them. If a relevant file is binary or cannot be inspected, report that limit.
 
-Record the initial worktree state and owned scope supplied by implementation. If pre-existing edits overlap the task and cannot be separated, flag or clarify them rather than attributing them to the change. Ignored ticket files are spec inputs, not part of the code diff. Do not stage files to make them appear in the review.
+Record the initial worktree state and owned scope supplied by implementation. If pre-existing edits overlap the task and cannot be separated, flag or clarify them rather than attributing them to the change. GitHub issue bodies and comments are spec inputs, not part of the code diff. Do not stage files to make them appear in the review.
 
 Verify that refs resolve and the selected scope contains changes. An empty committed diff does not mean there is no work to review: check the requested working-tree/untracked scope first. Provide the exact same pinned scope to every reviewer.
 
 ## 2. Identify requirements and standards
 
-Prefer the explicit ticket/spec path supplied by the caller. Otherwise look for local path references in the request or commit messages, then matching feature files under `.agents/tickets/`. Read the ticket, spec, and notes through the local tracker guidance. Do not turn a bare issue number into a remote lookup. If the intended spec is unclear, ask; if there is no spec, report that the Spec axis is unavailable instead of inventing one.
+Prefer the explicit ticket/spec URL, issue number, or supplied spec path. Otherwise inspect references in the request or commit messages, then search GitHub Issues for matching work using the tracker guidance. Read issue bodies, comments, linked specs, and dependencies. If the intended spec is unclear, ask; if there is no spec, report that the Spec axis is unavailable instead of inventing one.
 
 Standards come from `AGENTS.md`, relevant documented contracts in the root `README.md`, and existing code/test conventions. Consult [codebase-design](../codebase-design/SKILL.md) for consequential interface questions, not as a mandate to refactor.
 
