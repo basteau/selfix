@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.1.2
+
+[compare changes](https://github.com/basteau/selfix/compare/v2.1.1...v2.1.2)
+
+### 🩹 Fixes
+
+- **docs:** Align launch page rules and public origin ([ab3a388](https://github.com/basteau/selfix/commit/ab3a388))
+
+### 💅 Refactors
+
+- **lint:** Reuse component definitions within each lint call ([8bbaf4f](https://github.com/basteau/selfix/commit/8bbaf4f))
+- **traversal:** Reuse entry types and snapshot directories ([367728e](https://github.com/basteau/selfix/commit/367728e))
+
+### 📖 Documentation
+
+- Clarify landing page visual hierarchy ([b56a75c](https://github.com/basteau/selfix/commit/b56a75c))
+- **tickets:** Record definition reuse completion evidence ([e45fd45](https://github.com/basteau/selfix/commit/e45fd45))
+- **brand:** Adopt monochrome bandage logo and slogan ([0403c1b](https://github.com/basteau/selfix/commit/0403c1b))
+- **tickets:** Record traversal verification and completion ([3cf7737](https://github.com/basteau/selfix/commit/3cf7737))
+
 ## v2.1.1
 
 [compare changes](https://github.com/basteau/selfix/compare/v2.1.0...v2.1.1)
