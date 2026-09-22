@@ -4,6 +4,7 @@ import path from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { createLinter, defineConfig, type Config } from "../src/index.js"
 import { componentProps, createProject } from "../src/project.js"
+import { parseSfc } from "../src/vue.js"
 
 describe("component prop metadata", () => {
   it("reads only the component's macro and complete same-file string types", () => {
@@ -54,6 +55,12 @@ describe("component prop metadata", () => {
     "defineProps<{size:'first'}>(); defineProps<{size:'second'}>()",
   ])("omits runtime, shadowed, unrelated, or ambiguous macros: %s", (script) => {
     expect(componentProps(`<script setup lang="ts">${script}</script>`, "Button.vue")).toEqual({})
+  })
+
+  it("omits props when the component file itself cannot be parsed", () => {
+    const source = "<script setup lang=\"ts\">defineProps<{size:'sm'}>()</script><template><button>"
+    expect(parseSfc(source, { filename: "Button.vue" }).errors.length).toBeGreaterThan(0)
+    expect(componentProps(source, "Button.vue")).toEqual({})
   })
 })
 
@@ -670,6 +677,29 @@ it("keeps prepared metadata snapshots isolated across lint and classless doctor 
   ])
   expect(before.lint(source, page)).toEqual(findings)
   expect(before.doctor(source, page)).toEqual(doctor)
+})
+
+it("omits unreadable prop guidance and still protects the usage", async () => {
+  const { root, write } = fixture()
+  const button =
+    '<script setup lang="ts">const broken: = 1\n</script><template><button /></template>'
+  const file = write("Button.vue", button)
+  const source = `<script setup>import Button from './Button.vue'</script>\n<template><Button class="p-4" /></template>`
+  const page = path.join(root, "Page.vue")
+  const linter = await createLinter({
+    css: '@import "tailwindcss";',
+    root,
+    config: { components: ["^Button$"], project: { root } },
+  })
+  const findings = linter.lint(source, page)
+  expect(
+    findings.map(({ rule, component, className }) => ({ rule, component, className })),
+  ).toEqual([{ rule: "no-restyle", component: "Button", className: "p-4" }])
+  expect(findings[0].definition).toEqual({ file })
+  expect(findings[0].message).toContain(`Definition: ${file}.`)
+  expect(findings[0].message).not.toContain("Accepted")
+  expect(linter.doctor(source, page).usages.map((usage) => usage.definition)).toEqual([file])
+  expect(linter.lint(button, file).map(({ rule }) => rule)).toEqual(["parse-error"])
 })
 
 it("preserves prepared source failures and explicit recovery", () => {

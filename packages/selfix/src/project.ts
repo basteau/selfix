@@ -17,17 +17,17 @@ export interface ComponentProps {
   variant?: string[]
 }
 
-/** Read only complete literal string types belonging to a top-level defineProps macro. */
+/** Read only complete literal string types belonging to a top-level defineProps macro. Unreadable files omit props. */
 export function componentProps(source: string, filename: string): ComponentProps {
   const parsed = parseSfc(source, { filename, sourceMap: false })
-  if (parsed.errors.length) throw new Error(`Unable to parse component definition ${filename}`)
+  if (parsed.errors.length) return {}
   const setup = parsed.descriptor.scriptSetup
   if (!setup || setup.src || (setup.lang && !["ts", "js"].includes(setup.lang))) return {}
   let body: Statement[]
   try {
     body = babelParse(setup.content, { sourceType: "module", plugins: ["typescript"] }).program.body
-  } catch (error) {
-    throw new Error(`Unable to parse component definition ${filename}: ${String(error)}`)
+  } catch {
+    return {}
   }
   const types = new Map<string, TypeAlias | Interface | undefined>()
   const calls: Expression[] = []

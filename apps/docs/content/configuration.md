@@ -211,7 +211,7 @@ Use `project: false` to disable discovery, or these options to guide it:
 
 Explicit aliases and component mappings take priority over discovered ones. For Nuxt, run `nuxt prepare` first; custom build directories need matching metadata and [CSS paths](themes.md#nuxt-ui-application-themes).
 
-Missing explicit mappings, malformed metadata, and invalid resolved components fail loading. Unresolved or unsupported definitions omit guidance; they don't change which components are protected. See [Troubleshooting](troubleshooting.md) for recovery and [API reuse](api.md#component-discovery-and-reuse) for source updates.
+Missing explicit mappings, malformed metadata, and invalid resolved components fail loading. A component file whose script or template cannot be parsed still identifies that file and omits prop choices, without changing which components are protected. Unresolved or unsupported definitions omit guidance the same way. See [Troubleshooting](troubleshooting.md) for recovery and [API reuse](api.md#component-discovery-and-reuse) for source updates.
 
 ## Project settings
 
