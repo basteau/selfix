@@ -49,7 +49,7 @@ Use `pnpm exec selfix src --doctor` to verify which setting recognizes each usag
 
 ## Component restrictions
 
-Configure exact banned names and optional replacement guidance with [`no-restricted-components`](rules.md#no-restricted-components). Its `components` option is a list of `{ name, replacement?, message? }` entries, distinct from top-level recognition regexes. The list defaults to empty. Severity-only overrides preserve the list; a supplied list replaces it, including `[]` to clear it.
+Configure exact banned names and optional replacement guidance with [`no-restricted-components`](rules.md#no-restricted-components). Its `components` option is a list of `{ name, replacement?, message? }` entries, distinct from top-level recognition regexes. Its `imports` option is a list of `{ source, name, replacement?, message? }` entries that match an authored import string and exported name, including `name: "default"`. Both lists default to empty. Severity-only overrides preserve them. Supplying either list replaces only that list, including `[]` to clear it.
 
 ## Shared policy
 
@@ -222,7 +222,7 @@ Missing explicit mappings, malformed metadata, and invalid resolved components f
 | `components`       | `[]`. Component-name regular expressions.                                                |
 | `componentImports` | `[]`. Additional import-source regular expressions.                                      |
 | `ignoreImports`    | `[]`. Imports excluded from recognition.                                                 |
-| `rules`            | All seven rules at `"error"`; component restrictions default to an empty list.           |
+| `rules`            | All seven rules at `"error"`; component restrictions default to empty lists.             |
 | `overrides`        | `[]`. Per-file rule settings.                                                            |
 | `classProps`       | `[]`. Additional props containing classes.                                               |
 | `cssAliases`       | `{}`. Exact CSS import mappings.                                                         |

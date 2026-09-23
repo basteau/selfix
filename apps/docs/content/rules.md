@@ -9,7 +9,7 @@ The color examples use the theme below. `Button` is a [recognized component](con
 
 ## no-restricted-components
 
-Ban exact component names independently of styling recognition, classes, or definition discovery:
+Ban exact component names, or an authored import and exported name, independently of styling recognition, classes, or definition discovery:
 
 ```ts
 rules: {
@@ -25,15 +25,35 @@ rules: {
 
 `<CustomButton />` reports: `<CustomButton> is restricted. Use <UButton> instead. Use our standard button for consistent behavior.` The finding points to the opening tag, includes component metadata, and appends the global `note` when present. Styling findings still report independently.
 
-Each entry requires a nonempty exact `name`; `replacement` and `message` are optional nonempty strings. Names are not regexes or class patterns. Unknown options are rejected. An omitted or empty `components` list bans nothing, including under the default error severity. Duplicate matching entries use the first entry's guidance.
+Each entry requires a nonempty exact `name`; `replacement` and `message` are optional nonempty strings. Names are not regexes or class patterns. Unknown options are rejected. An omitted or empty `components` or `imports` list bans nothing from that list, including under the default error severity. Duplicate matching entries use the first entry's guidance.
 
-Matching uses local imported names or global/auto-imported names, with PascalCase and kebab-case equivalents. Acronyms remain distinct: `URLButton` matches `u-r-l-button`, not `url-button`. When different local imports compete, Vue’s exact, camelized, then PascalCase lookup determines the binding; a lowercase import and a distinct PascalCase global remain separate. A restriction on `CustomButton` does not follow `import { CustomButton as OtherButton }`; restrict `OtherButton` separately. Type-only imports do not establish runtime aliases. Native elements and literal `v-pre` content are excluded.
+Matching uses local imported names or global/auto-imported names, with PascalCase and kebab-case equivalents. Acronyms remain distinct: `URLButton` matches `u-r-l-button`, not `url-button`. When different local imports compete, Vue’s exact, camelized, then PascalCase lookup determines the binding; a lowercase import and a distinct PascalCase global remain separate. A `name` restriction on `CustomButton` does not follow `import { CustomButton as OtherButton }`; use an import restriction or restrict `OtherButton` separately. Type-only imports do not establish runtime aliases. Native elements and literal `v-pre` content are excluded.
 
-The rule supports `off`, `warn`, `error`, and [file overrides](configuration.md#per-file-rule-overrides). A severity-only override preserves restrictions. A supplied `components` list replaces the inherited list; `[]` clears it. Styling options such as `allow`, `deny`, and `contracts` do not apply.
+Import restrictions match the authored module string and exported name, including a local rename:
+
+```ts
+rules: {
+  "no-restricted-components": ["error", {
+    imports: [{
+      source: "some-ui",
+      name: "CustomButton",
+      replacement: "UButton",
+    }],
+  }],
+},
+```
+
+`import { CustomButton as LegacyButton } from "some-ui"` makes `<LegacyButton>` and `<legacy-button>` report `<LegacyButton> is restricted. Use <UButton> instead.` A default export uses `name: "default"`, including `import Button from "some-ui"` and `import { default as Button } from "some-ui"`. A string export uses that string, such as `name: "custom-button"` for `import { "custom-button" as Quoted }`. `source` and `name` are exact and nonempty; `some-ui` does not match `some-ui/button`, `@/some-ui`, or `./barrel`.
+
+The comparison uses the import written in the SFC. It does not resolve path aliases, follow barrel re-exports, or treat a global, auto-imported, or wrapper component as that export. A namespace member such as `<UI.Button>` is not the named export `Button`. Type-only imports, other exports from the same module, and native elements do not match. A `v-for` or slot binding shadows `:is="LegacyButton"` and leaves that usage unresolved; it does not retarget the `<LegacyButton>` tag.
+
+When a usage matches more than one entry, selfix reports one finding. Entries in `components` are considered before entries in `imports`, and the first match in each list supplies `replacement` and `message`.
+
+The rule supports `off`, `warn`, `error`, and [file overrides](configuration.md#per-file-rule-overrides). A severity-only override preserves both lists. A supplied `components` or `imports` list replaces only that list; `[]` clears it, and omitting a list preserves the inherited one. Styling options such as `allow`, `deny`, and `contracts` do not apply.
 
 A static `<component :is="Button">` or `<Component :is="Button">` binding uses the same local import as a direct `<Button>` tag when that name is an unshadowed runtime import. Lookup is exact: `:is="button"` is not the `Button` import. A namespace member written `<UI.Button>` or `:is="UI.Button"` keeps the name `UI.Button` and the namespace module as its import source. Contracts, configured class props, and a restriction entry match that exact written name. A restriction on `Button` or `UI` does not follow the member. `v-for` and slot props shadow `:is` expressions; they do not retarget a dotted tag, matching Vue's compiler. Calls, conditionals, strings, computed members, local aliases, and type-only imports stay unresolved. `is="vue:…"` stays unresolved.
 
-When the effective list is nonempty and the rule is enabled, unresolved dynamic components, unresolved namespace tags, bare namespace imports, and `is="vue:…"` usages produce `parse-error` coverage diagnostics. These are always errors, even when restrictions are warnings; the CLI exits with status 1. Disabling the rule or clearing the list removes this rule's coverage requirement. No expressions are evaluated. Direct restriction warnings use the normal warning limit; both text and JSON output include findings. selfix recommends replacements without rewriting imports, props, events, slots, or source.
+When either effective list is nonempty and the rule is enabled, unresolved dynamic components, unresolved namespace tags, bare namespace imports, and `is="vue:…"` usages produce `parse-error` coverage diagnostics. These are always errors, even when restrictions are warnings; the CLI exits with status 1. Disabling the rule or clearing both lists removes this rule's coverage requirement. No expressions are evaluated. Direct restriction warnings use the normal warning limit; both text and JSON output include findings. selfix recommends replacements without rewriting imports, props, events, slots, or source.
 
 ## no-restyle
 

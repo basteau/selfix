@@ -154,6 +154,44 @@ describe("CLI", () => {
     })
   })
 
+  it("reports a renamed import restriction in text and JSON", async () => {
+    const dir = await project()
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      `export default {
+      css: 'theme.css', rules: { 'no-restricted-components': ['error', {
+        imports: [{ source: 'some-ui', name: 'CustomButton', replacement: 'UButton' }]
+      }] }
+    }`,
+    )
+    const file = path.join(dir, "Page.vue")
+    await writeFile(
+      file,
+      `<script setup>
+import { CustomButton as LegacyButton } from "some-ui"
+</script>
+<template>
+  <LegacyButton />
+</template>`,
+    )
+    const text = await invoke([], dir)
+    expect(text.code).toBe(1)
+    expect(text.stdout).toContain("no-restricted-components")
+    expect(text.stdout).toContain("<LegacyButton> is restricted. Use <UButton> instead.")
+    const json = await invoke(["--format", "json"], dir)
+    expect(json.code).toBe(1)
+    expect(JSON.parse(json.stdout)).toEqual([
+      expect.objectContaining({
+        file,
+        rule: "no-restricted-components",
+        severity: "error",
+        component: "LegacyButton",
+        line: 5,
+        column: 3,
+      }),
+    ])
+  })
+
   it("applies config-relative file rules while retaining exclusions, failures, and warning limits", async () => {
     const dir = await project()
     await mkdir(path.join(dir, "src/ui"), { recursive: true })

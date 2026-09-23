@@ -9,6 +9,7 @@ import {
   type LinterConfig,
   type RuleName,
   type RuleOptions,
+  type ImportRestriction,
   type RestrictedComponentOptions,
   type Severity,
 } from "./config.js"
@@ -16,6 +17,7 @@ import {
 export { defineConfig, ruleNames } from "./config.js"
 export type {
   ComponentRestriction,
+  ImportRestriction,
   RestrictedComponentOptions,
   Rules,
   ClassProps,
@@ -60,6 +62,31 @@ export interface LinterOptions {
 function componentName(name: string): string {
   const camel = name.replace(/-(\w)/gu, (_, letter: string) => letter.toUpperCase())
   return camel.charAt(0).toUpperCase() + camel.slice(1)
+}
+
+function matchesRestrictedName(
+  name: string,
+  site: ComponentUsage,
+  imports: ReturnType<typeof collectVue>["imports"],
+): boolean {
+  const alias = resolveComponentAlias(name, imports)
+  // An imported usage matches its local binding. A written namespace
+  // member such as UI.Button is not that local name, so it matches
+  // only the exact configured name.
+  if (alias) return alias.local === site.component && site.importSource !== undefined
+  if (site.importSource !== undefined) return name === site.component
+  return componentName(name) === componentName(site.component)
+}
+
+function matchesRestrictedImport(
+  entry: ImportRestriction,
+  site: ComponentUsage,
+  imports: ReturnType<typeof collectVue>["imports"],
+): boolean {
+  if (site.importSource === undefined) return false
+  const alias = imports.get(site.component)
+  if (!alias || alias.imported === "*" || alias.importSource !== site.importSource) return false
+  return alias.importSource === entry.source && alias.imported === entry.name
 }
 
 function baseClass(token: string): string {
@@ -359,21 +386,20 @@ export async function createLinter(options: LinterOptions) {
         if (severity === "off") continue
         if (name === "no-restricted-components") {
           const restrictions = options.components ?? []
-          if (!restrictions.length) continue
+          const importRestrictions = options.imports ?? []
+          if (!restrictions.length && !importRestrictions.length) continue
           for (const site of collected.usages) {
             if (site.unsupported) {
               emit("parse-error", "error", site.offset, site.unsupported, site.component)
               continue
             }
-            const restriction = restrictions.find((entry) => {
-              const alias = resolveComponentAlias(entry.name, collected.imports)
-              // An imported usage matches its local binding. A written namespace
-              // member such as UI.Button is not that local name, so it matches
-              // only the exact configured name.
-              if (alias) return alias.local === site.component && site.importSource !== undefined
-              if (site.importSource !== undefined) return entry.name === site.component
-              return componentName(entry.name) === componentName(site.component)
-            })
+            const restriction =
+              restrictions.find((entry) =>
+                matchesRestrictedName(entry.name, site, collected.imports),
+              ) ??
+              importRestrictions.find((entry) =>
+                matchesRestrictedImport(entry, site, collected.imports),
+              )
             if (!restriction) continue
             const message =
               `<${site.component}> is restricted.` +

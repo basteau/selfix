@@ -43,8 +43,16 @@ export interface ComponentRestriction {
   replacement?: string
   message?: string
 }
+/** An exact authored import source and exported name, with optional correction guidance. */
+export interface ImportRestriction {
+  source: string
+  name: string
+  replacement?: string
+  message?: string
+}
 export interface RestrictedComponentOptions {
   components?: ComponentRestriction[]
+  imports?: ImportRestriction[]
 }
 /** File overrides preserve omitted options; supplied lists/maps replace as units. */
 export type RuleSetting<Options = RuleOptions> = Severity | [Severity, Options]
@@ -344,6 +352,20 @@ export function validateConfig(config: unknown): asserts config is Config {
   }
 }
 
+function validateRestrictionEntries(value: unknown, label: string, required: readonly string[]) {
+  if (!Array.isArray(value)) throw new Error(`${label} must be an array.`)
+  value.forEach((item, index) => {
+    const entryLabel = `${label}[${index}]`
+    const entry = record(item, entryLabel)
+    keys(entry, [...required, "replacement", "message"], entryLabel)
+    for (const key of [...required, "replacement", "message"]) {
+      if (!required.includes(key) && entry[key] === undefined) continue
+      if (typeof entry[key] !== "string" || !(entry[key] as string).trim())
+        throw new Error(`${entryLabel}.${key} must be a non-empty string.`)
+    }
+  })
+}
+
 function validateRules(value: unknown) {
   const rules = record(value, "rules")
   keys(rules, ruleNames, "rule")
@@ -355,21 +377,11 @@ function validateRules(value: unknown) {
       if (setting.length !== 2) throw new Error(`${name} must be [severity, options].`)
       if (name === "no-restricted-components") {
         const obj = record(setting[1], name)
-        keys(obj, ["components"], name)
-        if (obj.components !== undefined) {
-          if (!Array.isArray(obj.components))
-            throw new Error(`${name}.components must be an array.`)
-          obj.components.forEach((value, index) => {
-            const label = `${name}.components[${index}]`
-            const entry = record(value, label)
-            keys(entry, ["name", "replacement", "message"], label)
-            for (const key of ["name", "replacement", "message"]) {
-              if (key !== "name" && entry[key] === undefined) continue
-              if (typeof entry[key] !== "string" || !entry[key].trim())
-                throw new Error(`${label}.${key} must be a non-empty string.`)
-            }
-          })
-        }
+        keys(obj, ["components", "imports"], name)
+        if (obj.components !== undefined)
+          validateRestrictionEntries(obj.components, `${name}.components`, ["name"])
+        if (obj.imports !== undefined)
+          validateRestrictionEntries(obj.imports, `${name}.imports`, ["source", "name"])
       } else options(setting[1], name)
     }
   }
