@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.2.0
+
+Restrict a component by the module and export written in an import, including a local rename. Static `:is` bindings and single-member namespace tags use that same component identity. An unreadable component file still reports restyle findings and omits prop guidance.
+
+[compare changes](https://github.com/basteau/selfix/compare/v2.1.2...v2.2.0)
+
+### 🚀 Enhancements
+
+- **vue:** Recognize static dynamic and namespace components ([d29f5df](https://github.com/basteau/selfix/commit/d29f5df))
+- **rules:** Restrict components by import identity ([d0987a2](https://github.com/basteau/selfix/commit/d0987a2))
+
+### 🩹 Fixes
+
+- **project:** Omit prop guidance when a component cannot be parsed ([5e54562](https://github.com/basteau/selfix/commit/5e54562))
+
+### 🏡 Chore
+
+- **agents:** Move issue tracking to GitHub ([523767f](https://github.com/basteau/selfix/commit/523767f))
+
 ## v2.1.2
 
 [compare changes](https://github.com/basteau/selfix/compare/v2.1.1...v2.1.2)
