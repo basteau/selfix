@@ -83,6 +83,236 @@ import Base_Button from './underscore.vue';
     },
   )
   it.each([false, true])(
+    "applies a direct import's identity to a static component :is binding (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>
+import Button from './ui/Button.vue';
+import { Button as LegacyButton } from './legacy.vue';
+</script>
+<template>
+<Button class="p-4" />
+<component :is="Button" class="p-4" />
+<Component :is="LegacyButton" class="mt-2" />
+</template>`
+      const { descriptor } = parse(source)
+      const script = compileScript(descriptor, { id: "dynamic-is" })
+      const compiled = compileTemplate({
+        source: descriptor.template!.content,
+        filename: "dynamic-is.vue",
+        id: "dynamic-is",
+        compilerOptions: { bindingMetadata: script.bindings },
+      })
+      expect(compiled.errors).toEqual([])
+      expect(compiled.code).toContain("_resolveDynamicComponent($setup.Button)")
+      expect(compiled.code).toContain("_resolveDynamicComponent($setup.LegacyButton)")
+      const result = collectVue(source, "dynamic-is.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.usages.every((usage) => usage.unsupported === undefined)).toBe(true)
+      expect(
+        result.usages.map(({ component, importSource }) => ({ component, importSource })),
+      ).toEqual([
+        { component: "Button", importSource: "./ui/Button.vue" },
+        { component: "Button", importSource: "./ui/Button.vue" },
+        { component: "LegacyButton", importSource: "./legacy.vue" },
+      ])
+      expect(
+        result.sites.map(({ component, importSource, tokens, offset }) => ({
+          component,
+          importSource,
+          tokens,
+          offset,
+        })),
+      ).toEqual([
+        {
+          component: "Button",
+          importSource: "./ui/Button.vue",
+          tokens: ["p-4"],
+          offset: source.indexOf('class="p-4"'),
+        },
+        {
+          component: "Button",
+          importSource: "./ui/Button.vue",
+          tokens: ["p-4"],
+          offset: source.lastIndexOf('class="p-4"'),
+        },
+        {
+          component: "LegacyButton",
+          importSource: "./legacy.vue",
+          tokens: ["mt-2"],
+          offset: source.indexOf('class="mt-2"'),
+        },
+      ])
+    },
+  )
+  it.each([false, true])(
+    "preserves namespace import source on a static member tag (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>
+import * as UI from '@/components/ui/button';
+</script>
+<template>
+<UI.Button class="p-4" content-class="mt-2" />
+<component :is="UI.Button" class="p-4" />
+</template>`
+      const { descriptor } = parse(source)
+      const script = compileScript(descriptor, { id: "namespace" })
+      const compiled = compileTemplate({
+        source: descriptor.template!.content,
+        filename: "namespace.vue",
+        id: "namespace",
+        compilerOptions: { bindingMetadata: script.bindings },
+      })
+      expect(compiled.errors).toEqual([])
+      expect(compiled.code).toContain('$setup["UI"].Button')
+      expect(compiled.code).toContain("_resolveDynamicComponent($setup.UI.Button)")
+      const result = collectVue(source, "namespace.vue", {
+        forceCompileTemplateAst,
+        classProps: [{ pattern: "^UI\\.Button$", props: { contentClass: "class" } }],
+      })
+      expect(result.errors).toEqual([])
+      expect(result.usages.every((usage) => usage.unsupported === undefined)).toBe(true)
+      expect(
+        result.usages.map(({ component, importSource, offset }) => ({
+          component,
+          importSource,
+          offset,
+        })),
+      ).toEqual([
+        {
+          component: "UI.Button",
+          importSource: "@/components/ui/button",
+          offset: source.indexOf("<UI.Button"),
+        },
+        {
+          component: "UI.Button",
+          importSource: "@/components/ui/button",
+          offset: source.indexOf("<component"),
+        },
+      ])
+      expect(
+        result.sites.map(({ component, importSource, prop, tokens }) => ({
+          component,
+          importSource,
+          prop,
+          tokens,
+        })),
+      ).toEqual([
+        {
+          component: "UI.Button",
+          importSource: "@/components/ui/button",
+          prop: undefined,
+          tokens: ["p-4"],
+        },
+        {
+          component: "UI.Button",
+          importSource: "@/components/ui/button",
+          prop: "content-class",
+          tokens: ["mt-2"],
+        },
+        {
+          component: "UI.Button",
+          importSource: "@/components/ui/button",
+          prop: undefined,
+          tokens: ["p-4"],
+        },
+      ])
+    },
+  )
+  it.each([false, true])(
+    "keeps dotted namespace tags imported when a template scope reuses the namespace name (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>import * as UI from './ui'</script>
+<template>
+<div v-for="UI in items"><UI.Button class="p-4" /><component :is="UI.Button" class="mt-2" /></div>
+<List v-slot="{ UI }"><UI.Button class="p-4" /><component :is="UI.Button" class="gap-2" /></List>
+</template>`
+      const { descriptor } = parse(source)
+      const script = compileScript(descriptor, { id: "shadow-namespace" })
+      const compiled = compileTemplate({
+        source: descriptor.template!.content,
+        filename: "shadow-namespace.vue",
+        id: "shadow-namespace",
+        compilerOptions: { bindingMetadata: script.bindings },
+      })
+      expect(compiled.code).toContain('$setup["UI"].Button')
+      expect(compiled.code).toContain("_resolveDynamicComponent(UI.Button)")
+      const result = collectVue(source, "shadow-namespace.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(
+        result.usages.map(({ component, importSource, unsupported }) => ({
+          component,
+          importSource,
+          resolved: unsupported === undefined,
+        })),
+      ).toEqual([
+        { component: "UI.Button", importSource: "./ui", resolved: true },
+        { component: "component", importSource: undefined, resolved: false },
+        { component: "List", importSource: undefined, resolved: true },
+        { component: "UI.Button", importSource: "./ui", resolved: true },
+        { component: "component", importSource: undefined, resolved: false },
+      ])
+      expect(
+        result.sites.map(({ component, importSource, tokens }) => ({
+          component,
+          importSource,
+          tokens,
+        })),
+      ).toEqual([
+        { component: "UI.Button", importSource: "./ui", tokens: ["p-4"] },
+        { component: "component", importSource: undefined, tokens: ["mt-2"] },
+        { component: "UI.Button", importSource: "./ui", tokens: ["p-4"] },
+        { component: "component", importSource: undefined, tokens: ["gap-2"] },
+      ])
+    },
+  )
+  it.each([false, true])(
+    "does not invent identity for unresolved or shadowed component forms (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup lang="ts">
+import Button from './ui/Button.vue';
+import type { Panel } from './types';
+import type * as Types from './types';
+import * as UI from './ui';
+const Alias = Button;
+</script>
+<template>
+<component :is="button" class="p-4" />
+<component :is="Panel" />
+<component :is="Alias" />
+<component :is="'Button'" />
+<component :is="condition ? Button : Panel" />
+<component :is="(() => { throw new Error('never run') })()" class="p-4" />
+<div v-for="Button in items"><component :is="Button" /></div>
+<List v-slot="{ Button }"><component :is="Button" /></List>
+<Types.Button class="p-4" />
+<ui.Button class="p-4" />
+<UI.Button.Icon class="p-4" />
+<component :is="UI['Button']" />
+<div is="vue:Button" class="p-4" />
+<button class="p-4" />
+</template>`
+      const result = collectVue(source, "unresolved.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.usages.some((usage) => usage.importSource !== undefined)).toBe(false)
+      expect(result.sites.some((site) => site.importSource === "./ui/Button.vue")).toBe(false)
+      expect(result.sites.some((site) => site.component === "Button")).toBe(false)
+      for (const component of ["component", "Types.Button", "ui.Button", "UI.Button.Icon", "div"]) {
+        expect(
+          result.usages.filter((usage) => usage.component === component).length,
+        ).toBeGreaterThan(0)
+        expect(
+          result.usages
+            .filter((usage) => usage.component === component)
+            .every((usage) => usage.unsupported !== undefined),
+        ).toBe(true)
+      }
+      expect(result.sites.find((site) => site.component === "button")).toMatchObject({
+        tokens: ["p-4"],
+      })
+      expect(result.usages.find((usage) => usage.component === "List")?.unsupported).toBeUndefined()
+    },
+  )
+  it.each([false, true])(
     "keeps native and v-pre elements separate from imports (fallback: %s)",
     (forceCompileTemplateAst) => {
       const source = `<script setup>import Button from './ui/Button.vue'</script>

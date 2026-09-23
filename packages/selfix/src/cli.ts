@@ -198,7 +198,7 @@ export async function run(
           `If you intend to protect components from this import, add this exact import pattern to your config: ${suggestion}\n`,
         )
       io.out(
-        "Active protection describes the configured no-restyle policy; allowed classes depend on its contract. Definition discovery is separate: unavailable metadata does not disable protection. Dynamic/namespace components and wrapper tracing are unsupported; this report does not prove comprehensive coverage.\n",
+        "Active protection describes the configured no-restyle policy; allowed classes depend on its contract. Definition discovery is separate: unavailable metadata does not disable protection. Unresolved dynamic or namespace components and wrapper tracing are unsupported; this report does not prove comprehensive coverage.\n",
       )
       return reports.some((report) => report.issues.length) ? 1 : 0
     }

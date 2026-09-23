@@ -101,6 +101,77 @@ it("preserves restrictions for severity overrides and replaces or clears supplie
   ])
 })
 
+it("restricts a static :is import like the direct tag and still rejects unresolved forms", async () => {
+  const source = `<script setup>
+import CustomButton from 'kit'
+</script>
+<template>
+<component :is="CustomButton" />
+<component :is="choice" />
+</template>`
+  const linter = await createLinter({
+    css,
+    config: {
+      rules: {
+        "no-restricted-components": ["warn", { components: [{ name: "CustomButton" }] }],
+      },
+    },
+  })
+  expect(linter.lint(source, "Page.vue")).toEqual([
+    expect.objectContaining({
+      rule: "no-restricted-components",
+      severity: "warn",
+      component: "CustomButton",
+      offset: source.indexOf('<component :is="CustomButton"'),
+    }),
+    expect.objectContaining({
+      rule: "parse-error",
+      severity: "error",
+      component: "component",
+      offset: source.indexOf('<component :is="choice"'),
+      message: expect.stringContaining("component coverage is incomplete"),
+    }),
+  ])
+})
+
+it("restricts a namespace member by its written name", async () => {
+  const source = `<script setup>
+import * as UI from 'kit'
+import { Button } from 'other'
+</script>
+<template>
+<UI.Button />
+<component :is="UI.Button" />
+<Button />
+</template>`
+  const linter = await createLinter({
+    css,
+    config: {
+      rules: {
+        "no-restricted-components": ["error", { components: [{ name: "UI.Button" }] }],
+      },
+    },
+  })
+  expect(
+    linter.lint(source, "Page.vue").map(({ rule, component, offset }) => ({
+      rule,
+      component,
+      offset,
+    })),
+  ).toEqual([
+    {
+      rule: "no-restricted-components",
+      component: "UI.Button",
+      offset: source.indexOf("<UI.Button"),
+    },
+    {
+      rule: "no-restricted-components",
+      component: "UI.Button",
+      offset: source.indexOf('<component :is="UI.Button"'),
+    },
+  ])
+})
+
 it("reports unsupported coverage as errors even when restrictions are warnings", async () => {
   const source =
     '<template>\n<component :is="name"/><UI.Button/><div is="vue:CustomButton"/>\n</template>'

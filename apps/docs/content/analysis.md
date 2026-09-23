@@ -42,6 +42,8 @@ A clean result covers only selected files and enabled rules. Excluded files, unc
 
 selfix targets Vue SFC templates, not JSX/TSX or script-only class calls. It doesn't follow styles through wrappers. Configure wrapper recognition and [class props](configuration.md#configured-class-props) explicitly.
 
+Static `<component :is="Imported">` bindings and single-member namespace tags such as `<UI.Button>` use the resolved component described in [no-restricted-components](rules.md#no-restricted-components). Other dynamic expressions and `is="vue:…"` do not inherit an imported component's contract.
+
 Application expressions are never evaluated. **Configuration is executable:** use trusted `selfix.config.ts` files and Tailwind `@plugin` or `@config` modules. They run with Node's permissions.
 
 Unsupported input and failed theme loading produce failures, not clean results. See [Troubleshooting](troubleshooting.md) for recovery.

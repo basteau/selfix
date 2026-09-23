@@ -637,7 +637,7 @@ it.each([
   '<template src="./external.html"></template>',
   '<template lang="pug">Button</template>',
   '<template><component :is="(() => { throw new Error() })()" /></template>',
-  `<script setup>import * as UI from 'library'</script><template><UI.Button /></template>`,
+  `<script setup>import * as UI from 'library'</script><template><UI.Button.Icon /></template>`,
 ])("doctor exposes unsupported or invalid input: %s", async (source) => {
   const dir = await project()
   await writeFile(path.join(dir, "Page.vue"), source)
@@ -706,6 +706,30 @@ import Ignored from 'ignored'
   const suggestions = result.stdout.split("\n").filter((line) => line.startsWith("If you intend"))
   expect(suggestions).toHaveLength(1)
   expect(suggestions[0]).toContain('componentImports: ["^@acme/widget\\\\.v2$"]')
+})
+
+it("doctor recognizes a static imported :is binding", async () => {
+  const dir = await project()
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {css:'theme.css',components:['^Button$','^UI\\\\.Button$'],project:false}`,
+  )
+  await writeFile(
+    path.join(dir, "Page.vue"),
+    `<script setup>
+import Button from './Button.vue'
+import * as UI from '@/components/ui/button'
+</script><template><component :is="Button" class="p-4" /><UI.Button class="p-4" /></template>`,
+  )
+  const result = await invoke(["--doctor"], dir)
+  expect(result.code).toBe(0)
+  expect(result.stdout).toContain(
+    '<Button>: recognized by components "^Button$"; no-restyle: error; active protection: yes',
+  )
+  expect(result.stdout).toContain(
+    '<UI.Button>: recognized by components "^UI\\\\.Button$"; no-restyle: error; active protection: yes',
+  )
+  expect(result.stdout).not.toContain("component coverage is incomplete")
 })
 
 it.each(['<Component :is="value" />', '<div is="vue:Button" />'])(

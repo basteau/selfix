@@ -409,6 +409,114 @@ function collectBindingNames(
   }
 }
 
+const UNSUPPORTED_COMPONENT =
+  'Dynamic, namespace, and is="vue:…" components are not supported; component coverage is incomplete.'
+
+interface ResolvedComponent {
+  component: string
+  importSource?: string
+  unsupported?: string
+}
+
+function componentIdentity(node: ElementNode, context: TemplateContext): ResolvedComponent {
+  if (
+    node.props.some(
+      (prop) =>
+        prop.type === VueNode.Attribute &&
+        prop.name === "is" &&
+        prop.value?.content.startsWith("vue:"),
+    )
+  ) {
+    return { component: node.tag, unsupported: UNSUPPORTED_COMPONENT }
+  }
+  if (node.tag === "component" || node.tag === "Component") {
+    return (
+      resolveDynamicComponent(node, context) ?? {
+        component: node.tag,
+        unsupported: UNSUPPORTED_COMPONENT,
+      }
+    )
+  }
+  if (node.tag.includes(".")) {
+    return (
+      resolveNamespaceTag(node.tag, context) ?? {
+        component: node.tag,
+        unsupported: UNSUPPORTED_COMPONENT,
+      }
+    )
+  }
+  const alias = resolveComponentAlias(node.tag, context.aliases)
+  if (alias?.imported === "*") {
+    return {
+      component: alias.local,
+      importSource: alias.importSource,
+      unsupported: UNSUPPORTED_COMPONENT,
+    }
+  }
+  return {
+    component: alias?.local ?? node.tag,
+    ...(alias ? { importSource: alias.importSource } : {}),
+  }
+}
+
+function resolveDynamicComponent(
+  node: ElementNode,
+  context: TemplateContext,
+): ResolvedComponent | undefined {
+  const binding = node.props.find(
+    (prop): prop is DirectiveNode =>
+      prop.type === VueNode.Directive && isBoundAttribute(prop, "is"),
+  )
+  if (!binding) return undefined
+  const arg = binding.arg
+  const shorthand =
+    supportsSameNameBinding && arg?.type === VueNode.SimpleExpression ? arg.content : undefined
+  const content = expressionContent(binding.exp) ?? shorthand
+  if (!content) return undefined
+  let expression: ExpressionNode
+  try {
+    expression = parseExpression(content)
+  } catch {
+    return undefined
+  }
+  return staticComponentExpression(expression, context)
+}
+
+function resolveNamespaceTag(tag: string, context: TemplateContext): ResolvedComponent | undefined {
+  const match = /^([$A-Z_a-z][$\w]*)\.([$A-Z_a-z][$\w]*)$/u.exec(tag)
+  if (!match) return undefined
+  const alias = context.aliases.get(match[1])
+  if (alias?.imported !== "*") return undefined
+  return { component: tag, importSource: alias.importSource }
+}
+
+function staticComponentExpression(
+  expression: ExpressionNode,
+  context: TemplateContext,
+): ResolvedComponent | undefined {
+  if (expression.type === "Identifier") {
+    if (context.shadowed.has(expression.name)) return undefined
+    const alias = context.aliases.get(expression.name)
+    if (!alias || alias.imported === "*") return undefined
+    return { component: alias.local, importSource: alias.importSource }
+  }
+  if (
+    expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.object.type === "Identifier" &&
+    expression.property.type === "Identifier"
+  ) {
+    if (context.shadowed.has(expression.object.name)) return undefined
+    const alias = context.aliases.get(expression.object.name)
+    if (alias?.imported !== "*") return undefined
+    return {
+      component: `${expression.object.name}.${expression.property.name}`,
+      importSource: alias.importSource,
+    }
+  }
+  return undefined
+}
+
 function collectElement(
   node: ElementNode,
   context: TemplateContext,
@@ -417,28 +525,15 @@ function collectElement(
 ): void {
   // Vue classifies native tags and literal v-pre content as elements, not components.
   const isComponent = node.tagType === 1
-  const alias = isComponent ? resolveComponentAlias(node.tag, context.aliases) : undefined
-  const component = alias?.local ?? (isComponent ? node.tag : node.tag.toLowerCase())
-  const importSource = alias?.importSource
-  if (isComponent) {
-    const unsupported =
-      node.tag === "component" ||
-      node.tag === "Component" ||
-      node.tag.includes(".") ||
-      alias?.imported === "*" ||
-      node.props.some(
-        (prop) =>
-          prop.type === VueNode.Attribute &&
-          prop.name === "is" &&
-          prop.value?.content.startsWith("vue:"),
-      )
-        ? 'Dynamic, namespace, and is="vue:…" components are not supported; component coverage is incomplete.'
-        : undefined
+  const identity = isComponent ? componentIdentity(node, context) : undefined
+  const component = identity?.component ?? node.tag.toLowerCase()
+  const importSource = identity?.importSource
+  if (identity) {
     context.usages.push({
       component,
       importSource,
       offset: context.offset + node.loc.start.offset,
-      ...(unsupported ? { unsupported } : {}),
+      ...(identity.unsupported ? { unsupported: identity.unsupported } : {}),
     })
   }
 

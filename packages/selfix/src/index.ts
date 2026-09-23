@@ -367,8 +367,11 @@ export async function createLinter(options: LinterOptions) {
             }
             const restriction = restrictions.find((entry) => {
               const alias = resolveComponentAlias(entry.name, collected.imports)
-              if (alias || site.importSource !== undefined)
-                return alias?.local === site.component && site.importSource !== undefined
+              // An imported usage matches its local binding. A written namespace
+              // member such as UI.Button is not that local name, so it matches
+              // only the exact configured name.
+              if (alias) return alias.local === site.component && site.importSource !== undefined
+              if (site.importSource !== undefined) return entry.name === site.component
               return componentName(entry.name) === componentName(site.component)
             })
             if (!restriction) continue

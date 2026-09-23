@@ -212,6 +212,71 @@ import type { WholeType } from '@/components/ui/types';
       },
     ])
   })
+
+  it("applies direct-tag restyle policy to static :is bindings and namespace members", async () => {
+    const source = `<script setup>
+import { Button } from '@/components/ui/button'
+import * as UI from '@/components/ui/button'
+</script>
+<template>
+<Button class="p-4" content-class="p-4" />
+<component :is="Button" class="p-4" content-class="p-4" />
+<UI.Button class="p-4" content-class="p-4" />
+<component :is="choice" class="p-4" />
+</template>`
+    const linter = await createLinter({
+      css,
+      config: {
+        classProps: [{ pattern: "^Button$", props: { contentClass: "class" } }],
+        rules: only("no-restyle"),
+      },
+    })
+    expect(
+      linter.lint(source, "dynamic.vue").map(({ rule, component, className, prop, offset }) => ({
+        rule,
+        component,
+        className,
+        prop,
+        offset,
+      })),
+    ).toEqual([
+      {
+        rule: "no-restyle",
+        component: "Button",
+        className: "p-4",
+        prop: undefined,
+        offset: source.indexOf('class="p-4"'),
+      },
+      {
+        rule: "no-restyle",
+        component: "Button",
+        className: "p-4",
+        prop: "content-class",
+        offset: source.indexOf('content-class="p-4"'),
+      },
+      {
+        rule: "no-restyle",
+        component: "Button",
+        className: "p-4",
+        prop: undefined,
+        offset: source.indexOf('class="p-4"', source.indexOf(":is")),
+      },
+      {
+        rule: "no-restyle",
+        component: "Button",
+        className: "p-4",
+        prop: "content-class",
+        offset: source.indexOf('content-class="p-4"', source.indexOf(":is")),
+      },
+      {
+        rule: "no-restyle",
+        component: "UI.Button",
+        className: "p-4",
+        prop: undefined,
+        offset: source.indexOf('class="p-4"', source.indexOf("<UI.Button")),
+      },
+    ])
+  })
   it("prepares policy regexes before linting and reuses them across files", async () => {
     const patterns: string[] = []
     vi.stubGlobal(
