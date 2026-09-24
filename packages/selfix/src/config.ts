@@ -66,6 +66,12 @@ export interface FileOverride {
   files: string[]
   rules: Rules
 }
+/** An exact import identifying a helper with clsx-style class arguments. */
+export interface ClassHelper {
+  from: string
+  /** Exported name, or "default" for a default import. */
+  import: string
+}
 export interface ClassProps {
   /** Regular expression matching the collected component name. First match wins. */
   pattern: string
@@ -96,6 +102,8 @@ export interface Config {
   project?: ProjectOptions | false
   /** Additional props containing classes, scoped by component name. */
   classProps?: ClassProps[]
+  /** Additional imported class helpers; built-in recognition remains enabled. */
+  classHelpers?: ClassHelper[]
   /** CSS entry relative to the configuration file. Required by the CLI. */
   css?: string
   /** Exact CSS imports mapped to local files, relative to the config directory (API: root). */
@@ -234,6 +242,7 @@ export function validateConfig(config: unknown): asserts config is Config {
       "css",
       "project",
       "classProps",
+      "classHelpers",
       "cssAliases",
       "ui",
       "componentImports",
@@ -288,6 +297,18 @@ export function validateConfig(config: unknown): asserts config is Config {
   for (const key of ["css", "note"])
     if (obj[key] !== undefined && typeof obj[key] !== "string")
       throw new Error(`${key} must be a string.`)
+  if (obj.classHelpers !== undefined) {
+    if (!Array.isArray(obj.classHelpers)) throw new Error("classHelpers must be an array.")
+    obj.classHelpers.forEach((value, index) => {
+      const label = `classHelpers[${index}]`
+      const entry = record(value, label)
+      keys(entry, ["from", "import"], label)
+      for (const key of ["from", "import"]) {
+        if (typeof entry[key] !== "string" || !entry[key].trim())
+          throw new Error(`${label}.${key} must be a non-empty string.`)
+      }
+    })
+  }
   if (obj.classProps !== undefined) {
     if (!Array.isArray(obj.classProps)) throw new Error("classProps must be an array.")
     obj.classProps.forEach((value, index) => {

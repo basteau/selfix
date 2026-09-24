@@ -21,6 +21,7 @@ export type {
   RestrictedComponentOptions,
   Rules,
   ClassProps,
+  ClassHelper,
   FileOverride,
   ProjectOptions,
   Config,
@@ -286,7 +287,10 @@ export async function createLinter(options: LinterOptions) {
 
   return {
     doctor(source: string, filename: string) {
-      const collected = collectVue(source, filename, { classProps: config.classProps })
+      const collected = collectVue(source, filename, {
+        classProps: config.classProps,
+        classHelpers: config.classHelpers,
+      })
       const positionAt = sourcePositions(source)
       const severity = effectiveSettings(filename).find(
         (setting) => setting.name === "no-restyle",
@@ -337,7 +341,10 @@ export async function createLinter(options: LinterOptions) {
       return { usages, issues: issues.sort((a, b) => a.offset - b.offset) }
     },
     lint(source: string, filename = "component.vue"): Diagnostic[] {
-      const collected = collectVue(source, filename, { classProps: config.classProps })
+      const collected = collectVue(source, filename, {
+        classProps: config.classProps,
+        classHelpers: config.classHelpers,
+      })
       const diagnostics: Diagnostic[] = []
       let positionAt: ReturnType<typeof sourcePositions> | undefined
       const emit = (

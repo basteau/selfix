@@ -20,7 +20,7 @@ Constructed strings such as `` `mt-${size}` ``, imported values, and computed ke
 
 ### Helpers and scope
 
-`cn`, `clsx`, and `twMerge` arguments use the same class-expression rules. These local names are fixed; renamed imports and other helpers aren't recognized. Local variables, loops, and slot bindings can shadow helpers or constants.
+`cn`, `clsx`, and `twMerge` arguments use the same class-expression rules. Aliased named/default imports from `clsx` and named `twMerge` imports from `tailwind-merge` are also recognized. Add custom imported helpers with [`classHelpers`](configuration.md#class-helpers). Local variables, loops, and slot bindings can shadow helpers or constants. Namespace calls, local function aliases, and variant factories (`cva`/`tv`) remain unsupported; helper bodies are never executed.
 
 Helpers aren't executed, and selfix doesn't simulate how they merge classes.
 

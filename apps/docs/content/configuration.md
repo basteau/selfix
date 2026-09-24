@@ -148,6 +148,23 @@ All matching overrides apply in order. Severity changes only severity; options u
 
 Exclusions skip whole files and cannot be undone by overrides. There are no inline suppressions. Parse and loading failures cannot be disabled.
 
+## Class helpers
+
+Built-in helper recognition supports aliased named/default imports from `clsx` and the named `twMerge` export from `tailwind-merge`. Add other helpers explicitly:
+
+```ts
+classHelpers: [
+  { from: "@/lib/utils", import: "cn" },
+  { from: "my-classes", import: "default" },
+],
+```
+
+Entries match the exact authored import source and exported name, not the local alias. For example, `import { cn as classes } from "@/lib/utils"` enables `classes('flex')`. No module is loaded or followed. Entries add to built-ins; `[]` does not disable them.
+
+Only configure helpers whose arguments follow [clsx-style class-expression rules](analysis.md#vue-class-bindings). selfix inspects possible class arguments, not runtime merging or the helper body. Unshadowed legacy names `cn`, `clsx`, and `twMerge` remain recognized regardless of import source for compatibility.
+
+Local declarations, loop bindings, and slot bindings still shadow helpers. Namespace calls, type-only imports, local function aliases, and unconfigured calls are not newly recognized. Variant factories such as `cva` and `tv` are not class-merging helpers: do not configure them here. Their definition objects and returned functions remain outside this analysis.
+
 ## Configured class props
 
 Add `classProps` to inspect classes passed through component props:
@@ -224,6 +241,7 @@ Missing explicit mappings, malformed metadata, and invalid resolved components f
 | `ignoreImports`    | `[]`. Imports excluded from recognition.                                                 |
 | `rules`            | All seven rules at `"error"`; component restrictions default to empty lists.             |
 | `overrides`        | `[]`. Per-file rule settings.                                                            |
+| `classHelpers`     | `[]`. Additional exact imported helpers, alongside built-in recognition.                 |
 | `classProps`       | `[]`. Additional props containing classes.                                               |
 | `cssAliases`       | `{}`. Exact CSS import mappings.                                                         |
 | `exclude`          | `[]`. CLI-only whole-file exclusions; see [file selection](cli.md#discovery-and-output). |

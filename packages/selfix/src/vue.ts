@@ -1,6 +1,6 @@
 import { createRequire } from "node:module"
 import type * as VueCompilerSfc from "vue/compiler-sfc"
-import { normalizePropName, type ClassProps } from "./config.js"
+import { normalizePropName, type ClassProps, type ClassHelper } from "./config.js"
 
 const require = createRequire(import.meta.url)
 const { version: vueVersion } = require("vue/package.json") as { version: string }
@@ -110,6 +110,7 @@ interface TemplateContext {
 interface CollectVueOptions {
   forceCompileTemplateAst?: boolean
   classProps?: ClassProps[]
+  classHelpers?: ClassHelper[]
 }
 
 // Vue introduced same-name v-bind shorthand in 3.4. Older compilers must
@@ -215,7 +216,7 @@ export function collectVue(
       })),
       aliases,
       bindings,
-      helpers: collectClassHelpers([script, setup]),
+      helpers: collectClassHelpers([script, setup], options.classHelpers),
       shadowed: new Set(),
       errors,
       offset: templateAst ? 0 : template.loc.start.offset,
@@ -917,8 +918,38 @@ function collectCallExpression(node: CallExpressionNode, context: TemplateContex
   )
 }
 
-function collectClassHelpers(programs: (ProgramNode | undefined)[]): ReadonlySet<string> {
+function collectClassHelpers(
+  programs: (ProgramNode | undefined)[],
+  configured: ClassHelper[] = [],
+): ReadonlySet<string> {
   const helpers = new Set(CLASS_HELPERS)
+  const imports = [
+    { from: "clsx", import: "default" },
+    { from: "clsx", import: "clsx" },
+    { from: "tailwind-merge", import: "twMerge" },
+    ...configured,
+  ]
+  for (const program of programs) {
+    for (const statement of program?.body ?? []) {
+      if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue
+      for (const specifier of statement.specifiers) {
+        if (specifier.type === "ImportNamespaceSpecifier") continue
+        if (specifier.type === "ImportSpecifier" && specifier.importKind === "type") continue
+        const imported =
+          specifier.type === "ImportDefaultSpecifier"
+            ? "default"
+            : specifier.imported.type === "Identifier"
+              ? specifier.imported.name
+              : specifier.imported.value
+        if (
+          imports.some(
+            (entry) => entry.from === statement.source.value && entry.import === imported,
+          )
+        )
+          helpers.add(specifier.local.name)
+      }
+    }
+  }
   const visit = (statement: StatementNode, topLevel = false): void => {
     switch (statement.type) {
       case "ExportNamedDeclaration":
