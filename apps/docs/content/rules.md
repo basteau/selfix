@@ -156,6 +156,10 @@ Catch class names that your loaded theme doesn't define.
 <div class="bg-primary" />
 ```
 
+For a unique close spelling match, selfix suggests a complete replacement such as `flex-cols` → `flex-col` or `hovr:flex` → `hover:flex`. Candidates come from the loaded Tailwind compiler's utility and variant vocabulary, including theme completions and custom utilities/variants. Each complete replacement must compile and pass all applicable enabled class rules, including component contracts and file overrides. Rules set to `warn` still constrain suggestions.
+
+Matching allows one insertion, deletion, substitution, or adjacent transposition in one utility or variant. Prefixes, negative signs, important markers, and slash modifiers are preserved. Ties among permitted candidates produce no suggestion. Tokens containing arbitrary syntax or escaped identifiers, missing/incorrect prefixes, multiple spelling mistakes, and names absent from compiler completions may receive no suggestion. selfix does not approximate colors, convert arbitrary values to theme scales, or edit your files. Existing findings remain even when there is no suggestion.
+
 Check the spelling first. If the class exists in another stylesheet, make sure your configured CSS entry imports it. See [Themes](themes.md).
 
 Tailwind markers such as `group`, `peer`, `dark`, and `group/card` are accepted. Loaded custom classes are accepted too, but don't automatically gain Tailwind variants such as `hover:notice`.

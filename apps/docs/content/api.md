@@ -63,6 +63,8 @@ A diagnostic is one reported finding. API and JSON consumers receive these field
 | `line`, `column` | One-based position in the original file.  |
 | `offset`         | Zero-based JavaScript string position.    |
 
-Optional fields are `component`, `className`, `prop`, `slot`, and `definition`. Class findings point to their containing attribute or binding. Findings within a file sort by offset, then rule name.
+Optional fields are `component`, `className`, `prop`, `slot`, `definition`, and `suggestions`. Class findings point to their containing attribute or binding. Findings within a file sort by offset, then rule name.
+
+`suggestions`, when present, is an array of complete replacement class strings. Spelling guidance currently contains at most one compiler-validated, policy-permitted replacement. The field is omitted when no unambiguous correction is available. It is advisory: there are no edit ranges or automatic source changes. The JSON output includes this field; text output appends `Did you mean "flex-col"?` while the API `message` stays unchanged, including custom messages.
 
 `definition` contains an absolute component `file` and optional `props.size` and `props.variant` string arrays. These come from [source discovery](configuration.md#component-source-discovery); they provide guidance without validating prop values.

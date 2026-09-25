@@ -211,7 +211,7 @@ export async function run(
     else {
       for (const item of diagnostics)
         io.out(
-          `${path.relative(cwd, item.file)}:${item.line}:${item.column} ${item.severity} ${item.rule} ${item.message}\n`,
+          `${path.relative(cwd, item.file)}:${item.line}:${item.column} ${item.severity} ${item.rule} ${item.message}${item.suggestions?.length ? ` Did you mean ${item.suggestions.map((suggestion) => JSON.stringify(suggestion)).join(" or ")}?` : ""}\n`,
         )
       io.out(
         `Checked ${files.size} Vue file${files.size === 1 ? "" : "s"}: ${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}.\n`,

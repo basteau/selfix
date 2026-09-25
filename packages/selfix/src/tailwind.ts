@@ -16,6 +16,8 @@ type InspectResult = {
 }
 
 type DesignSystem = {
+  getClassList(): [string, unknown][]
+  getVariants(): { name: string; values: string[]; hasDash: boolean }[]
   theme: {
     prefix: string | null
     entries(): Iterable<[string, { options: number }]>
@@ -111,6 +113,7 @@ export async function createTailwind(
   cssAliases: Record<string, string> = {},
 ): Promise<{
   inspect(token: string): InspectResult
+  suggest(token: string): string[]
   colors: string[]
 }> {
   const loadedStylesheets: string[] = []
@@ -213,8 +216,44 @@ export async function createTailwind(
   const customClasses = collectCustomClasses(chunks, inspectGenerated)
   const cache = new Map<string, InspectResult>()
 
+  let vocabulary: string[] | undefined
+  let variants: string[] | undefined
   return {
     colors,
+    suggest(token: string): string[] {
+      // Keep arbitrary syntax and escaped identifiers opaque to spelling matching.
+      if (/[[\]()\\]/.test(token) || designSystem.candidatesToCss([token])[0]) return []
+      vocabulary ??= designSystem.getClassList().map(([name]) => name)
+      variants ??= designSystem
+        .getVariants()
+        .flatMap(({ name, values, hasDash }) => [
+          name,
+          ...values.map((value) => `${name}${hasDash ? "-" : ""}${value}`),
+        ])
+      const parts = token.split(":")
+      const prefix = designSystem.theme.prefix
+      if (prefix && parts[0] !== prefix) return []
+      const candidates = new Set<string>()
+      for (let index = prefix ? 1 : 0; index < parts.length; index++) {
+        const utility = index === parts.length - 1
+        const part = parts[index]
+        const leading = utility && part.startsWith("!") ? "!" : ""
+        const trailing = utility && part.endsWith("!") ? "!" : ""
+        const bare = part.slice(leading.length, trailing ? -1 : undefined)
+        const slash = bare.indexOf("/")
+        const stem = slash === -1 ? bare : bare.slice(0, slash)
+        const modifier = slash === -1 ? "" : bare.slice(slash)
+        for (const name of utility ? vocabulary : variants) {
+          if (utility && name.startsWith("-") !== stem.startsWith("-")) continue
+          if (!oneEditApart(stem, name)) continue
+          const replacement = [...parts]
+          replacement[index] = `${leading}${name}${modifier}${trailing}`
+          const candidate = replacement.join(":")
+          if (designSystem.candidatesToCss([candidate])[0]) candidates.add(candidate)
+        }
+      }
+      return [...candidates].sort()
+    },
     inspect(token: string): InspectResult {
       const cached = cache.get(token)
       if (cached) return cached
@@ -226,6 +265,21 @@ export async function createTailwind(
   }
 }
 
+// A single insertion, deletion, substitution, or adjacent transposition.
+function oneEditApart(left: string, right: string): boolean {
+  if (left === right || Math.abs(left.length - right.length) > 1) return false
+  let index = 0
+  while (left[index] === right[index]) index++
+  if (left.length < right.length) return left.slice(index) === right.slice(index + 1)
+  if (left.length > right.length) return left.slice(index + 1) === right.slice(index)
+  return (
+    left.slice(index + 1) === right.slice(index + 1) ||
+    (left[index] === right[index + 1] &&
+      left[index + 1] === right[index] &&
+      left.slice(index + 2) === right.slice(index + 2))
+  )
+}
+
 async function loadDesignSystem(css: string, options: LoadOptions): Promise<DesignSystem> {
   const api = __unstable__loadDesignSystem as unknown as (
     css: string,
@@ -234,12 +288,14 @@ async function loadDesignSystem(css: string, options: LoadOptions): Promise<Desi
   const designSystem = await api(css, options)
 
   if (
+    typeof designSystem.getClassList !== "function" ||
+    typeof designSystem.getVariants !== "function" ||
     typeof designSystem.candidatesToCss !== "function" ||
     typeof designSystem.theme?.entries !== "function" ||
     typeof designSystem.parseCandidate !== "function"
   ) {
     throw new Error(
-      "Tailwind CSS design-system API is missing candidatesToCss, theme.entries, or parseCandidate; selfix requires Tailwind CSS 4's compiler inspection API.",
+      "Tailwind CSS design-system API is missing getClassList, getVariants, candidatesToCss, theme.entries, or parseCandidate; selfix requires Tailwind CSS 4's compiler inspection API.",
     )
   }
 

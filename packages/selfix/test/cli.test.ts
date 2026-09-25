@@ -36,6 +36,25 @@ async function invoke(args: string[], dir: string) {
 }
 
 describe("CLI", () => {
+  it("prints advisory spelling suggestions in text and JSON without changing files", async () => {
+    const dir = await project()
+    const source = '<template><div class="flex-cols" /></template>'
+    const file = path.join(dir, "Example.vue")
+    await writeFile(file, source)
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      `export default { css: 'theme.css', rules: { 'no-unknown-classes': ['error', {message: 'Custom guidance'}] } }`,
+    )
+    const json = await invoke(["--format", "json", "Example.vue"], dir)
+    expect(json.code).toBe(1)
+    expect(JSON.parse(json.stdout)).toEqual([
+      expect.objectContaining({ message: "Custom guidance", suggestions: ["flex-col"] }),
+    ])
+    const text = await invoke(["Example.vue"], dir)
+    expect(text.code).toBe(1)
+    expect(text.stdout).toContain('Custom guidance Did you mean "flex-col"?')
+    expect(await readFile(file, "utf8")).toBe(source)
+  })
   it("deduplicates overlapping selections and preserves explicit versus nested symlinks", async () => {
     const dir = await project()
     await mkdir(path.join(dir, "src"))

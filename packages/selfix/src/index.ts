@@ -37,6 +37,7 @@ export type { ComponentDefinition, ComponentProps } from "./project.js"
 export type { Category } from "./tailwind.js"
 
 export interface Diagnostic {
+  suggestions?: string[]
   definition?: ComponentDefinition
   file: string
   rule: RuleName | "parse-error"
@@ -354,7 +355,7 @@ export async function createLinter(options: LinterOptions) {
         message: string,
         component?: string,
         className?: string,
-        location: Pick<Diagnostic, "prop" | "slot" | "definition"> = {},
+        location: Pick<Diagnostic, "prop" | "slot" | "definition" | "suggestions"> = {},
       ) => {
         positionAt ??= sourcePositions(source)
         diagnostics.push({
@@ -422,6 +423,7 @@ export async function createLinter(options: LinterOptions) {
           fallback: string,
           token = "",
           category: Category = "unknown",
+          suggestions: string[] = [],
         ) => {
           const custom =
             typeof selected.message === "string"
@@ -467,6 +469,7 @@ export async function createLinter(options: LinterOptions) {
             site.component,
             token || undefined,
             {
+              ...(suggestions.length ? { suggestions } : {}),
               ...(definition ? { definition: structuredClone(definition) } : {}),
               ...(site.prop === undefined ? {} : { prop: site.prop }),
               ...(site.slot === undefined ? {} : { slot: site.slot }),
@@ -550,14 +553,40 @@ export async function createLinter(options: LinterOptions) {
                 token,
                 category,
               )
-            if (name === "no-unknown-classes" && !info.known)
+            if (name === "no-unknown-classes" && !info.known) {
+              const candidates = tailwind.suggest(token).filter((candidate) => {
+                const replacement = tailwind.inspect(candidate)
+                return effective.every(({ name: rule, severity, policy }) => {
+                  if (
+                    severity === "off" ||
+                    rule === "no-inline-styles" ||
+                    rule === "require-static-classes" ||
+                    rule === "no-restricted-components"
+                  )
+                    return true
+                  if (rule === "no-restyle" && !recognition(site).recognized) return true
+                  const selected = policy(site.component)
+                  if (matches(selected.deny, candidate, replacement.categories)) return false
+                  if (rule === "no-restyle")
+                    return replacement.categories.every((category) =>
+                      matches(selected.allow, candidate, [category]),
+                    )
+                  if (matches(selected.allow, candidate, replacement.categories)) return true
+                  if (rule === "no-raw-colors") return !replacement.rawColor
+                  if (rule === "no-arbitrary-values")
+                    return !/[-/]\[|^\[[^\]]+:/.test(baseClass(candidate))
+                  return replacement.known
+                })
+              })
               report(
                 site,
                 selected,
                 `Tailwind cannot generate "${token}". Check the spelling and the configured CSS theme.`,
                 token,
                 category,
+                candidates.length === 1 ? candidates : [],
               )
+            }
           }
         }
       }
