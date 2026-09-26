@@ -23,7 +23,7 @@ test("copy controls work after returning from docs and recover from clipboard fa
       addEventListener: (_name: string, handler: typeof initialize) => {
         initialize = handler
       },
-      querySelectorAll: () => [button],
+      querySelectorAll: (selector: string) => (selector === "[data-copy]" ? [button] : []),
       getElementById: (id: string) =>
         id === "copy-status" ? status : { textContent: "pnpm add -D selfix" },
     },
@@ -51,4 +51,81 @@ test("copy controls work after returning from docs and recover from clipboard fa
   reject = false
   await click()
   expect(button.textContent).toBe("Copied")
+})
+
+test("example tabs switch panels with clicks and arrow keys", () => {
+  let initialize = () => {}
+  const handlers = new Map<string, Map<string, (event?: unknown) => void>>()
+  const panels = new Map(
+    ["a", "b", "c"].map((id) => {
+      const classes = new Set<string>()
+      return [
+        id,
+        {
+          classes,
+          attributes: new Map<string, string>(),
+          setAttribute(name: string, value: string) {
+            this.attributes.set(name, value)
+          },
+          classList: {
+            toggle: (name: string, on: boolean) => (on ? classes.add(name) : classes.delete(name)),
+          },
+        },
+      ]
+    }),
+  )
+  const tabs = ["a", "b", "c"].map((id, index) => {
+    const attributes = new Map([
+      ["aria-controls", id],
+      ["aria-selected", String(index === 0)],
+    ])
+    handlers.set(id, new Map())
+    return {
+      id,
+      tabIndex: 0,
+      focused: false,
+      getAttribute: (name: string) => attributes.get(name),
+      setAttribute: (name: string, value: string) => attributes.set(name, value),
+      addEventListener: (name: string, handler: (event?: unknown) => void) =>
+        handlers.get(id)!.set(name, handler),
+      focus() {
+        this.focused = true
+      },
+    }
+  })
+  const classes = new Set<string>()
+  const list = {
+    hidden: true,
+    querySelectorAll: () => tabs,
+    parentElement: { classList: { add: (name: string) => classes.add(name) } },
+  }
+  runInNewContext(script, {
+    document: {
+      addEventListener: (_name: string, handler: typeof initialize) => {
+        initialize = handler
+      },
+      querySelectorAll: (selector: string) => (selector === "[data-tabs]" ? [list] : []),
+      getElementById: (id: string) => panels.get(id),
+    },
+  })
+  initialize()
+  const visible = () =>
+    [...panels].filter(([, panel]) => !panel.classes.has("is-inactive")).map(([id]) => id)
+  expect(list.hidden).toBe(false)
+  expect(classes.has("has-tabs")).toBe(true)
+  expect(visible()).toEqual(["a"])
+  expect(panels.get("b")?.attributes.get("role")).toBe("tabpanel")
+  handlers.get("c")!.get("click")!()
+  expect(visible()).toEqual(["c"])
+  expect(tabs.map((tab) => tab.tabIndex)).toEqual([-1, -1, 0])
+  let prevented = false
+  handlers.get("c")!.get("keydown")!({
+    key: "ArrowRight",
+    preventDefault: () => (prevented = true),
+  })
+  expect(prevented).toBe(true)
+  expect(visible()).toEqual(["a"])
+  expect(tabs[0]?.focused).toBe(true)
+  handlers.get("a")!.get("keydown")!({ key: "End", preventDefault() {} })
+  expect(visible()).toEqual(["c"])
 })

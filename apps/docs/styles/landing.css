@@ -137,13 +137,71 @@
   font-size: 12px;
 }
 .example {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
   text-align: left;
   border: 1px solid var(--blume-border);
   border-radius: 10px;
   overflow: hidden;
   background: var(--blume-code-background);
+}
+.example-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--blume-border);
+  background: var(--blume-background);
+}
+.landing .example-tabs button {
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--blume-muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+.landing .example-tabs [aria-selected="true"] {
+  border-color: var(--blume-border);
+  background: var(--blume-code-background);
+  color: var(--blume-foreground);
+}
+.example-panel {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+}
+.example-panel + .example-panel {
+  border-top: 1px solid var(--blume-border);
+}
+.landing .example-heading {
+  grid-column: 1 / -1;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--blume-border);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* Stack tab panels in one cell so the figure keeps the tallest panel's height. */
+.example.has-tabs {
+  display: grid;
+}
+.has-tabs > .example-panel {
+  grid-area: 2 / 1;
+  border-top: 0;
+}
+.has-tabs > .is-inactive {
+  visibility: hidden;
+}
+.has-tabs > figcaption {
+  grid-row: 3;
+}
+.has-tabs .example-heading {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .example-source,
 .example-result,
@@ -217,7 +275,6 @@
   font-weight: 500;
 }
 .example figcaption {
-  grid-column: 1 / -1;
   border-top: 1px solid var(--blume-border);
   padding: 16px 24px;
   color: var(--blume-muted-foreground);
@@ -425,6 +482,9 @@
     background: var(--blume-foreground);
     color: var(--blume-background);
   }
+  .landing .example-tabs button:hover {
+    color: var(--blume-foreground);
+  }
   .landing button[data-copy]:hover {
     color: var(--blume-foreground);
   }
@@ -438,7 +498,7 @@
   .hero {
     padding: 64px 24px 32px;
   }
-  .example {
+  .example-panel {
     grid-template-columns: 1fr;
   }
   .example-source {

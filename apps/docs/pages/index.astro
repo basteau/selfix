@@ -3,6 +3,23 @@ import PageLayout from "blume/components/layout/PageLayout.astro"
 import data from "blume:data"
 import SetupPanel from "../components/SetupPanel.astro"
 import "../styles/landing.css"
+import { examples, type LandingExample } from "../landing-examples"
+
+const escape = (text: string) =>
+  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+// Mark the reported class and dim the SFC block tags around the template.
+function highlight({ source, token }: LandingExample) {
+  return source
+    .split("\n")
+    .map((line) => {
+      const html = escape(line)
+      if (/^<\/?(script|template)\b/.test(line)) return `<span class="code-muted">${html}</span>`
+      return html
+        .replace(/(from )(".*")/, '$1<span class="code-string">$2</span>')
+        .replace(escape(token), `<mark>${escape(token)}</mark>`)
+    })
+    .join("\n")
+}
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, "")
 const docs = `${base}/docs`
@@ -35,17 +52,23 @@ const rules = [
       <div class="hero-actions"><a class="action primary" href={`${docs}/getting-started`}>Get started <span aria-hidden="true">→</span></a><a class="action" href="https://github.com/basteau/selfix">View on GitHub <span aria-hidden="true">↗</span></a></div>
       <p class="install"><span aria-hidden="true">$</span> <code id="install-command">pnpm add -D selfix</code><button type="button" data-copy="install-command" aria-label="Copy install command" hidden>Copy</button></p>
       <p class="requirements">Works with Vue 3, Tailwind CSS 4, and Node.js 22.18 or later.</p>
-      <figure class="example" aria-label="A styling override and its correction">
-        <div class="example-source">
-          <div class="panel-heading"><span>src/Example.vue</span><span class="file-type">Vue</span></div>
-          <pre tabindex="0" aria-label="Source example"><code><span class="code-muted">&lt;script setup lang="ts"&gt;</span>{'\n'}import Button from <span class="code-string">"./components/ui/Button.vue"</span>{'\n'}<span class="code-muted">&lt;/script&gt;</span>{'\n\n'}<span class="code-muted">&lt;template&gt;</span>{'\n'}{'  '}&lt;Button class=<mark>"p-4"</mark>&gt;Save&lt;/Button&gt;{'\n'}<span class="code-muted">&lt;/template&gt;</span></code></pre>
-        </div>
-        <div class="example-result">
-          <div class="panel-heading"><span>selfix src</span><span class="diagnostic-label">1 error</span></div>
-          <div class="diagnostic"><p class="code-muted">src/Example.vue:6:11</p><p><strong>no-restyle</strong></p><p><code>"p-4" is not allowed on &lt;Button&gt;</code></p><p class="diagnostic-help">The component owns its padding.<br />The page can still control its placement.</p></div>
-          <div class="correction"><span class="correction-label">✓ Allowed layout</span><code>&lt;Button class="mt-4 w-full"&gt;</code></div>
-        </div>
-        <figcaption>Findings point to the original Vue file. You make the correction; selfix checks it.</figcaption>
+      <figure class="example" aria-labelledby="example-caption">
+        <div class="example-tabs" role="tablist" aria-label="Example findings" data-tabs hidden>{examples.map((example, index) => <button type="button" role="tab" id={`example-tab-${example.id}`} aria-controls={`example-${example.id}`} aria-selected={index === 0 ? "true" : "false"} tabindex={index === 0 ? 0 : -1}>{example.label}</button>)}</div>
+        {examples.map((example) => (
+          <section class="example-panel" id={`example-${example.id}`} aria-labelledby={`example-heading-${example.id}`}>
+            <h2 class="example-heading" id={`example-heading-${example.id}`}>{example.label}</h2>
+            <div class="example-source">
+              <div class="panel-heading"><span>src/Example.vue</span><span class="file-type">Vue</span></div>
+              <pre tabindex="0" aria-label={`${example.label} source`}><code set:html={highlight(example)} /></pre>
+            </div>
+            <div class="example-result">
+              <div class="panel-heading"><span>selfix src</span><span class="diagnostic-label">1 error</span></div>
+              <div class="diagnostic"><p class="code-muted">src/Example.vue:{example.location}</p><p><strong>{example.rule}</strong></p><p><code>{example.message}</code></p>{example.suggestion && <p><code>Did you mean "{example.suggestion}"?</code></p>}<p class="diagnostic-help">{example.help}</p></div>
+              <div class="correction"><span class="correction-label">✓ {example.fixLabel}</span><code>{example.fix}</code></div>
+            </div>
+          </section>
+        ))}
+        <figcaption id="example-caption">selfix output for each example. Locations point to the original Vue file.</figcaption>
       </figure>
     </section>
 
