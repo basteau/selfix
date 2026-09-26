@@ -1,5 +1,53 @@
 # Changelog
 
+## v2.3.0
+
+Findings now suggest the theme utility for an arbitrary value that matches one, and a close spelling fix for an unknown class. `no-restyle` follows single-root wrapper components, custom messages can name a component's sizes and variants, and shadcn-vue projects can leave `css` and `ui` to `components.json`. The documentation site and README were rewritten around shorter guides, one page per rule, and recipes for shadcn-vue, Nuxt, and CI.
+
+[compare changes](https://github.com/basteau/selfix/compare/v2.2.0...v2.3.0)
+
+### 🚀 Enhancements
+
+- **vue:** Configure and resolve imported class helpers ([578ed07e](https://github.com/basteau/selfix/commit/578ed07e))
+- **rules:** Suggest compiler-validated spelling corrections ([3a95718e](https://github.com/basteau/selfix/commit/3a95718e))
+- **rules:** Inspect native SVG paint colors ([fcead978](https://github.com/basteau/selfix/commit/fcead978))
+- **messages:** Add size and variant placeholders with fallbacks ([73da3978](https://github.com/basteau/selfix/commit/73da3978))
+- **cli:** Read css and ui defaults from shadcn-vue components.json ([f18143f9](https://github.com/basteau/selfix/commit/f18143f9))
+- **rules:** Suggest the theme utility for a matching arbitrary value ([2f176c52](https://github.com/basteau/selfix/commit/2f176c52))
+- **rules:** Trace no-restyle through single-root wrapper components ([2929b8fb](https://github.com/basteau/selfix/commit/2929b8fb))
+
+### 🔥 Performance
+
+- **rules:** Match arbitrary values against same-root theme utilities ([5584c8ac](https://github.com/basteau/selfix/commit/5584c8ac))
+
+### 🩹 Fixes
+
+- **cli:** Use the singular for one component usage in doctor ([cb7e812c](https://github.com/basteau/selfix/commit/cb7e812c))
+
+### 📖 Documentation
+
+- **site:** Lead the landing page with the design-system promise ([c2b74be3](https://github.com/basteau/selfix/commit/c2b74be3))
+- **site:** State the hero outcome and show requirements beside install ([c51e98e3](https://github.com/basteau/selfix/commit/c51e98e3))
+- **site:** Show verified override, color, and typo findings in the hero ([abad3393](https://github.com/basteau/selfix/commit/abad3393))
+- **site:** Contrast vue-tsc with selfix instead of generic principles ([478bc447](https://github.com/basteau/selfix/commit/478bc447))
+- **site:** Pair each landing rule with a verified fix ([c79a3386](https://github.com/basteau/selfix/commit/c79a3386))
+- **site:** Offer agent and manual setup with a package-manager choice ([fd5703eb](https://github.com/basteau/selfix/commit/fd5703eb))
+- **site:** Tighten landing copy and label shortened findings ([23b2b2d9](https://github.com/basteau/selfix/commit/23b2b2d9))
+- **site:** Render content blockquotes as callouts ([f5b80dec](https://github.com/basteau/selfix/commit/f5b80dec))
+- Start from the reader's existing app in getting started ([d247d9d3](https://github.com/basteau/selfix/commit/d247d9d3))
+- **rules:** Give each rule its own reference page ([41a6440a](https://github.com/basteau/selfix/commit/41a6440a))
+- Explain how selfix gets from a Vue file to a finding ([093bb071](https://github.com/basteau/selfix/commit/093bb071))
+- **config:** Lead with an annotated config and goal-first contracts ([96b11fa2](https://github.com/basteau/selfix/commit/96b11fa2))
+- **agent-setup:** Put the setup policy in the agent's steps ([eae89081](https://github.com/basteau/selfix/commit/eae89081))
+- Add shadcn-vue, Nuxt, and CI recipes ([beb398be](https://github.com/basteau/selfix/commit/beb398be))
+- **adoption:** Keep new code strict and share one policy ([f6bc8c62](https://github.com/basteau/selfix/commit/f6bc8c62))
+- **maintaining:** Split development from releases and deployment ([4cc26357](https://github.com/basteau/selfix/commit/4cc26357))
+- **cli:** Show doctor output and exit codes instead of prose ([dd0e4088](https://github.com/basteau/selfix/commit/dd0e4088))
+- Turn the introduction into a short index and add an FAQ ([4b2432c0](https://github.com/basteau/selfix/commit/4b2432c0))
+- **readme:** Lead with a verified example and a short quick start ([ce446fd1](https://github.com/basteau/selfix/commit/ce446fd1))
+- Tighten themes, analysis, troubleshooting, adoption, and API ([666beea0](https://github.com/basteau/selfix/commit/666beea0))
+- **api:** Document ruleNames and defineConfig ([b7f410c3](https://github.com/basteau/selfix/commit/b7f410c3))
+
 ## v2.2.0
 
 Restrict a component by the module and export written in an import, including a local rename. Static `:is` bindings and single-member namespace tags use that same component identity. An unreadable component file still reports restyle findings and omits prop guidance.
