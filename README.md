@@ -1,78 +1,99 @@
 # <img src="https://raw.githubusercontent.com/basteau/selfix/main/apps/docs/public/logo.svg" alt="" width="32" height="32" /> selfix
 
-**The design-system linter for Vue 3 and Tailwind CSS 4.**
+[![npm](https://img.shields.io/npm/v/selfix)](https://www.npmjs.com/package/selfix) [![CI](https://github.com/basteau/selfix/actions/workflows/ci.yml/badge.svg)](https://github.com/basteau/selfix/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/npm/l/selfix)](https://github.com/basteau/selfix/blob/main/LICENSE)
 
-A shared Button shouldn't need its padding and colors redefined on every page. selfix checks the classes added to your components and reports styling that breaks their rules.
+**Catch Tailwind classes that break your design system.**
+
+selfix lints Vue 3 templates against your own components and Tailwind CSS 4 theme. It reports component overrides, raw colors, typos, and other styling drift. Each finding says how to fix it.
 
 ```vue
-<!-- Changes the Button's padding: reported by selfix. -->
-<Button class="p-4">Save</Button>
+<script setup lang="ts">
+import { Button } from "@/components/ui/button"
+</script>
 
-<!-- Controls its placement: allowed by default. -->
-<Button class="mt-4 w-full">Save</Button>
+<template>
+  <Button class="p-4">Save</Button>
+</template>
 ```
 
-Tell selfix which components to protect and which Tailwind theme to use. It points to the offending class in your `.vue` file and explains what to change. It also checks raw colors, arbitrary values, inline styles, unknown classes, and unreadable class expressions.
+```text
+$ pnpm exec selfix src
+src/Page.vue:6:11 error no-restyle "p-4" is not allowed on <Button>: spacing changes are outside the component's contract. Remove this override. Check the component's documented spacing props and its contract before changing surrounding layout.
+Checked 1 Vue file: 1 error, 0 warnings.
+```
 
-Built for **Vue 3 and Tailwind CSS 4**. Works with your own components. No UI kit, class helper, ESLint, or Oxlint required.
+Change the class to `mt-4 w-full` and the check passes. The page places the Button, and the Button keeps its own padding. selfix never edits your files.
 
-## Try it
+## Quick start
 
-Requires **Node.js ≥22.18.0**, **Vue ≥3.2.13 <4**, and **Tailwind CSS ≥4 <5**. Install any missing Vue or Tailwind peers, then add selfix:
+You need Node.js 22.18 or later, Vue 3 (3.2.13 or later), and Tailwind CSS 4.
 
 ```sh
 pnpm add -D selfix
 ```
 
-Use `"type": "module"` in your project's `package.json`. Create `selfix.config.ts` in the project root:
+Add `"type": "module"` to `package.json` and create `selfix.config.ts` next to it:
 
 ```ts
 import { defineConfig } from "selfix"
 
 export default defineConfig({
-  css: "src/style.css",
-  ui: ["./components/ui"],
+  css: "src/style.css", // your Tailwind entry
+  ui: ["@/components/ui"], // import prefix of your shared components
 })
 ```
 
-Set `css` to your application's Tailwind entry. Set `ui` to match your component imports: this example recognizes `import Button from "./components/ui/Button.vue"`.
-
-Run from the project root:
+Check which components selfix protects, then run the check:
 
 ```sh
+pnpm exec selfix src --doctor
 pnpm exec selfix src
 ```
 
-All seven rules start as errors (component restrictions require a configured list), including the rule against SFC `<style>` blocks. For an existing app, [start with warnings](https://github.com/basteau/selfix/blob/main/apps/docs/content/adoption.md). For a complete example with a theme, Button, and first correction, follow [Getting started](https://github.com/basteau/selfix/blob/main/apps/docs/content/getting-started.md).
+selfix reads your templates and CSS without running your app. Your `selfix.config.ts` and Tailwind `@plugin` and `@config` modules do run, so only use configs you trust.
 
-selfix leaves your source unchanged. Fix a finding using component props, theme classes, or an explicit exception, then rerun the check.
+Every rule is an error by default. In an existing app, [start with warnings](https://selfix.exe.xyz/docs/adoption/) and turn on one rule at a time.
 
-Add `"lint:design": "selfix src"` to your existing package scripts. Run it after UI changes and in CI. See [Adoption](https://github.com/basteau/selfix/blob/main/apps/docs/content/adoption.md) for warning limits, workspaces, and agent instructions.
+To let a coding agent do the setup, give it this prompt:
+
+```text
+Set up selfix in this project. Follow
+https://github.com/basteau/selfix/blob/main/apps/docs/content/agent-setup.md
+```
+
+## Rules
+
+| Rule                                                                              | Reports                                                |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| [no-restyle](https://selfix.exe.xyz/docs/no-restyle/)                             | Classes that change a protected component's appearance |
+| [no-raw-colors](https://selfix.exe.xyz/docs/no-raw-colors/)                       | Palette colors, literal colors, and raw SVG paints     |
+| [no-unknown-classes](https://selfix.exe.xyz/docs/no-unknown-classes/)             | Classes your Tailwind CSS cannot generate              |
+| [no-arbitrary-values](https://selfix.exe.xyz/docs/no-arbitrary-values/)           | Bracket values such as `p-[13px]`                      |
+| [no-inline-styles](https://selfix.exe.xyz/docs/no-inline-styles/)                 | `style` attributes and SFC `<style>` blocks            |
+| [require-static-classes](https://selfix.exe.xyz/docs/require-static-classes/)     | Class values selfix cannot read without running code   |
+| [no-restricted-components](https://selfix.exe.xyz/docs/no-restricted-components/) | Components or imports you ban                          |
 
 ## Documentation
 
-- [Getting started](https://github.com/basteau/selfix/blob/main/apps/docs/content/getting-started.md): catch your first styling override.
-- [Rules and exceptions](https://github.com/basteau/selfix/blob/main/apps/docs/content/rules.md): choose what to enforce.
-- [Configuration](https://github.com/basteau/selfix/blob/main/apps/docs/content/configuration.md): protect components and define their contracts.
-- [Agent setup](https://github.com/basteau/selfix/blob/main/apps/docs/content/agent-setup.md): let a coding agent configure and verify the check.
-
-selfix reads Vue source and Tailwind CSS without evaluating application expressions. A clean result covers the selected files and enabled checks. See [What selfix can read](https://github.com/basteau/selfix/blob/main/apps/docs/content/analysis.md) for supported syntax and configuration trust.
+- [Getting started](https://selfix.exe.xyz/docs/getting-started/) and [adoption in an existing app](https://selfix.exe.xyz/docs/adoption/)
+- [Rules and exceptions](https://selfix.exe.xyz/docs/rules/) and [what selfix can read](https://selfix.exe.xyz/docs/analysis/)
+- Recipes for [shadcn-vue](https://selfix.exe.xyz/docs/shadcn-vue/), [Nuxt](https://selfix.exe.xyz/docs/nuxt/), and [CI](https://selfix.exe.xyz/docs/ci/)
+- [Configuration](https://selfix.exe.xyz/docs/configuration/), [CLI](https://selfix.exe.xyz/docs/cli/), and [API](https://selfix.exe.xyz/docs/api/) reference
+- [How selfix works](https://selfix.exe.xyz/docs/how-it-works/), [Troubleshooting](https://selfix.exe.xyz/docs/troubleshooting/), and [FAQ](https://selfix.exe.xyz/docs/faq/)
 
 ## Contributing
-
-Clone this repository and run from its root:
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm dev          # Build selfix and start the Vue playground
-pnpm docs:dev     # Start the Blume documentation site
+pnpm docs:dev     # Start the documentation site
 pnpm check        # Run all repository checks
 ```
 
-Edit docs in `apps/docs/content`. Read [AGENTS.md](AGENTS.md) for project conventions, [Development](https://github.com/basteau/selfix/blob/main/apps/docs/content/maintaining.md) for testing, and [Releases and deployment](https://github.com/basteau/selfix/blob/main/apps/docs/content/releasing.md) for publishing.
+Read [AGENTS.md](https://github.com/basteau/selfix/blob/main/AGENTS.md) for project conventions and [Development](https://selfix.exe.xyz/docs/maintaining/) for testing and docs. Maintainers publish with [Releases and deployment](https://selfix.exe.xyz/docs/releasing/).
 
-[Report a bug](https://github.com/basteau/selfix/issues) with your Vue/CSS example, config, command, and dependency versions.
+To report a bug, [open an issue](https://github.com/basteau/selfix/issues) with a small Vue and CSS example, your config, the command, and your dependency versions.
 
-## Acknowledgments and license
+## License
 
-Inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). selfix is an independent project; adapted code retains upstream attribution. [MIT licensed](LICENSE).
+[MIT](https://github.com/basteau/selfix/blob/main/LICENSE). selfix is an independent project inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). Adapted code keeps its upstream attribution.
