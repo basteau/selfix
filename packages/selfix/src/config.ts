@@ -1,3 +1,16 @@
+// `sizes` and `variants` are filled only for no-restyle findings with a discovered definition.
+const placeholders = [
+  "component",
+  "className",
+  "category",
+  "file",
+  "rule",
+  "prop",
+  "slot",
+  "sizes",
+  "variants",
+]
+
 export const categories = [
   "layout",
   "color",
@@ -221,10 +234,8 @@ function options(value: unknown, label: string, contract = false) {
     for (const message of messages) {
       if (typeof message !== "string") throw new Error(`${label}.message values must be strings.`)
       for (const match of message.matchAll(/\{\{(.*?)\}\}/g)) {
-        if (
-          !["component", "className", "category", "file", "rule", "prop", "slot"].includes(match[1])
-        )
-          throw new Error(`Unknown message placeholder: ${match[1]}.`)
+        const field = match[1]!.split("|", 1)[0]!
+        if (!placeholders.includes(field)) throw new Error(`Unknown message placeholder: ${field}.`)
       }
     }
   }

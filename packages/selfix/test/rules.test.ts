@@ -1005,6 +1005,12 @@ function cn() { throw new Error('never run') }
     expect(() => defineConfig({ rules: only("no-restyle", { message: "{{missing}}" }) })).toThrow(
       "Unknown message placeholder",
     )
+    expect(() =>
+      defineConfig({ rules: only("no-restyle", { message: "{{missing|fallback}}" }) }),
+    ).toThrow("Unknown message placeholder: missing.")
+    expect(() =>
+      defineConfig({ rules: only("no-restyle", { message: "{{sizes|none}} {{variants}}" }) }),
+    ).not.toThrow()
     expect(() => defineConfig({ ui: "invalid" } as unknown as Config)).toThrow("array")
     expect(() => defineConfig({ rules: only("require-static-classes", { allow: ["*"] }) })).toThrow(
       "not allow/deny",

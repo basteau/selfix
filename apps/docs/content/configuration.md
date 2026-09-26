@@ -227,15 +227,19 @@ message: "Use Button's variant prop instead of {{className}}.",
 
 A map keyed by category also works, with `default` as the fallback.
 
-| Placeholder     | Value                                                                 |
-| --------------- | --------------------------------------------------------------------- |
-| `{{component}}` | Local component or tag name, or `style` for SFC blocks                |
-| `{{className}}` | The class, or empty for static-class and inline-style findings        |
-| `{{category}}`  | The category, or `unknown` for static-class and inline-style findings |
-| `{{file}}`      | Absolute in the CLI. In the API, the name as you passed it            |
-| `{{prop}}`      | Configured prop name, or empty                                        |
-| `{{slot}}`      | Known slot name, or empty                                             |
-| `{{rule}}`      | Rule name                                                             |
+| Placeholder     | Value                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------- |
+| `{{component}}` | Local component or tag name, or `style` for SFC blocks                                      |
+| `{{className}}` | The class, or empty for static-class and inline-style findings                              |
+| `{{category}}`  | The category, or `unknown` for static-class and inline-style findings                       |
+| `{{file}}`      | Absolute in the CLI. In the API, the name as you passed it                                  |
+| `{{prop}}`      | Configured prop name, or empty                                                              |
+| `{{slot}}`      | Known slot name, or empty                                                                   |
+| `{{rule}}`      | Rule name                                                                                   |
+| `{{sizes}}`     | `no-restyle` only. The component's `size` values when its prop is a string-literal union    |
+| `{{variants}}`  | `no-restyle` only. The component's `variant` values when its prop is a string-literal union |
+
+Add `|` and fallback text to any placeholder to use when its value is empty, such as `{{sizes|none defined}}`. For a Button with `sm` and `lg` sizes, `"Use a {{component}} size: {{sizes|none defined}}."` starts the message with `Use a Button size: sm, lg.` selfix still appends the definition details.
 
 A category message beats `default`, which beats built-in guidance. A contract's message replaces the rule's whole map. `note` appends text to every finding. Parse errors keep their own message.
 

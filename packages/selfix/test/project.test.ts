@@ -720,3 +720,47 @@ it("preserves prepared source failures and explicit recovery", () => {
   write(".nuxt/components.d.ts", "export const UiButton: typeof import('../Missing.vue')['named'];")
   expect(createProject({ root }).resolve("UiButton", undefined, "Page.vue")).toBeUndefined()
 })
+
+it("fills size and variant placeholders from the discovered definition", async () => {
+  const { root, write } = fixture()
+  write("Button.vue", component("sm"))
+  write("Card.vue", "<template><div><slot /></div></template>")
+  const linter = await createLinter({
+    css: '@import "tailwindcss";',
+    config: {
+      components: ["^(Button|Card)$"],
+      project: { root, components: { Button: "Button.vue", Card: "Card.vue" } },
+      rules: {
+        "no-restyle": [
+          "error",
+          {
+            message: "Use a {{component}} size ({{sizes|none defined}}) or variant ({{variants}}).",
+          },
+        ],
+      },
+    },
+  })
+  const page = path.join(root, "Page.vue")
+  const [button] = linter.lint('<template><Button class="p-4" /></template>', page)
+  expect(button?.message).toMatch(/^Use a Button size \(sm\) or variant \(solid, outline\)\./)
+  const [card] = linter.lint('<template><Card class="p-4" /></template>', page)
+  expect(card?.message).toMatch(/^Use a Card size \(none defined\) or variant \(\)\./)
+})
+
+it("uses fallback text for any empty placeholder and keeps later bars", async () => {
+  const linter = await createLinter({
+    css: '@import "tailwindcss";',
+    config: {
+      rules: {
+        "no-restyle": ["error", { message: "{{sizes|a|b}} {{className|none}} {{prop|no prop}}" }],
+        "no-inline-styles": ["error", { message: "{{sizes|n/a}} {{className|static}}" }],
+      },
+    },
+  })
+  const [restyle, inline] = linter.lint(
+    '<script setup>import { Button } from "@/components/ui"</script><template><Button class="p-4" style="color: red" /></template>',
+    "Page.vue",
+  )
+  expect(restyle?.message).toBe("a|b p-4 no prop")
+  expect(inline?.message).toBe("n/a static")
+})

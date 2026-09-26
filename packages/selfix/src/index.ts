@@ -429,6 +429,7 @@ export async function createLinter(options: LinterOptions) {
             typeof selected.message === "string"
               ? selected.message
               : (selected.message?.[category] ?? selected.message?.default)
+          const definition = name === "no-restyle" ? definitionFor(site.component) : undefined
           const fields: Record<string, string> = {
             component: site.component,
             className: token,
@@ -437,16 +438,19 @@ export async function createLinter(options: LinterOptions) {
             rule: name,
             prop: site.prop ?? "",
             slot: site.slot ?? "",
+            sizes: definition?.props?.size?.join(", ") ?? "",
+            variants: definition?.props?.variant?.join(", ") ?? "",
           }
-          const message = (custom ?? fallback).replace(
-            /\{\{(.*?)\}\}/g,
-            (_, key: string) => fields[key] ?? "",
-          )
+          // `{{sizes|none defined}}` falls back to the text after `|` when the field is empty.
+          const message = (custom ?? fallback).replace(/\{\{(.*?)\}\}/g, (_, key: string) => {
+            const bar = key.indexOf("|")
+            const field = bar < 0 ? key : key.slice(0, bar)
+            return fields[field] || (bar < 0 ? "" : key.slice(bar + 1))
+          })
           const context =
             site.prop === undefined
               ? ""
               : ` [prop ${JSON.stringify(site.prop)}${site.slot === undefined ? "" : `, slot ${JSON.stringify(site.slot)}`}]`
-          const definition = name === "no-restyle" ? definitionFor(site.component) : undefined
           const details = definition
             ? ` Definition: ${definition.file}.` +
               (["size", "variant"] as const)
