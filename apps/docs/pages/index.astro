@@ -21,6 +21,7 @@ function highlight({ source, token }: LandingExample) {
     .join("\n")
 }
 
+const override = examples[0]!
 const base = import.meta.env.BASE_URL.replace(/\/$/, "")
 const docs = `${base}/docs`
 const rules = [
@@ -72,10 +73,12 @@ const rules = [
       </figure>
     </section>
 
-    <section class="principles" aria-label="Works with your project">
-      <div><span class="section-number">01</span><h2>Your components.</h2><p>Protect the component imports you choose. Keep the UI you already built.</p><a href={`${docs}/configuration#component-recognition`}>Component recognition <span aria-hidden="true">↗</span></a></div>
-      <div><span class="section-number">02</span><h2>Your Tailwind theme.</h2><p>Check utilities against your actual CSS entry, using Tailwind’s compiler.</p><a href={`${docs}/themes`}>Theme loading <span aria-hidden="true">↗</span></a></div>
-      <div><span class="section-number">03</span><h2>One standalone check.</h2><p>Run locally, in CI, or after agent changes. No UI kit or linter integration required.</p><a href={`${docs}/agent-setup`}>Agent setup <span aria-hidden="true">↗</span></a></div>
+    <section class="compare-section" aria-labelledby="compare-heading">
+      <div class="section-heading"><h2 id="compare-heading">Type checks accept any class.</h2><p>To <code>vue-tsc</code>, <code>class</code> is any string, so a page can add padding to a Button and still pass. selfix reads the string and checks it against the Button's contract.</p></div>
+      <div class="compare-grid">
+        <div class="terminal"><div class="panel-heading"><span>vue-tsc --noEmit</span><span class="pass-label">exit 0</span></div><pre tabindex="0" aria-label="vue-tsc output"><code><span class="code-muted">$ vue-tsc --noEmit</span>{'\n'}<span class="code-muted">(no output)</span></code></pre></div>
+        <div class="terminal"><div class="panel-heading"><span>selfix src</span><span class="diagnostic-label">exit 1</span></div><pre tabindex="0" aria-label="selfix output"><code><span class="code-muted">$ selfix src</span>{'\n'}src/Example.vue:{override.location} error <strong>{override.rule}</strong> {override.message}{'\n'}Checked 1 Vue file: 1 error, 0 warnings.</code></pre></div>
+      </div>
     </section>
 
     <section class="rules-section" aria-labelledby="rules-heading">

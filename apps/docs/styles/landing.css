@@ -250,7 +250,8 @@
   font-size: 12px;
   line-height: 1.9;
 }
-.diagnostic strong {
+.diagnostic strong,
+.terminal strong {
   color: var(--landing-error);
   font-weight: 500;
 }
@@ -282,35 +283,24 @@
   text-align: center;
   background: var(--blume-background);
 }
-.principles {
+.compare-section {
+  border-top: 1px solid var(--blume-border);
+}
+.compare-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  border-block: 1px solid var(--blume-border);
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.terminal {
+  min-width: 0;
+  border: 1px solid var(--blume-border);
+  border-radius: 8px;
+  overflow: hidden;
   background: var(--blume-code-background);
 }
-.principles > div {
-  padding: 32px;
+.pass-label {
+  color: var(--landing-accent);
 }
-.principles > div + div {
-  border-left: 1px solid var(--blume-border);
-}
-.section-number {
-  font-family: var(--blume-font-mono);
-  font-size: 12px;
-  color: var(--blume-muted-foreground);
-}
-.landing .principles h2 {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 18px 0 10px;
-  letter-spacing: -0.025em;
-}
-.principles p {
-  font-size: 14px;
-  line-height: 1.8;
-  color: var(--blume-muted-foreground);
-}
-.principles a,
 .setup-link {
   display: inline-flex;
   align-items: center;
@@ -319,6 +309,7 @@
   margin-top: 12px;
   font-size: 13px;
 }
+.compare-section,
 .rules-section,
 .setup-section {
   padding: 88px 48px;
@@ -333,6 +324,9 @@
   line-height: 1.2;
   letter-spacing: -0.04em;
   font-weight: 600;
+}
+.landing .section-heading code {
+  font-size: 0.9em;
 }
 .landing .section-heading > p:last-child {
   margin-top: 18px;
@@ -505,9 +499,7 @@
     border-right: 0;
     border-bottom: 1px solid var(--blume-border);
   }
-  .principles > div {
-    padding: 24px;
-  }
+  .compare-section,
   .rules-section,
   .setup-section {
     padding: 48px 24px;
@@ -539,16 +531,9 @@
   .landing pre code {
     font-size: inherit;
   }
-  .principles,
+  .compare-grid,
   .setup-panel {
     grid-template-columns: 1fr;
-  }
-  .principles > div + div {
-    border-left: 0;
-    border-top: 1px solid var(--blume-border);
-  }
-  .principles > div {
-    padding: 28px 24px;
   }
   .rule-row {
     grid-template-columns: 1fr 16px;
