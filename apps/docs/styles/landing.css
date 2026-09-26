@@ -116,11 +116,34 @@
 }
 .landing .install {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
-  gap: 12px;
+  gap: 4px 16px;
   margin-top: 20px;
   color: var(--blume-muted-foreground);
+}
+.pm-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--blume-border);
+  border-radius: 8px;
+}
+.landing .pm-switch button {
+  min-width: 44px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--blume-muted-foreground);
+  font-family: var(--blume-font-mono);
+  font-size: 12px;
+}
+.landing .pm-switch [aria-pressed="true"] {
+  background: var(--blume-code-background);
+  color: var(--blume-foreground);
 }
 .landing .requirements {
   margin: 4px 0 52px;
@@ -204,8 +227,7 @@
   white-space: nowrap;
 }
 .example-source,
-.example-result,
-.setup-config {
+.example-result {
   min-width: 0;
 }
 .example-source {
@@ -306,7 +328,7 @@
   align-items: center;
   gap: 12px;
   min-height: 44px;
-  margin-top: 12px;
+  margin-top: auto;
   font-size: 13px;
 }
 .compare-section,
@@ -393,60 +415,56 @@
 .setup-panel {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.setup-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
   border: 1px solid var(--blume-border);
   border-radius: 8px;
-  overflow: hidden;
 }
-.setup-instructions {
-  padding: 28px;
-}
-.setup-instructions h3 {
+.setup-card h3 {
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
 }
-.landing .setup-instructions p {
-  margin: 12px 0 20px;
+.landing .setup-card p {
   color: var(--blume-muted-foreground);
-  font-size: 13px;
-  line-height: 1.8;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.setup-code {
+  align-self: stretch;
+  min-width: 0;
+  border: 1px solid var(--blume-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--blume-code-background);
+}
+.landing .setup-code pre {
+  padding: 16px 22px;
+}
+.landing .setup-prompt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .command {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 48px;
+  min-height: 44px;
 }
 .command > span {
   color: var(--blume-muted-foreground);
 }
-.command button {
+.setup-card .command {
+  align-self: stretch;
+}
+.setup-card .command button {
   margin-left: auto;
-}
-.setup-config {
-  border-left: 1px solid var(--blume-border);
-  background: var(--blume-code-background);
-}
-.closing {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 32px;
-  padding: 48px;
-  background: var(--landing-accent-soft);
-}
-.closing h2 {
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.035em;
-}
-.landing .closing p {
-  margin-top: 12px;
-  color: var(--blume-muted-foreground);
-  font-size: 14px;
-  line-height: 1.7;
-}
-.closing .action {
-  flex-shrink: 0;
 }
 .landing-footer {
   max-width: 1120px;
@@ -496,6 +514,9 @@
   .landing .example-tabs button:hover {
     color: var(--blume-foreground);
   }
+  .landing .pm-switch button:hover {
+    color: var(--blume-foreground);
+  }
   .landing button[data-copy]:hover {
     color: var(--blume-foreground);
   }
@@ -527,9 +548,6 @@
   .rule-change {
     grid-column: 2;
     grid-row: 2;
-  }
-  .closing {
-    padding: 32px 24px;
   }
 }
 @media (max-width: 38rem) {
@@ -569,16 +587,8 @@
     grid-column: 2;
     grid-row: 1 / 4;
   }
-  .setup-instructions {
+  .setup-card {
     padding: 20px;
-  }
-  .setup-config {
-    border-left: 0;
-    border-top: 1px solid var(--blume-border);
-  }
-  .closing {
-    align-items: flex-start;
-    flex-direction: column;
   }
   .landing-footer {
     flex-wrap: wrap;

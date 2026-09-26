@@ -22,6 +22,28 @@ document.addEventListener("astro:page-load", () => {
     })
   }
 
+  // Every switcher controls every command; the choice persists when storage is available.
+  const choose = (manager) => {
+    for (const code of document.querySelectorAll("[data-pm-command]")) {
+      code.textContent = code.dataset[manager]
+    }
+    for (const button of document.querySelectorAll("[data-pm-choice]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.pmChoice === manager))
+    }
+    try {
+      localStorage.setItem("selfix-package-manager", manager)
+    } catch {}
+  }
+  for (const group of document.querySelectorAll("[data-pm-switch]")) group.hidden = false
+  for (const button of document.querySelectorAll("[data-pm-choice]")) {
+    button.addEventListener("click", () => choose(button.dataset.pmChoice))
+  }
+  let saved
+  try {
+    saved = localStorage.getItem("selfix-package-manager")
+  } catch {}
+  if (["npm", "yarn", "bun"].includes(saved)) choose(saved)
+
   // Without JavaScript every example panel stays visible with its own heading.
   for (const list of document.querySelectorAll("[data-tabs]")) {
     const tabs = [...list.querySelectorAll('[role="tab"]')]

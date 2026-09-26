@@ -1,0 +1,8 @@
+---
+// Revealed by scripts/landing.js; without JavaScript the pnpm commands stay visible.
+const { label } = Astro.props
+const managers = ["pnpm", "npm", "yarn", "bun"]
+---
+<div class="pm-switch" role="group" aria-label={label} data-pm-switch hidden>
+  {managers.map((manager) => <button type="button" data-pm-choice={manager} aria-pressed={manager === "pnpm" ? "true" : "false"}>{manager}</button>)}
+</div>

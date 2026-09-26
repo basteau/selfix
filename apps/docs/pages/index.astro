@@ -1,6 +1,8 @@
 ---
 import PageLayout from "blume/components/layout/PageLayout.astro"
 import data from "blume:data"
+import PackageCommand from "../components/PackageCommand.astro"
+import PackageSwitch from "../components/PackageSwitch.astro"
 import SetupPanel from "../components/SetupPanel.astro"
 import "../styles/landing.css"
 import { examples, rules, type LandingExample } from "../landing-examples"
@@ -42,7 +44,7 @@ const docs = `${base}/docs`
       <h1 id="hero-heading">Catch Tailwind classes that break your design system.</h1>
       <p class="hero-description">selfix lints your Vue templates against your own components and Tailwind theme. It flags overrides, raw colors, and typos, then tells you or your coding agent how to fix each one.</p>
       <div class="hero-actions"><a class="action primary" href={`${docs}/getting-started`}>Get started <span aria-hidden="true">→</span></a><a class="action" href="https://github.com/basteau/selfix">View on GitHub <span aria-hidden="true">↗</span></a></div>
-      <p class="install"><span aria-hidden="true">$</span> <code id="install-command">pnpm add -D selfix</code><button type="button" data-copy="install-command" aria-label="Copy install command" hidden>Copy</button></p>
+      <div class="install"><PackageSwitch label="Package manager for the install command" /><PackageCommand id="install-command" kind="install" /></div>
       <p class="requirements">Works with Vue 3, Tailwind CSS 4, and Node.js 22.18 or later.</p>
       <figure class="example" aria-labelledby="example-caption">
         <div class="example-tabs" role="tablist" aria-label="Example findings" data-tabs hidden>{examples.map((example, index) => <button type="button" role="tab" id={`example-tab-${example.id}`} aria-controls={`example-${example.id}`} aria-selected={index === 0 ? "true" : "false"} tabindex={index === 0 ? 0 : -1}>{example.label}</button>)}</div>
@@ -79,11 +81,10 @@ const docs = `${base}/docs`
     </section>
 
     <section class="setup-section" aria-labelledby="setup-heading">
-      <div class="section-heading"><h2 id="setup-heading">Make it part of your workflow.</h2><p>Point selfix at your CSS entry and component imports. Run it on your Vue files.</p></div>
+      <div class="section-heading"><h2 id="setup-heading">Add selfix to your project.</h2><p>One dev dependency and one config file. No ESLint, Oxlint, or UI kit required.</p></div>
       <SetupPanel docs={docs} />
-      <p class="section-note">selfix reads source without evaluating application expressions. <a href={`${docs}/analysis`}>Understand the analysis limits <span aria-hidden="true">↗</span></a></p>
+      <p class="section-note">selfix reads your templates and never runs your app code. <a href={`${docs}/analysis`}>What selfix can read <span aria-hidden="true">→</span></a></p>
     </section>
-    <section class="closing" aria-label="Get started"><div><h2>Keep the system in your design system.</h2><p>Start with one component. Make the next change with confidence.</p></div><a class="action primary" href={`${docs}/getting-started`}>Get started <span aria-hidden="true">→</span></a></section>
     <p class="sr-only" id="copy-status" role="status"></p>
   </div>
   <footer slot="footer" class="landing-footer"><a class="footer-brand" href={`${base}/`}>selfix</a><p>Independent. Open source. <a href="https://github.com/basteau/selfix/blob/main/LICENSE">MIT licensed.</a><br />Inspired by <a href="https://github.com/shadcn-ui/lint">shadcn/lint</a>.</p><nav aria-label="Footer"><a href={docs}>Documentation</a><a href="https://github.com/basteau/selfix">GitHub ↗</a></nav></footer>

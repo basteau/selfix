@@ -1,0 +1,13 @@
+---
+// A copyable command that follows the package manager picked in any switcher on the page.
+const { id, kind } = Astro.props
+const commands = {
+  install: { pnpm: "pnpm add -D selfix", npm: "npm install -D selfix", yarn: "yarn add -D selfix", bun: "bun add -d selfix" },
+  run: { pnpm: "pnpm exec selfix src", npm: "npx selfix src", yarn: "yarn selfix src", bun: "bunx selfix src" },
+}[kind as "install" | "run"]
+---
+<div class="command">
+  <span aria-hidden="true">$</span>
+  <code id={id} data-pm-command data-pnpm={commands.pnpm} data-npm={commands.npm} data-yarn={commands.yarn} data-bun={commands.bun}>{commands.pnpm}</code>
+  <button type="button" data-copy={id} aria-label={kind === "install" ? "Copy install command" : "Copy run command"} hidden>Copy</button>
+</div>

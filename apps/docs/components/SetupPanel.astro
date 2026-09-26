@@ -1,8 +1,27 @@
 ---
+import PackageCommand from "./PackageCommand.astro"
+import PackageSwitch from "./PackageSwitch.astro"
+
 const { docs } = Astro.props
-const configuration = 'import { defineConfig } from "selfix"\n\nexport default defineConfig({\n  css: "src/style.css",\n  ui: ["./components/ui"],\n})'
+const prompt =
+  "Set up selfix in this project. Follow\nhttps://github.com/basteau/selfix/blob/main/apps/docs/content/agent-setup.md"
+const configuration =
+  'import { defineConfig } from "selfix"\n\nexport default defineConfig({\n  css: "src/style.css",\n  ui: ["@/components/ui"],\n})'
 ---
 <div class="setup-panel">
-  <div class="setup-instructions"><h3>From install to first finding.</h3><p>Use Node.js ≥22.18.0, Vue 3, and Tailwind CSS 4. Set <code>"type": "module"</code> in your package.json.</p><div class="command"><span aria-hidden="true">$</span><code id="setup-install">pnpm add -D selfix</code><button type="button" data-copy="setup-install" aria-label="Copy install command" hidden>Copy</button></div><div class="command"><span aria-hidden="true">$</span><code id="setup-run">pnpm exec selfix src</code><button type="button" data-copy="setup-run" aria-label="Copy run command" hidden>Copy</button></div><a class="setup-link" href={`${docs}/getting-started`}>Follow the getting started guide <span aria-hidden="true">→</span></a></div>
-  <div class="setup-config"><div class="panel-heading"><span>selfix.config.ts</span><button type="button" data-copy="setup-config" aria-label="Copy configuration" hidden>Copy</button></div><pre tabindex="0" aria-label="selfix configuration"><code id="setup-config">{configuration}</code></pre></div>
+  <div class="setup-card">
+    <h3>Ask your coding agent</h3>
+    <p>Paste this prompt. The agent finds your theme and components, adds a config, and checks that selfix reports a deliberate override.</p>
+    <div class="setup-code"><div class="panel-heading"><span>Prompt</span><button type="button" data-copy="setup-prompt" aria-label="Copy agent prompt" hidden>Copy</button></div><pre class="setup-prompt" tabindex="0" aria-label="Agent prompt"><code id="setup-prompt">{prompt}</code></pre></div>
+    <a class="setup-link" href={`${docs}/agent-setup`}>What the agent does <span aria-hidden="true">→</span></a>
+  </div>
+  <div class="setup-card">
+    <h3>Set it up yourself</h3>
+    <p>Install selfix, set <code>"type": "module"</code> in package.json, and point the config at your Tailwind entry and component imports.</p>
+    <PackageSwitch label="Package manager for the setup commands" />
+    <PackageCommand id="setup-install" kind="install" />
+    <div class="setup-code"><div class="panel-heading"><span>selfix.config.ts</span><button type="button" data-copy="setup-config" aria-label="Copy configuration" hidden>Copy</button></div><pre tabindex="0" aria-label="selfix configuration"><code id="setup-config">{configuration}</code></pre></div>
+    <PackageCommand id="setup-run" kind="run" />
+    <a class="setup-link" href={`${docs}/getting-started`}>Read Getting started <span aria-hidden="true">→</span></a>
+  </div>
 </div>

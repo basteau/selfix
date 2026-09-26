@@ -129,3 +129,69 @@ test("example tabs switch panels with clicks and arrow keys", () => {
   handlers.get("a")!.get("keydown")!({ key: "End", preventDefault() {} })
   expect(visible()).toEqual(["c"])
 })
+
+function packageSwitchPage(localStorage: unknown) {
+  let initialize = () => {}
+  const managers = ["pnpm", "npm", "yarn", "bun"]
+  const commands = ["add", "exec"].map((verb) => ({
+    dataset: Object.fromEntries(managers.map((manager) => [manager, `${manager} ${verb}`])),
+    textContent: "pnpm " + verb,
+  }))
+  const clicks = new Map<string, () => void>()
+  const buttons = managers.map((manager) => {
+    const attributes = new Map<string, string>()
+    return {
+      dataset: { pmChoice: manager },
+      attributes,
+      setAttribute: (name: string, value: string) => attributes.set(name, value),
+      addEventListener: (_name: string, handler: () => void) => clicks.set(manager, handler),
+    }
+  })
+  const group = { hidden: true }
+  const elements: Record<string, unknown[]> = {
+    "[data-pm-command]": commands,
+    "[data-pm-choice]": buttons,
+    "[data-pm-switch]": [group],
+  }
+  runInNewContext(script, {
+    localStorage,
+    document: {
+      addEventListener: (_name: string, handler: typeof initialize) => {
+        initialize = handler
+      },
+      querySelectorAll: (selector: string) => elements[selector] ?? [],
+    },
+  })
+  initialize()
+  const pressed = () => buttons.map((button) => button.attributes.get("aria-pressed"))
+  return { commands, clicks, group, pressed, text: () => commands.map((c) => c.textContent) }
+}
+
+test("package manager switches update every command and restore the saved choice", () => {
+  const storage = new Map([["selfix-package-manager", "bun"]])
+  const page = packageSwitchPage({
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+  })
+  expect(page.group.hidden).toBe(false)
+  expect(page.text()).toEqual(["bun add", "bun exec"])
+  page.clicks.get("yarn")!()
+  expect(page.text()).toEqual(["yarn add", "yarn exec"])
+  expect(page.pressed()).toEqual(["false", "false", "true", "false"])
+  expect(storage.get("selfix-package-manager")).toBe("yarn")
+})
+
+test("package manager switches ignore unknown values and blocked storage", () => {
+  const unknown = packageSwitchPage({ getItem: () => "deno", setItem() {} })
+  expect(unknown.text()).toEqual(["pnpm add", "pnpm exec"])
+  const blocked = packageSwitchPage({
+    getItem() {
+      throw new Error("SecurityError")
+    },
+    setItem() {
+      throw new Error("SecurityError")
+    },
+  })
+  blocked.clicks.get("npm")!()
+  expect(blocked.text()).toEqual(["npm add", "npm exec"])
+})
