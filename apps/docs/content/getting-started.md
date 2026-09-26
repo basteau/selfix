@@ -35,7 +35,7 @@ export default defineConfig({
 
 `ui` matches import paths only. If your components are auto-imported or registered globally, add name patterns to `components` instead. See [component recognition](configuration.md#component-recognition).
 
-In a shadcn-vue project, set `css` to the `tailwind.css` path from `components.json`. The `ui` default, `@/components/ui`, already matches. In Nuxt, run selfix on `app` instead of `src` and follow [Nuxt UI themes](themes.md#nuxt-ui-application-themes).
+In a shadcn-vue project, set `css` to the `tailwind.css` path from `components.json`. The `ui` default, `@/components/ui`, already matches. In Nuxt, run selfix on `app` instead of `src` and follow [Nuxt and Nuxt UI](nuxt.md).
 
 ## Optional: create a component to try
 

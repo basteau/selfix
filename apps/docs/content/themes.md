@@ -30,30 +30,7 @@ Alias targets are local `.css` files, relative to the config directory (API: `ro
 
 ## Nuxt UI application themes
 
-Nuxt UI generates part of its theme during preparation. Load that generated CSS so selfix sees your application's colors:
-
-```ts
-import { defineConfig } from "selfix"
-
-export default defineConfig({
-  css: "app/assets/css/main.css",
-  cssAliases: {
-    "#build/ui.css": ".nuxt/ui.css",
-  },
-})
-```
-
-Keep `@import "tailwindcss";` and `@import "@nuxt/ui";` in your app's CSS entry. From the app root, run:
-
-```sh
-pnpm exec nuxt prepare && pnpm exec selfix app
-```
-
-Use this order locally and in CI. Rerun preparation after theme changes. For a custom Nuxt build directory, update the alias target. selfix cannot generate or detect stale CSS for you.
-
-This sets up the theme. To protect auto-imported components or check their `:ui` classes, also configure [component recognition](configuration.md#component-recognition) and [class props](configuration.md#configured-class-props).
-
-See [integration verification](maintaining.md#integration-verification) for tested versions and the smoke check.
+Nuxt UI generates part of its theme during `nuxt prepare`. Map `#build/ui.css` to `.nuxt/ui.css` with `cssAliases`, and prepare before each check. See [Nuxt and Nuxt UI](nuxt.md).
 
 ## Nested custom CSS
 

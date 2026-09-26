@@ -252,7 +252,7 @@ The CLI finds each component's source file to add its path and its `size` and `v
 | `nuxt`           | Turns prepared Nuxt discovery on or off. Detected by default                   |
 | `nuxtComponents` | Generated declarations relative to `root`. Defaults to `.nuxt/components.d.ts` |
 
-- Explicit `aliases` and `components` win over discovered ones. For Nuxt, run `nuxt prepare` first. A custom Nuxt build directory needs matching metadata and [CSS paths](themes.md#nuxt-ui-application-themes).
+- Explicit `aliases` and `components` win over discovered ones. For Nuxt, run `nuxt prepare` first. A custom Nuxt build directory needs matching metadata and [CSS paths](nuxt.md).
 - Missing explicit mappings, malformed metadata, and invalid resolved components fail loading.
 - A component file that cannot be parsed still gives its path, without prop choices. Unresolved or unsupported definitions omit guidance the same way.
 - Prop choices are suggestions. They do not promise the same visual result as the reported class.

@@ -43,7 +43,7 @@ Use theme classes, or add a [file override](configuration.md#per-file-rule-overr
 
 Check the spelling, then check whether your configured CSS entry imports the class's stylesheet. CSS loaded only by a component or build tool may not be part of selfix's theme.
 
-Follow [CSS import resolution](themes.md#css-import-resolution). For generated Nuxt UI colors, use the [preparation and alias setup](themes.md#nuxt-ui-application-themes). If another system supplies a class you can't load, add a [rule exception](no-unknown-classes.md).
+Follow [CSS import resolution](themes.md#css-import-resolution). For generated Nuxt UI colors, use the [preparation and alias setup](nuxt.md). If another system supplies a class you can't load, add a [rule exception](no-unknown-classes.md).
 
 ## The CLI finds no Vue files
 

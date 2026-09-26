@@ -47,10 +47,11 @@ export default defineConfig({
     actions: [{ label: "Documentation", href: "/docs" }],
     sidebar: [
       "/",
-      { label: "Get started", items: ["/getting-started", "/adoption"] },
+      { label: "Get started", items: ["/getting-started", "/adoption", "/agent-setup"] },
+      { label: "Recipes", items: ["/shadcn-vue", "/nuxt", "/ci"] },
       {
         label: "Guides",
-        items: ["/how-it-works", "/themes", "/agent-setup", "/analysis", "/troubleshooting"],
+        items: ["/how-it-works", "/themes", "/analysis", "/troubleshooting"],
       },
       {
         label: "Rules",
