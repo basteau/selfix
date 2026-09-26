@@ -40,4 +40,4 @@ Reports classes that neither Tailwind nor your loaded CSS defines. selfix asks y
 
 ## Options
 
-`allow`, `deny`, `contracts`, and `message`. See [shared policy](configuration.md#shared-policy).
+`allow`, `deny`, `contracts`, and `message`. See [rule settings](configuration.md#rule-settings).

@@ -27,4 +27,4 @@ CSS-variable shorthand such as `p-(--gutter)` and arbitrary variants such as `[&
 
 ## Options
 
-`allow`, `deny`, `contracts`, and `message`. See [shared policy](configuration.md#shared-policy).
+`allow`, `deny`, `contracts`, and `message`. See [rule settings](configuration.md#rule-settings).

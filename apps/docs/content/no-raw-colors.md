@@ -59,7 +59,7 @@ The rule checks native SVG `fill` and `stroke`, including literal string binding
 
 ## Options
 
-`allow`, `deny`, `contracts`, and `message`. See [shared policy](configuration.md#shared-policy).
+`allow`, `deny`, `contracts`, and `message`. See [rule settings](configuration.md#rule-settings).
 
 ## Limits
 

@@ -17,4 +17,4 @@ Every rule starts at `"error"`. Set each one to `"off"`, `"warn"`, or `"error"`,
 
 Each rule reports independently. Passing one rule never skips another.
 
-Severity, `allow`, `deny`, `contracts`, and `message` work the same way across the rules marked Yes. See [shared policy](configuration.md#shared-policy).
+Severity, `allow`, `deny`, `contracts`, and `message` work the same way across the rules marked Yes. See [rule settings](configuration.md#rule-settings).
