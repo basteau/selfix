@@ -90,7 +90,8 @@
   letter-spacing: -0.055em;
 }
 .landing .hero-description {
-  margin-top: 24px;
+  max-width: 40rem;
+  margin: 24px auto 0;
   color: var(--blume-muted-foreground);
   font-size: 19px;
   line-height: 1.65;

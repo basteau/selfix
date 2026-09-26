@@ -1,6 +1,6 @@
 # <img src="https://raw.githubusercontent.com/basteau/selfix/main/apps/docs/public/logo.svg" alt="" width="32" height="32" /> selfix
 
-**selfix - a linter for your design system**
+**The design-system linter for Vue 3 and Tailwind CSS 4.**
 
 A shared Button shouldn't need its padding and colors redefined on every page. selfix checks the classes added to your components and reports styling that breaks their rules.
 

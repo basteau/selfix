@@ -1,9 +1,7 @@
 ---
 title: Introduction
-description: selfix - a linter for your design system
+description: Catch styling drift in Vue 3 and Tailwind CSS 4 projects.
 ---
-
-**selfix - a linter for your design system**
 
 You build a Button with the right padding and colors. Then a page adds `p-4`. Another adds `bg-red-500`. The same component starts looking different everywhere.
 

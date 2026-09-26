@@ -4,7 +4,8 @@ import { markdownLinks } from "./markdown-links.js"
 
 export default defineConfig({
   title: "selfix",
-  description: "selfix - a linter for your design system",
+  description:
+    "Lint Vue 3 templates against your components and Tailwind CSS 4 theme. selfix catches overrides, raw colors, and typos before they ship.",
   logo: { image: "/logo.svg", text: "selfix" },
   content: { root: "content" },
   basePath: "/docs",
@@ -32,7 +33,7 @@ export default defineConfig({
         { name: "Spline Sans", src: "public/fonts/spline-sans/SplineSans[wght].ttf", weight: 500 },
       ],
       logo: "public/logo.svg",
-      titles: { "/": "selfix - a linter for your design system" },
+      titles: { "/": "selfix — the design-system linter for Vue and Tailwind" },
       palette: {
         accent: "#42b883",
         background: "#ffffff",
