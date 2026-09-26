@@ -189,7 +189,7 @@ test.each(["https://selfix.exe.xyz", "https://docs.example.com/"])(
           requested.push(String(url))
           return {
             ok: true,
-            text: async () => process.env.GITHUB_SHA + ' selfix-landing selfix Reproduce a finding',
+            text: async () => process.env.GITHUB_SHA + ' selfix-landing selfix Install selfix',
           }
         }
         ${script}
@@ -204,3 +204,11 @@ test.each(["https://selfix.exe.xyz", "https://docs.example.com/"])(
     )
   },
 )
+
+test("post-deploy content checks match the documentation sources", () => {
+  const script = readFileSync(join(root, "scripts/deploy-website.sh"), "utf8")
+  const expected = /\['\/docs\/getting-started', '([^']+)'\]/.exec(script)?.[1]
+  expect(expected).toBeDefined()
+  const page = readFileSync(join(root, "apps/docs/content/getting-started.md"), "utf8")
+  expect(page.split("\n")).toContain(`## ${expected}`)
+})

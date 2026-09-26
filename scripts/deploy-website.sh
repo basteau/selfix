@@ -51,7 +51,7 @@ for (const [route, expected] of [
   ['/.well-known/selfix-release.txt', process.env.GITHUB_SHA],
   ['/', 'selfix-landing'],
   ['/docs/', 'selfix'],
-  ['/docs/getting-started', 'Reproduce a finding'],
+  ['/docs/getting-started', 'Install selfix'],
 ]) {
   const response = await fetch(new URL(route, process.env.SITE_URL), { signal: AbortSignal.timeout(30000), cache: 'no-store' })
   assert(response.ok, `${route}: HTTP ${response.status}`)
