@@ -21,10 +21,10 @@ When a theme utility produces the same value, selfix suggests it:
 src/Page.vue:3:8 error no-arbitrary-values Replace "p-[16px]" with a named theme utility instead of an arbitrary value. Did you mean "p-4"?
 ```
 
-- Tailwind CSS 4.1.15 or later finds the match, such as `bg-[#3456d1]` to `bg-primary` or `w-[100%]` to `w-full`. It treats `1rem` as `16px`. Older versions give no suggestion.
-- selfix suggests only named utilities from Tailwind's class list. `p-[13px]` gets no suggestion, even though `p-3.25` has the same value.
+- selfix compiles the named utilities with the same root, such as `p-*` for `p-[16px]`, and compares their CSS after resolving theme variables. It treats `1rem` as `16px` and assumes theme variables keep their `@theme` values at runtime. Other variables, such as `var(--gap, 16px)`, never match.
+- It suggests only named utilities from Tailwind's class list. `p-[13px]` gets no suggestion, even though `p-3.25` has the same value.
+- Arbitrary properties such as `[padding:1rem]` and classes with modifiers such as `text-[#fff]/50` get no suggestion.
 - A theme color defined through another variable, such as `--color-primary: var(--primary)` in shadcn-vue themes, has no literal value to match.
-- The first lookup in a run takes a second or more while Tailwind indexes its utilities. Later lookups take milliseconds.
 - selfix only suggests a utility that passes the other enabled rules, so a Button contract or `no-raw-colors` can withhold it.
 
 Without a suggestion, use the named utility closest to the design. If the design needs a new value, add it to your theme. For a one-off exception, allow the class: `allow: ["p-[13px]"]`.

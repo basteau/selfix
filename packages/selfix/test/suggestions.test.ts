@@ -1,6 +1,6 @@
 import { expect, it } from "vitest"
 import { createLinter, ruleNames, type Config } from "../src/index.js"
-import { canonicalUtility } from "../src/tailwind.js"
+import { declarationSignature, themeUtility } from "../src/tailwind.js"
 
 const css = '@import "tailwindcss"; @theme { --color-primary: #124578; }'
 const rules = Object.fromEntries(
@@ -148,9 +148,7 @@ it.each([
   ["hover:p-[16px]", ["hover:p-4"]],
   ["bg-[#124578]", ["bg-primary"]],
   ["w-[100%]", ["w-full"]],
-  ["[padding:1rem]", ["p-4"]],
   ["hover:p-[16px]!", ["hover:p-4!"]],
-  ["text-[#124578]/[0.5]", ["text-primary/50"]],
 ])("suggests the theme utility with the same value for %s", async (token, expected) => {
   const linter = await createLinter({ css })
   const finding = linter
@@ -169,22 +167,33 @@ it.each(["p-[13px]", "w-[1234px]", "bg-[var(--primary)]"])(
   },
 )
 
-it("keeps value suggestions optional for Tailwind versions without canonicalization", () => {
-  const compiles = { candidatesToCss: (classes: string[]) => classes.map(() => ".x{}") }
-  const named = new Set(["p-4"])
-  expect(canonicalUtility(compiles, named, "p-[16px]")).toBeUndefined()
-  const canonical = (result: string) => ({ ...compiles, canonicalizeCandidates: () => [result] })
-  expect(canonicalUtility(canonical("p-[16px]"), named, "p-[16px]")).toBeUndefined()
-  expect(canonicalUtility(canonical("p-(--gap)"), named, "p-[var(--gap)]")).toBeUndefined()
-  expect(canonicalUtility(canonical("p-3.25"), named, "p-[13px]")).toBeUndefined()
+it("matches theme values after resolving variables and calc products", () => {
+  const theme = new Map([
+    ["--spacing", "0.25rem"],
+    ["--color-primary", "#124578"],
+  ])
+  const sign = (value: string) => declarationSignature([{ property: "padding", value }], theme)
+  expect(sign("calc(var(--spacing) * 4)")).toBe(sign("16px"))
+  expect(sign("calc(var(--spacing) * 4)")).toBe(sign("1rem"))
+  expect(sign("var(--color-primary)")).toBe(sign("#124578"))
+  expect(sign("var(--missing)")).not.toBe(sign("16px"))
+  expect(sign("var(--missing, 16px)")).not.toBe(sign("16px"))
+  const signatures: Record<string, string> = {
+    "p-[16px]": "a",
+    "p-4": "a",
+    "p-3": "b",
+    "p-(--x)": "a",
+  }
+  const names = () => ["p-3", "p-4", "p-(--x)"]
+  expect(themeUtility("md:p-[16px]!", names, (name) => signatures[name])).toBe("md:p-4!")
   expect(
-    canonicalUtility(
-      { canonicalizeCandidates: () => ["p-4"], candidatesToCss: () => [null] },
-      named,
+    themeUtility(
       "p-[16px]",
+      () => ["p-4", "p-four"],
+      (name) => (name === "p-four" ? "a" : signatures[name]),
     ),
   ).toBeUndefined()
-  expect(canonicalUtility(canonical("md:p-4!"), named, "md:p-[16px]!")).toBe("md:p-4!")
+  expect(themeUtility("[padding:1rem]", names, () => "a")).toBeUndefined()
 })
 
 it("withholds a value suggestion that another enabled rule would report", async () => {
@@ -198,5 +207,35 @@ it("withholds a value suggestion that another enabled rule would report", async 
   expect(button.map((item) => [item.rule, item.suggestions])).toEqual([
     ["no-arbitrary-values", undefined],
     ["no-restyle", undefined],
+  ])
+})
+
+it("keeps the theme prefix on a value suggestion", async () => {
+  const linter = await createLinter({
+    css: '@import "tailwindcss" prefix(tw); @theme { --color-primary: #124578; }',
+  })
+  const [finding] = linter.lint('<template><div class="tw:hover:p-[16px]" /></template>')
+  expect(finding).toMatchObject({ rule: "no-arbitrary-values", suggestions: ["tw:hover:p-4"] })
+})
+
+it.each([
+  ["-mt-[16px]", ["-mt-4"]],
+  ["text-[14px]", undefined],
+  ["p-[var(--gap,16px)]", undefined],
+  ["z-[var(--z,10)]", undefined],
+])("suggests %s only when the value is equivalent", async (token, expected) => {
+  const linter = await createLinter({ css })
+  const finding = linter
+    .lint(`<template><div class="${token}" /></template>`)
+    .find((item) => item.rule === "no-arbitrary-values")
+  expect(finding?.suggestions).toEqual(expected)
+})
+
+it("reports arbitrary blur values whose siblings have empty custom properties", async () => {
+  const linter = await createLinter({ css })
+  for (const token of ["blur-[8px]", "blur-none"])
+    expect(() => linter.lint(`<template><div class="${token}" /></template>`)).not.toThrow()
+  expect(linter.lint('<template><div class="blur-[8px]" /></template>')).toEqual([
+    expect.objectContaining({ rule: "no-arbitrary-values" }),
   ])
 })

@@ -20,7 +20,7 @@ type DesignSystem = {
   getVariants(): { name: string; values: string[]; hasDash: boolean }[]
   theme: {
     prefix: string | null
-    entries(): Iterable<[string, { options: number }]>
+    entries(): Iterable<[string, { options: number; value?: string }]>
     keysInNamespaces(themeKeys: Iterable<`--${string}`>): string[]
   }
   parseCandidate(candidate: string): {
@@ -29,8 +29,6 @@ type DesignSystem = {
     modifier?: { kind: string; value: string } | null
   }[]
   candidatesToCss(classes: string[]): (string | null)[]
-  // Added in Tailwind CSS 4.1.15; feature-detected before use.
-  canonicalizeCandidates?(candidates: string[], options?: { rem?: number }): string[]
 }
 
 type LoadOptions = {
@@ -117,7 +115,7 @@ export async function createTailwind(
   inspect(token: string): InspectResult
   isRawColor(value: string): boolean
   suggest(token: string): string[]
-  canonical(token: string): string | undefined
+  themeMatch(token: string): string | undefined
   colors: string[]
 }> {
   const loadedStylesheets: string[] = []
@@ -222,7 +220,10 @@ export async function createTailwind(
 
   let vocabulary: string[] | undefined
   let variants: string[] | undefined
-  let named: Set<string> | undefined
+  const byRoot = new Map<string, string[]>()
+  let classList: string[] | undefined
+  let themeValues: Map<string, string> | undefined
+  const signatures = new Map<string, string | undefined>()
   return {
     colors,
     isRawColor(value) {
@@ -262,9 +263,39 @@ export async function createTailwind(
       }
       return [...candidates].sort()
     },
-    canonical(token: string): string | undefined {
-      named ??= new Set(designSystem.getClassList().map(([name]) => name))
-      return canonicalUtility(designSystem, named, token)
+    themeMatch(token: string): string | undefined {
+      themeValues ??= new Map(
+        [...designSystem.theme.entries()].flatMap(([key, entry]) =>
+          typeof entry.value === "string" ? [[key, entry.value] as const] : [],
+        ),
+      )
+      // With a prefix, class-list names and compiled candidates carry `prefix:`.
+      const prefix = designSystem.theme.prefix ? `${designSystem.theme.prefix}:` : ""
+      classList ??= designSystem
+        .getClassList()
+        .map(([name]) => (prefix && name.startsWith(prefix) ? name.slice(prefix.length) : name))
+      const sameRoot = (root: string) => {
+        if (!byRoot.has(root))
+          byRoot.set(
+            root,
+            classList!.filter((name) => name.startsWith(`${root}-`)),
+          )
+        return byRoot.get(root)!
+      }
+      const signature = (utility: string) => {
+        if (!signatures.has(utility)) {
+          const css = designSystem.candidatesToCss([prefix + utility])[0]
+          let found: string | undefined
+          try {
+            found = css ? declarationSignature(parseDeclarations(css), themeValues!) : undefined
+          } catch {
+            // A sibling selfix cannot parse only removes the suggestion.
+          }
+          signatures.set(utility, found)
+        }
+        return signatures.get(utility)
+      }
+      return themeUtility(token, sameRoot, signature)
     },
     inspect(token: string): InspectResult {
       const cached = cache.get(token)
@@ -277,25 +308,66 @@ export async function createTailwind(
   }
 }
 
-// Tailwind maps an arbitrary value to the utility with the same value, such as `p-[16px]`
-// to `p-4`, assuming a 16px root font size. selfix keeps only named utilities from the
-// class list, so dynamic spacing multiples such as `p-3.25` and `bg-(--x)` shorthands
-// never replace a reported arbitrary value.
-export function canonicalUtility(
-  designSystem: Pick<DesignSystem, "canonicalizeCandidates" | "candidatesToCss">,
-  named: Set<string>,
+// An arbitrary value that equals a named theme utility, such as `p-[16px]` and `p-4`,
+// suggests that utility. Only utilities with the same root are compiled, and their
+// declarations are compared after resolving theme variables and simple `calc()`
+// products, with `1rem` as `16px`. Variants and `!` are kept. Modifiers and arbitrary
+// properties such as `[padding:1rem]` get no suggestion.
+export function themeUtility(
   token: string,
+  sameRoot: (root: string) => string[],
+  signature: (utility: string) => string | undefined,
 ): string | undefined {
-  if (typeof designSystem.canonicalizeCandidates !== "function") return undefined
-  const [result] = designSystem.canonicalizeCandidates([token], { rem: 16 })
-  if (!result || result === token || /[[(]/.test(result.split(":").at(-1)!)) return undefined
-  const utility = result
-    .split(":")
-    .at(-1)!
-    .replace(/^!|!$/g, "")
-    .replace(/\/[^/]*$/, "")
-  if (!named.has(utility)) return undefined
-  return designSystem.candidatesToCss([result])[0] ? result : undefined
+  const base = baseCandidate(token)
+  const variants = token.slice(0, token.length - base.length)
+  const important = base.startsWith("!") ? "!" : ""
+  const trailing = base.endsWith("!") ? "!" : ""
+  const utility = base.slice(important.length, trailing ? -1 : undefined)
+  const match = /^(-?[a-z]+(?:-[a-z]+)*?)-\[[^\]]+\]$/.exec(utility)
+  if (!match) return undefined
+  const target = signature(utility)
+  if (!target) return undefined
+  const found = sameRoot(match[1]!).filter(
+    (name) => !name.includes("[") && !name.includes("(") && signature(name) === target,
+  )
+  return found.length === 1 ? `${variants}${important}${found[0]}${trailing}` : undefined
+}
+
+export function declarationSignature(
+  declarations: { property: string; value: string }[],
+  theme: Map<string, string>,
+): string {
+  const resolve = (value: string, depth = 0): string =>
+    depth > 8
+      ? value
+      : value.replace(
+          // Only theme keys resolve. Any other variable can change at runtime, so it and
+          // its fallback stay as written.
+          /var\((--[\w-]+)\)/g,
+          (whole, name: string) => {
+            const found = theme.get(name)
+            return found === undefined ? whole : resolve(found, depth + 1)
+          },
+        )
+  const number = (value: number) => String(Number(value.toFixed(4)))
+  const normalize = (value: string) =>
+    resolve(value)
+      .replace(
+        /calc\(\s*(-?[\d.]+)(px|rem)?\s*\*\s*(-?[\d.]+)(px|rem)?\s*\)/g,
+        (whole, left: string, leftUnit = "", right: string, rightUnit = "") =>
+          leftUnit && rightUnit
+            ? whole
+            : `${number(Number(left) * Number(right))}${leftUnit || rightUnit}`,
+      )
+      .replace(/(-?[\d.]+)rem\b/g, (_, size: string) => `${number(Number(size) * 16)}px`)
+      .replace(/(-?[\d.]+)px\b/g, (_, size: string) => `${number(Number(size))}px`)
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase()
+  return declarations
+    .map(({ property, value }) => `${property}:${normalize(value)}`)
+    .sort()
+    .join(";")
 }
 
 // A single insertion, deletion, substitution, or adjacent transposition.
@@ -758,7 +830,10 @@ function scanDeclarations(
       return
     }
     if (!statement || statement.startsWith("@")) return
-    const match = /^([_a-zA-Z-][\w-]*)\s*:\s*([\s\S]+)$/.exec(statement)
+    // Custom properties may be empty, as in Tailwind's `--tw-blur: ;`.
+    const match =
+      /^([_a-zA-Z-][\w-]*)\s*:\s*([\s\S]+)$/.exec(statement) ??
+      /^(--[\w-]+)\s*:\s*()$/.exec(statement)
     if (!match) fail("unsupported or malformed declaration")
     const block = blocks.at(-1)
     if (!block) fail("declaration outside a rule")

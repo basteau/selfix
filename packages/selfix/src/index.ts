@@ -657,7 +657,7 @@ export async function createLinter(options: LinterOptions) {
             }
             const arbitrary = /[-/]\[|^\[[^\]]+:/.test(baseClass(token))
             if (name === "no-arbitrary-values" && arbitrary) {
-              const canonical = tailwind.canonical(token)
+              const canonical = tailwind.themeMatch(token)
               report(
                 site,
                 selected,
