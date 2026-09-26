@@ -1,7 +1,13 @@
 import path from "node:path"
 import { createProject, type ComponentDefinition } from "./project.js"
 import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
-import { collectVue, resolveComponentAlias, type ComponentUsage } from "./vue.js"
+import {
+  collectVue,
+  forwardsClass,
+  parseSfc,
+  resolveComponentAlias,
+  type ComponentUsage,
+} from "./vue.js"
 import {
   ruleNames,
   validateLinterConfig,
@@ -255,6 +261,41 @@ export async function createLinter(options: LinterOptions) {
     return { recognized: false, reason: "unrecognized (no recognition setting matches)" }
   }
 
+  // One level of wrapper tracing. A component whose template has a single root that is a
+  // recognized component, and that keeps Vue's attribute fallthrough, passes its caller's
+  // class to that component. Needs component source discovery to read the wrapper.
+  const wrappers = new Map<string, ComponentUsage | undefined>()
+  function wrappedBy(file: string): ComponentUsage | undefined {
+    if (wrappers.has(file)) return wrappers.get(file)
+    let target: ComponentUsage | undefined
+    const source = project?.read(file)
+    if (source !== undefined) {
+      const { descriptor } = parseSfc(source, { filename: file, sourceMap: false })
+      const roots = (descriptor.template?.ast?.children ?? []).filter(
+        (node) => node.type !== 3 && !(node.type === 2 && !node.content.trim()),
+      )
+      const root = roots.length === 1 && roots[0]!.type === 1 ? roots[0]! : undefined
+      // A v-for root renders a fragment, which receives no fallthrough attributes.
+      const repeated = root?.props.some((prop) => prop.type === 7 && prop.name === "for")
+      if (
+        root &&
+        !repeated &&
+        forwardsClass([descriptor.script?.content, descriptor.scriptSetup?.content])
+      ) {
+        const inner = collectVue(source, file, {
+          classProps: config.classProps,
+          classHelpers: config.classHelpers,
+        })
+        const usage = inner.fatal
+          ? undefined
+          : inner.usages.find((item) => item.offset === root.loc.start.offset)
+        if (usage && !usage.unsupported && recognition(usage).recognized) target = usage
+      }
+    }
+    wrappers.set(file, target)
+    return target
+  }
+
   function effectiveSettings(filename: string) {
     const effective = overrides.length ? settings.map((setting) => ({ ...setting })) : settings
     const relativeFile = path.relative(root, path.resolve(root, filename)).split(path.sep).join("/")
@@ -314,7 +355,6 @@ export async function createLinter(options: LinterOptions) {
             offset: site.offset,
             ...positionAt(site.offset),
           })
-        const match = recognition(site)
         const definition = site.unsupported
           ? undefined
           : project?.resolve(
@@ -323,6 +363,13 @@ export async function createLinter(options: LinterOptions) {
               path.resolve(root, filename),
               source,
             )
+        let match = recognition(site)
+        const inner = !match.recognized && definition ? wrappedBy(definition.file) : undefined
+        if (inner)
+          match = {
+            recognized: true,
+            reason: `wraps <${inner.component}>, which is ${recognition(inner).reason}`,
+          }
         return {
           ...site,
           ...positionAt(site.offset),
@@ -389,6 +436,14 @@ export async function createLinter(options: LinterOptions) {
           )
         return definitions.get(component)
       }
+      // The component whose no-restyle contract applies to a class site, if any.
+      const restyled = (site: (typeof collected.sites)[number]) => {
+        if (recognition(site).recognized) return { component: site.component, via: undefined }
+        if (site.prop !== undefined) return undefined
+        const definition = definitionFor(site.component)
+        const inner = definition && wrappedBy(definition.file)
+        return inner ? { component: inner.component, via: site.component } : undefined
+      }
       const effective = effectiveSettings(filename)
       for (const { name, severity, policy, options } of effective) {
         if (severity === "off") continue
@@ -424,6 +479,7 @@ export async function createLinter(options: LinterOptions) {
           token = "",
           category: Category = "unknown",
           suggestions: string[] = [],
+          wrapped?: { component: string; via: string },
         ) => {
           const custom =
             typeof selected.message === "string"
@@ -431,7 +487,7 @@ export async function createLinter(options: LinterOptions) {
               : (selected.message?.[category] ?? selected.message?.default)
           const definition = name === "no-restyle" ? definitionFor(site.component) : undefined
           const fields: Record<string, string> = {
-            component: site.component,
+            component: wrapped?.component ?? site.component,
             className: token,
             category,
             file: filename,
@@ -447,6 +503,9 @@ export async function createLinter(options: LinterOptions) {
             const field = bar < 0 ? key : key.slice(0, bar)
             return fields[field] || (bar < 0 ? "" : key.slice(bar + 1))
           })
+          const through = wrapped
+            ? ` <${wrapped.via}> passes its class to <${wrapped.component}>.`
+            : ""
           const context =
             site.prop === undefined
               ? ""
@@ -469,7 +528,7 @@ export async function createLinter(options: LinterOptions) {
             name,
             severity,
             site.offset,
-            message + details + context,
+            message + through + details + context,
             site.component,
             token || undefined,
             {
@@ -522,8 +581,9 @@ export async function createLinter(options: LinterOptions) {
           }
         }
         for (const site of collected.sites) {
-          if (name === "no-restyle" && !recognition(site).recognized) continue
-          const selected = policy(site.component)
+          const target = restyled(site)
+          if (name === "no-restyle" && !target) continue
+          const selected = policy(name === "no-restyle" ? target!.component : site.component)
           if (name === "require-static-classes") {
             if (site.dynamic)
               report(
@@ -551,9 +611,11 @@ export async function createLinter(options: LinterOptions) {
                 report(
                   site,
                   selected,
-                  restyleMessage(token, site.component, rejectedCategory, denied),
+                  restyleMessage(token, target!.component, rejectedCategory, denied),
                   token,
                   rejectedCategory,
+                  [],
+                  target!.via ? { component: target!.component, via: target!.via } : undefined,
                 )
               continue
             }
@@ -579,8 +641,8 @@ export async function createLinter(options: LinterOptions) {
                   rule === "no-restricted-components"
                 )
                   return true
-                if (rule === "no-restyle" && !recognition(site).recognized) return true
-                const selected = policy(site.component)
+                if (rule === "no-restyle" && !target) return true
+                const selected = policy(rule === "no-restyle" ? target!.component : site.component)
                 if (matches(selected.deny, candidate, replacement.categories)) return false
                 if (rule === "no-restyle")
                   return replacement.categories.every((category) =>

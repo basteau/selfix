@@ -59,7 +59,7 @@ A clean result covers only the selected files and enabled rules. selfix doesn't 
 - Component props you haven't configured as [class props](configuration.md#configured-class-props).
 - Dynamic values when `require-static-classes` is off.
 - JSX, TSX, or class calls that appear only in script.
-- Styles passed through wrapper components. Configure wrapper recognition explicitly.
+- Styles passed through wrappers deeper than one level, or through wrappers with several roots or `inheritAttrs: false`. See [wrapper components](no-restyle.md#wrapper-components).
 
 Static `<component :is="Imported">` bindings and single-member namespace tags such as `<UI.Button>` use the resolved component, as described in [no-restricted-components](no-restricted-components.md). Other dynamic expressions and `is="vue:…"` don't inherit an imported component's contract.
 

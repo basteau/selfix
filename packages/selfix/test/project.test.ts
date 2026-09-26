@@ -764,3 +764,133 @@ it("uses fallback text for any empty placeholder and keeps later bars", async ()
   expect(restyle?.message).toBe("a|b p-4 no prop")
   expect(inline?.message).toBe("n/a static")
 })
+
+describe("wrapper tracing", () => {
+  const wrapper = (template: string, script = "") =>
+    `<script setup>import { Button } from "@/components/ui"\n${script}</script><template>${template}</template>`
+  const page = (classes: string) =>
+    `<script setup>import AppButton from "./AppButton.vue"</script><template><AppButton class="${classes}" /></template>`
+  async function lintWrapper(source: string, classes: string, config: Config = {}) {
+    const { root, write } = fixture()
+    write("AppButton.vue", source)
+    const linter = await createLinter({
+      css: '@import "tailwindcss";',
+      config: { project: { root }, ...config },
+    })
+    return {
+      linter,
+      page: path.join(root, "Page.vue"),
+      findings: linter.lint(page(classes), path.join(root, "Page.vue")),
+    }
+  }
+
+  it("checks a class on a single-root wrapper against the wrapped component", async () => {
+    const { findings } = await lintWrapper(wrapper("<Button><slot /></Button>"), "p-4")
+    expect(findings).toEqual([
+      expect.objectContaining({ rule: "no-restyle", component: "AppButton", className: "p-4" }),
+    ])
+    expect(findings[0]?.message).toContain('"p-4" is not allowed on <Button>')
+    expect(findings[0]?.message).toContain("<AppButton> passes its class to <Button>.")
+    expect(
+      (await lintWrapper(wrapper("<Button><slot /></Button>"), "mt-4 w-full")).findings,
+    ).toEqual([])
+  })
+
+  it("applies the wrapped component's contract", async () => {
+    const { findings } = await lintWrapper(wrapper("<Button><slot /></Button>"), "p-4", {
+      rules: {
+        "no-restyle": [
+          "error",
+          { contracts: [{ pattern: "^Button$", allow: ["layout", "spacing"] }] },
+        ],
+      },
+    })
+    expect(findings).toEqual([])
+  })
+
+  it.each([
+    [
+      "turns off attribute fallthrough",
+      wrapper("<Button><slot /></Button>", "defineOptions({ inheritAttrs: false })"),
+    ],
+    ["has several roots", wrapper("<Button /><Button />")],
+    ["renders a native root", wrapper("<button><slot /></button>")],
+    [
+      "wraps an unrecognized component",
+      `<script setup>import Other from "./Other.vue"</script><template><Other /></template>`,
+    ],
+    ["repeats its root with v-for", wrapper('<Button v-for="i in 3" :key="i" />')],
+    [
+      "declares class as a prop",
+      wrapper("<Button><slot /></Button>", "defineProps<{ class?: string }>()"),
+    ],
+    [
+      "declares class in runtime props",
+      wrapper("<Button><slot /></Button>", 'defineProps(["class"])'),
+    ],
+    [
+      "turns off fallthrough in a plain script",
+      `<script>export default { "inheritAttrs": false }</script><script setup>import { Button } from "@/components/ui"</script><template><Button /></template>`,
+    ],
+    [
+      "sets inheritAttrs to a non-literal",
+      wrapper("<Button />", "const keep = false\ndefineOptions({ inheritAttrs: keep })"),
+    ],
+  ])("does not trace a wrapper that %s", async (_label, source) => {
+    expect((await lintWrapper(source, "p-4")).findings).toEqual([])
+  })
+
+  it("keeps tracing through comments, v-if, and inheritAttrs: true", async () => {
+    for (const source of [
+      wrapper("<!-- note --><Button><slot /></Button>"),
+      wrapper('<Button v-if="true"><slot /></Button>'),
+      wrapper("<Button />", "defineOptions({ inheritAttrs: true })"),
+    ])
+      expect((await lintWrapper(source, "p-4")).findings.map((item) => item.rule)).toEqual([
+        "no-restyle",
+      ])
+  })
+
+  it("names the wrapped component in custom messages and keeps the wrapper note", async () => {
+    const { findings } = await lintWrapper(wrapper("<Button />"), "p-4", {
+      rules: {
+        "no-restyle": [
+          "error",
+          { contracts: [{ pattern: "^Button$", message: "Style {{component}} with props." }] },
+        ],
+      },
+    })
+    expect(findings[0]?.message).toMatch(
+      /^Style Button with props\. <AppButton> passes its class to <Button>\./,
+    )
+  })
+
+  it("does not trace configured class props", async () => {
+    const { root, write } = fixture()
+    write("AppButton.vue", wrapper("<Button />"))
+    const linter = await createLinter({
+      css: '@import "tailwindcss";',
+      config: {
+        project: { root },
+        classProps: [{ pattern: "^AppButton$", props: { inner: "class" } }],
+      },
+    })
+    const source = `<script setup>import AppButton from "./AppButton.vue"</script><template><AppButton inner="p-4" /></template>`
+    expect(linter.lint(source, path.join(root, "Page.vue"))).toEqual([])
+  })
+
+  it("reports the wrapped component in doctor", async () => {
+    const { linter, page: file } = await lintWrapper(wrapper("<Button><slot /></Button>"), "p-4")
+    const [usage] = linter.doctor(page("p-4"), file).usages
+    expect(usage).toMatchObject({
+      component: "AppButton",
+      active: true,
+      reason: 'wraps <Button>, which is recognized by ui "@/components/ui"',
+    })
+  })
+
+  it("needs component source discovery", async () => {
+    const linter = await createLinter({ css: '@import "tailwindcss";' })
+    expect(linter.lint(page("p-4"), "Page.vue")).toEqual([])
+  })
+})

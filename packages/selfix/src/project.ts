@@ -578,6 +578,10 @@ export function createProject(options: ProjectOptions) {
     return next ? resolveExport(next, target.name, input, seen) : undefined
   }
   return {
+    /** The snapshot source of a discovered file. */
+    read(file: string): string | undefined {
+      return sources.get(file)
+    },
     resolve(
       component: string,
       imported: ComponentAlias | undefined,

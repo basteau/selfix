@@ -1273,3 +1273,56 @@ function issue(error: SyntaxError | unknown, baseOffset: number): ParseIssue {
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
+
+// Vue passes a caller's class to a component's single root only through attribute
+// fallthrough. That stops when `inheritAttrs` is anything but `true`, or when the
+// component declares `class` as a prop. Reads the scripts without running them.
+export function forwardsClass(scripts: (string | undefined)[]): boolean {
+  let forwards = true
+  const keyName = (node: { type: string; name?: string; value?: unknown } | undefined) =>
+    node?.type === "Identifier"
+      ? node.name
+      : node?.type === "StringLiteral"
+        ? node.value
+        : undefined
+  const visit = (node: unknown, inProps: boolean): void => {
+    if (!forwards || !node || typeof node !== "object") return
+    if (Array.isArray(node)) return node.forEach((item) => visit(item, inProps))
+    const item = node as Record<string, unknown> & { type?: string }
+    if (item.type === "ObjectProperty" || item.type === "ObjectMethod") {
+      const key = keyName(item.key as Parameters<typeof keyName>[0])
+      if (
+        key === "inheritAttrs" &&
+        (item.value as { type?: string; value?: unknown })?.type !== "BooleanLiteral"
+      )
+        forwards = false
+      if (key === "inheritAttrs" && (item.value as { value?: unknown })?.value === false)
+        forwards = false
+      if (key === "class" && inProps) forwards = false
+      if (key === "props") return visit(item.value, true)
+    }
+    if (
+      item.type === "TSPropertySignature" &&
+      keyName(item.key as Parameters<typeof keyName>[0]) === "class"
+    )
+      forwards = false
+    if (item.type === "StringLiteral" && inProps && item.value === "class") forwards = false
+    if (
+      item.type === "CallExpression" &&
+      (item.callee as { type?: string; name?: string })?.type === "Identifier" &&
+      (item.callee as { name?: string }).name === "defineProps"
+    )
+      return visit([item.arguments, item.typeParameters], true)
+    for (const [field, value] of Object.entries(item))
+      if (field !== "loc" && field !== "start" && field !== "end") visit(value, inProps)
+  }
+  for (const script of scripts) {
+    if (!script?.trim()) continue
+    try {
+      visit(babelParse(script, { sourceType: "module", plugins: ["typescript"] }).program, false)
+    } catch {
+      return false
+    }
+  }
+  return forwards
+}
