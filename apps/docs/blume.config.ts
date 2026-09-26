@@ -67,7 +67,7 @@ export default defineConfig({
         ],
       },
       { label: "Reference", items: ["/configuration", "/cli", "/api"] },
-      { label: "Contributing", items: ["/maintaining"] },
+      { label: "Contributing", items: ["/maintaining", "/releasing"] },
     ],
   },
   ai: { llmsTxt: true },

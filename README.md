@@ -69,7 +69,7 @@ pnpm docs:dev     # Start the Blume documentation site
 pnpm check        # Run all repository checks
 ```
 
-Edit docs in `apps/docs/content`. Read [AGENTS.md](AGENTS.md) for project conventions and [Development](https://github.com/basteau/selfix/blob/main/apps/docs/content/maintaining.md) for testing and releases.
+Edit docs in `apps/docs/content`. Read [AGENTS.md](AGENTS.md) for project conventions, [Development](https://github.com/basteau/selfix/blob/main/apps/docs/content/maintaining.md) for testing, and [Releases and deployment](https://github.com/basteau/selfix/blob/main/apps/docs/content/releasing.md) for publishing.
 
 [Report a bug](https://github.com/basteau/selfix/issues) with your Vue/CSS example, config, command, and dependency versions.
 
