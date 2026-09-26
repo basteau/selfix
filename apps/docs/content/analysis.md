@@ -30,6 +30,12 @@ Helpers aren't executed, and selfix doesn't simulate how they merge classes.
 
 Malformed Vue, external templates, template preprocessors, and external script blocks also fail. Keep the template and script inside the SFC. Where possible, readable parts are still checked.
 
+## SVG paint attributes
+
+`no-raw-colors` checks native SVG `fill` and `stroke`, including literal string bindings and literal `v-bind` objects. Values stay intact: a color such as `rgb(1 2 3)` is not split into classes. Unresolved explicit paint bindings produce `parse-error` when the rule is enabled; expressions are never evaluated. Use `currentColor`, a semantic CSS variable, or an explicit rule exception for dynamic paints.
+
+Other SVG presentation attributes and component props are outside this check. Paint-server references such as `url(#gradient)` are allowed, but selfix does not follow their targets or validate rendered colors. Existing class checks still run independently.
+
 ## Custom CSS selectors
 
 Loaded custom classes contribute their CSS effects, including supported nesting and `@apply`. The check considers possible effects, not the browser's current state or cascade.

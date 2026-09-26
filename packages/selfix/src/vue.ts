@@ -73,6 +73,13 @@ export interface ComponentUsage {
   unsupported?: string
 }
 
+export interface SvgColorSite {
+  component: string
+  prop: "fill" | "stroke"
+  value?: string
+  offset: number
+}
+
 export interface StyleSite {
   component: string
   offset: number
@@ -97,6 +104,7 @@ export interface ComponentAlias {
 type ComponentAliases = Map<string, ComponentAlias>
 
 interface TemplateContext {
+  svgColors: SvgColorSite[]
   usages: ComponentUsage[]
   classProps: { pattern: RegExp; props: Map<string, "class" | "slot-map"> }[]
   aliases: ComponentAliases
@@ -125,6 +133,7 @@ export function collectVue(
   options: CollectVueOptions = {},
 ): {
   usages: ComponentUsage[]
+  svgColors: SvgColorSite[]
   sites: ClassSite[]
   styles: StyleSite[]
   errors: ParseIssue[]
@@ -167,6 +176,7 @@ export function collectVue(
 
   const bindings = collectStaticBindings(setup)
   const usages: ComponentUsage[] = []
+  const svgColors: SvgColorSite[] = []
   const sites: ClassSite[] = []
   const styles: StyleSite[] = []
 
@@ -179,21 +189,21 @@ export function collectVue(
 
   const template = parsed.descriptor.template
   if (!template) {
-    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   if (template.src) {
     errors.push({
       message: "External template src is not supported",
       offset: template.loc.start.offset,
     })
-    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   if (template.lang && template.lang !== "html") {
     errors.push({
       message: `Template language "${template.lang}" is not supported`,
       offset: template.loc.start.offset,
     })
-    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
   const templateAst = options.forceCompileTemplateAst ? undefined : template.ast
   const errorsBeforeCompile = errors.length
@@ -201,13 +211,14 @@ export function collectVue(
     templateAst ?? compileTemplateAst(template.content, filename, template.loc.start.offset, errors)
   fatal ||= errors.length > errorsBeforeCompile
   if (!ast) {
-    return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
   }
 
   walkTemplate(
     ast,
     {
       usages,
+      svgColors,
       classProps: (options.classProps ?? []).map((entry) => ({
         pattern: new RegExp(entry.pattern),
         props: new Map(
@@ -224,7 +235,7 @@ export function collectVue(
     sites,
     styles,
   )
-  return { usages, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+  return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
 }
 
 function compileTemplateAst(
@@ -525,6 +536,7 @@ function collectElement(
   styles: StyleSite[],
 ): void {
   // Vue classifies native tags and literal v-pre content as elements, not components.
+  const isSvg = node.ns === 1 && node.tagType === 0
   const isComponent = node.tagType === 1
   const identity = isComponent ? componentIdentity(node, context) : undefined
   const component = identity?.component ?? node.tag.toLowerCase()
@@ -549,6 +561,32 @@ function collectElement(
   }
 
   for (const prop of node.props) {
+    if (isSvg) {
+      for (const name of ["fill", "stroke"] as const) {
+        if (prop.type === VueNode.Attribute && prop.name === name) {
+          context.svgColors.push({
+            component,
+            prop: name,
+            value: prop.value?.content ?? "",
+            offset: context.offset + prop.loc.start.offset,
+          })
+        } else if (prop.type === VueNode.Directive && isBoundAttribute(prop, name)) {
+          let value: string | undefined
+          try {
+            const content = expressionContent(prop.exp)
+            if (content) value = svgLiteralValue(parseExpression(content))
+          } catch {
+            // Keep unreadable bindings explicit; never evaluate application code.
+          }
+          context.svgColors.push({
+            component,
+            prop: name,
+            value,
+            offset: context.offset + prop.loc.start.offset,
+          })
+        }
+      }
+    }
     if (prop.type === VueNode.Attribute) {
       const name = normalizePropName(prop.name)
       const mode = configured?.get(name)
@@ -639,7 +677,7 @@ function collectElement(
       styles.push({ component, offset: context.offset + prop.loc.start.offset })
     }
     if (isFullBind(prop)) {
-      collectSpreadAttrs(prop, component, importSource, context, sites, styles, configured)
+      collectSpreadAttrs(prop, component, importSource, context, sites, styles, configured, isSvg)
     }
     if (isDynamicBindArg(prop)) {
       context.errors.push({
@@ -693,6 +731,7 @@ function collectSpreadAttrs(
   sites: ClassSite[],
   styles: StyleSite[],
   configured: Map<string, "class" | "slot-map"> | undefined,
+  isSvg = false,
 ): void {
   const content = expressionContent(prop.exp)
   if (!content) {
@@ -737,6 +776,14 @@ function collectSpreadAttrs(
       continue
     }
     const key = propertyKey(property)
+    if (isSvg && (key === "fill" || key === "stroke")) {
+      context.svgColors.push({
+        component,
+        prop: key,
+        value: svgLiteralValue(property.value),
+        offset: context.offset + prop.loc.start.offset,
+      })
+    }
     const name = key === undefined ? undefined : normalizePropName(key)
     const mode = name === undefined ? undefined : configured?.get(name)
     if (mode) {
@@ -767,6 +814,15 @@ function collectSpreadAttrs(
       styles.push({ component, offset: context.offset + prop.loc.start.offset })
     }
   }
+}
+
+function svgLiteralValue(expression: ExpressionInput): string | undefined {
+  if (expression.type === "StringLiteral") return expression.value
+  if (expression.type === "NullLiteral") return ""
+  if (expression.type === "TemplateLiteral" && expression.expressions.length === 0) {
+    return expression.quasis.map((part) => part.value.cooked ?? part.value.raw).join("")
+  }
+  return undefined
 }
 
 function isBoundAttribute(prop: DirectiveNode, name: string): boolean {

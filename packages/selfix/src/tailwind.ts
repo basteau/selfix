@@ -113,6 +113,7 @@ export async function createTailwind(
   cssAliases: Record<string, string> = {},
 ): Promise<{
   inspect(token: string): InspectResult
+  isRawColor(value: string): boolean
   suggest(token: string): string[]
   colors: string[]
 }> {
@@ -220,6 +221,9 @@ export async function createTailwind(
   let variants: string[] | undefined
   return {
     colors,
+    isRawColor(value) {
+      return hasRawColor([{ property: "fill", value }], stockColors, true)
+    },
     suggest(token: string): string[] {
       // Keep arbitrary syntax and escaped identifiers opaque to spelling matching.
       if (/[[\]()\\]/.test(token) || designSystem.candidatesToCss([token])[0]) return []

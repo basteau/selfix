@@ -489,6 +489,34 @@ export async function createLinter(options: LinterOptions) {
           }
           continue
         }
+        if (name === "no-raw-colors") {
+          for (const site of collected.svgColors) {
+            const selected = policy(site.component)
+            const denied = matches(selected.deny, site.prop, ["color"])
+            if (!denied && matches(selected.allow, site.prop, ["color"])) continue
+            if (site.value === undefined) {
+              emit(
+                "parse-error",
+                "error",
+                site.offset,
+                `Cannot inspect dynamic SVG ${site.prop} on <${site.component}>; use a literal color, currentColor, or a semantic CSS variable.`,
+                site.component,
+                undefined,
+                { prop: site.prop },
+              )
+            } else if (denied || tailwind.isRawColor(site.value)) {
+              report(
+                site,
+                selected,
+                denied
+                  ? `SVG ${site.prop} is denied by the design-system policy for <${site.component}>.`
+                  : `Replace SVG ${site.prop} color ${JSON.stringify(site.value)} with currentColor or a semantic theme variable.`,
+                "",
+                "color",
+              )
+            }
+          }
+        }
         for (const site of collected.sites) {
           if (name === "no-restyle" && !recognition(site).recognized) continue
           const selected = policy(site.component)

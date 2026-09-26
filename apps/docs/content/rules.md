@@ -100,9 +100,21 @@ The class must use the named token. Redefining `red-500` still leaves it a palet
 
 Custom CSS is checked too: replace `.alert { color: red; }` with a theme variable such as `var(--color-primary)`.
 
-`currentColor` and the built-in `bg-transparent` utility pass. Authored `transparent` in arbitrary values or custom CSS is reported. This rule checks class CSS, not SVG color attributes or inline style properties.
+`currentColor` and the built-in `bg-transparent` utility pass. Authored `transparent` in arbitrary values or custom CSS is reported. This rule checks class CSS and native SVG `fill`/`stroke` attributes. Inline style properties remain outside its color checks.
 
-For a deliberate exception, add a rule option such as `allow: ["bg-red-500"]`.
+Native SVG paints can use `currentColor`, `none`, semantic variables such as `var(--color-primary)`, or paint-server references such as `url(#gradient)`. Raw literals, stock palette variables, and raw fallback colors are reported, including in literal bindings:
+
+```vue
+<!-- Rejected -->
+<svg><path fill="#fff" :stroke="'red'" /></svg>
+
+<!-- Allowed -->
+<svg><path fill="currentColor" stroke="var(--color-primary)" /></svg>
+```
+
+Only literal strings (including template literals without substitutions) and `null` bindings are readable; `null` removes the attribute. Literal `v-bind` objects use the same checks. Unresolved SVG paint bindings produce `parse-error` while this rule is enabled. Component props and HTML inside SVG `foreignObject` are excluded.
+
+For a deliberate exception, add a rule option such as `allow: ["bg-red-500"]`. SVG exceptions match `fill`, `stroke`, or the `color` category through the same allow/deny policy; deny takes precedence. SVG diagnostics carry `prop` and point to the attribute (the whole `v-bind` for object bindings), without a `className`.
 
 ## no-arbitrary-values
 
