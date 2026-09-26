@@ -60,6 +60,17 @@ Now 13 warnings fail the command. As you fix findings, lower the limit until it 
 
 When `no-restyle` is clean, change it to `"error"`. Pick another [rule](rules.md), enable it at `"warn"`, and repeat.
 
+## Keep new code strict
+
+While you fix warnings in older files, hold new code to errors. Raise the severity for the directories you add:
+
+```ts
+rules: { "no-restyle": "warn" },
+overrides: [
+  { files: ["src/features/checkout/**/*.vue"], rules: { "no-restyle": "error" } },
+],
+```
+
 ## Allow styling inside component implementations
 
 A Button's implementation may need styles its callers cannot add. Use [file overrides](configuration.md#per-file-rule-overrides) to permit those styles in component files while keeping other rules active. `exclude` skips every check in a file.
@@ -75,14 +86,26 @@ pnpm exec selfix apps/admin/src --config apps/admin/selfix.config.ts
 
 In the store config, `css: "src/style.css"` resolves to `apps/store/src/style.css`. Exclusions and overrides are also config-relative. Check shared packages with their intended consuming theme. For app-owned tooling, use app-local scripts.
 
+## Share one policy across apps
+
+The config is a module, so apps can import shared settings. A pnpm workspace package can stay TypeScript. If you install the shared config from a registry, publish it as JavaScript, because Node does not strip TypeScript types from files under `node_modules`:
+
+```ts
+import { defineConfig } from "selfix"
+import shared from "@acme/design-lint"
+
+export default defineConfig({
+  ...shared,
+  css: "src/style.css",
+  rules: { ...shared.rules, "no-raw-colors": "warn" },
+})
+```
+
+Spread `shared.rules` when an app changes rules. Otherwise the app's `rules` object replaces the shared one.
+
 ## Run the same check in CI and coding agents
 
-Use the same script locally and in CI so they enforce the same warning limit. With a supported Node version and your project's pnpm version, run:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm run lint:design
-```
+Run the same `lint:design` script locally and in CI, so both enforce the same warning limit. See [Run in CI](ci.md) for a GitHub Actions workflow.
 
 Add this to your existing coding-agent instructions:
 
