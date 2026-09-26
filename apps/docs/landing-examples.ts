@@ -82,3 +82,56 @@ export const examples: LandingExample[] = [
     fixed: typo.replace("flex-cols", "flex-col"),
   },
 ]
+
+export interface RuleExample {
+  name: string
+  summary: string
+  bad: string
+  good: string
+}
+
+// Rules ordered by impact. The test lints each bad and good case.
+export const rules: RuleExample[] = [
+  {
+    name: "no-restyle",
+    summary: "Pages can position a component but not restyle it.",
+    bad: `<Button class="p-4">`,
+    good: `<Button class="mt-4">`,
+  },
+  {
+    name: "no-raw-colors",
+    summary: "Colors come from your theme, not the palette or hex values.",
+    bad: "bg-red-500",
+    good: "bg-danger",
+  },
+  {
+    name: "no-unknown-classes",
+    summary: "Every class must exist in your Tailwind CSS.",
+    bad: "bg-prmary",
+    good: "bg-primary",
+  },
+  {
+    name: "no-arbitrary-values",
+    summary: "Spacing and sizes stay on your theme's scale.",
+    bad: "p-[13px]",
+    good: "p-3",
+  },
+  {
+    name: "no-inline-styles",
+    summary: "Styling lives in classes that selfix can check.",
+    bad: `style="padding: 1rem"`,
+    good: `class="p-4"`,
+  },
+  {
+    name: "require-static-classes",
+    summary: "Write class names in full so selfix can read them.",
+    bad: ':class="`mt-${size}`"',
+    good: `:class="big ? 'mt-4' : 'mt-2'"`,
+  },
+  {
+    name: "no-restricted-components",
+    summary: "Banned components are reported, with a replacement if you name one.",
+    bad: "<OldButton>",
+    good: "<Button>",
+  },
+]
