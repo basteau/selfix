@@ -49,6 +49,18 @@ Discovery is off in the API. To add component definitions and readable prop choi
 
 Reuse a linter until its theme, policy, or project sources change, then create a new one. Discovery keeps a snapshot of project sources, while the file you lint always uses the source you pass to `lint`. Each CLI run creates a fresh linter.
 
+## Helpers
+
+`ruleNames` lists every rule name, for example to build a `rules` object:
+
+```js
+import { ruleNames } from "selfix"
+
+const rules = Object.fromEntries(ruleNames.map((name) => [name, "warn"]))
+```
+
+`defineConfig` checks a `selfix.config.ts` object, throws on invalid settings, and returns it unchanged. Its `css` and `exclude` fields are CLI-only, so remove them before you pass the object as the API's `config`.
+
 ## Errors
 
 - Parse errors and unsupported input return `parse-error` diagnostics.
