@@ -1,33 +1,53 @@
 ---
 title: Getting started
-description: Configure selfix, reproduce your first diagnostic, and correct it.
+description: Add selfix to a Vue 3 and Tailwind CSS 4 app and fix your first finding.
 ---
 
-A Button defines its own padding. A page adds `p-4` and changes it. In this tutorial, you'll catch that override with selfix and correct it.
-
-Use an existing Vue project with Tailwind CSS. Run the commands from its root, and keep any existing files when adding the examples.
+This guide adds selfix to your app. You point selfix at the Tailwind CSS and components you already have, confirm which components it protects, and fix one finding. If you have no shared components yet, one optional step creates a Button to try it on.
 
 ## Install selfix
 
-You need **Node.js ≥22.18.0**, **Vue ≥3.2.13 <4**, and **Tailwind CSS ≥4 <5**. Install any missing peers, then add selfix:
+You need Node.js 22.18 or later, Vue 3 (3.2.13 or later), and Tailwind CSS 4.
 
 ```sh
 pnpm add -D selfix
 ```
 
-Use `"type": "module"` in your project's `package.json` so Node can load the configuration below.
+With npm, run `npm install -D selfix` and use `npx` wherever this guide says `pnpm exec`.
 
-## Define the theme and component
+Node loads `selfix.config.ts` as an ES module. If `package.json` has no `"type"` or sets `"commonjs"`, add `"type": "module"` and check that your other `.js` config files still load.
 
-Use your existing Tailwind entry, or create `src/style.css` if you don't have one:
+## Point selfix at your theme and components
+
+Create `selfix.config.ts` next to `package.json`:
+
+```ts
+import { defineConfig } from "selfix"
+
+export default defineConfig({
+  css: "src/style.css",
+  ui: ["@/components/ui"],
+})
+```
+
+- `css` is the stylesheet that imports Tailwind. To find it, run `grep -rl 'tailwindcss' --include='*.css' src`.
+- `ui` is the start of the import path your pages use for shared components. For `import { Button } from "@/components/ui/button"`, use `@/components/ui`.
+
+`ui` matches import paths only. If your components are auto-imported or registered globally, add name patterns to `components` instead. See [component recognition](configuration.md#component-recognition).
+
+In a shadcn-vue project, set `css` to the `tailwind.css` path from `components.json`. The `ui` default, `@/components/ui`, already matches. In Nuxt, run selfix on `app` instead of `src` and follow [Nuxt UI themes](themes.md#nuxt-ui-application-themes).
+
+## Optional: create a component to try
+
+Skip this step if your app already has shared components.
+
+Create `src/style.css` and import it from `src/main.ts` with `import "./style.css"`:
 
 ```css
 @import "tailwindcss";
 ```
 
-Import it in your app, for example with `import "./style.css"` in `src/main.ts`. Keep your existing theme if you have one.
-
-Create `src/components/ui/Button.vue` (or use a new filename if it already exists, updating the import below):
+Create `src/components/ui/Button.vue`. The Button owns its padding:
 
 ```vue
 <template>
@@ -35,30 +55,11 @@ Create `src/components/ui/Button.vue` (or use a new filename if it already exist
 </template>
 ```
 
-The Button owns its padding. The page will control where it sits.
-
-## Configure and run the check
-
-Create `selfix.config.ts` in the project root:
-
-```ts
-import { defineConfig } from "selfix"
-
-export default defineConfig({
-  css: "src/style.css",
-  ui: ["./components/ui"],
-})
-```
-
-`css` tells selfix where to read your theme. `ui` tells it which component imports to protect. Here, it matches the Button import in the next step.
-
-## Reproduce a finding
-
-Create `src/Example.vue` with a padding override:
+Create `src/Example.vue`, which overrides that padding:
 
 ```vue
 <script setup lang="ts">
-import Button from "./components/ui/Button.vue"
+import Button from "@/components/ui/Button.vue"
 </script>
 
 <template>
@@ -66,38 +67,49 @@ import Button from "./components/ui/Button.vue"
 </template>
 ```
 
-Run the check on this file:
+## Check which components selfix protects
+
+```sh
+pnpm exec selfix src --doctor
+```
+
+Doctor lists each component usage and the setting that recognizes it:
+
+```text
+Configuration: /app/selfix.config.ts
+Tailwind CSS loaded: /app/src/style.css
+src/Example.vue:6:3 <Button>: recognized by ui "@/components/ui"; no-restyle: error; active protection: yes; definition: unavailable
+Scanned 2 Vue files; 1 component usages; 1 actively protected.
+…
+```
+
+A usage that shows `unrecognized` or `active protection: no` is not protected. Add its import prefix to `ui` or its name to `components`, then run doctor again. `definition: unavailable` is fine. It only means selfix could not find the component's source file. See [doctor reports](cli.md#diagnose-component-protection).
+
+## Fix one finding
+
+Run selfix on a page that uses a protected component, such as `src/Example.vue`:
 
 ```sh
 pnpm exec selfix src/Example.vue
 ```
 
-The check fails with `no-restyle` at line 6, column 11. The message starts with this excerpt:
+A finding names the file, position, rule, and class:
 
 ```text
-src/Example.vue:6:11 error no-restyle "p-4" is not allowed on <Button>
+src/Example.vue:6:11 error no-restyle "p-4" is not allowed on <Button>: spacing changes are outside the component's contract. Remove this override. …
+Checked 1 Vue file: 1 error, 0 warnings.
 ```
 
-`p-4` changes the Button's padding. The default contract lets the page control layout, but keeps padding inside the component.
+The default contract lets a page place a component but not change its padding, colors, or typography. Replace `p-4` with a component prop or a layout class such as `mt-4 w-full`, then run the command again. The `no-restyle` finding is gone.
 
-## Correct the override
+If your page has no `no-restyle` finding, add `class="p-4"` to a protected component to see one, then remove it.
 
-Replace the Button line with:
+## Check the whole app
 
-```vue
-<Button class="mt-4 w-full">Save</Button>
+> **Existing app?** Every rule is an error by default, and `<style>` blocks count as inline styles. Start with warnings for one rule, as described in [Adopt in an existing project](adoption.md).
+
+```sh
+pnpm exec selfix src
 ```
 
-Run `pnpm exec selfix src/Example.vue` again. It exits with code `0`:
-
-```text
-Checked 1 Vue file: 0 errors, 0 warnings.
-```
-
-The Button keeps its padding. The page can still give it a top margin and full width. That is the boundary selfix checks.
-
-## Next steps
-
-All seven rules are enabled by default (component restrictions require a configured list), including the rule against `<style>` blocks. In an existing app, follow [Adoption](adoption.md) to introduce them gradually before checking every file.
-
-When you’re ready, run `pnpm exec selfix src` to check the source directory. To give a component more freedom, [configure a contract](configuration.md#component-contracts).
+To let a component accept more classes, [configure its contract](configuration.md#component-contracts).

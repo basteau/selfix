@@ -9,7 +9,7 @@ Install selfix with the [setup instructions](getting-started.md#install-selfix).
 
 ## Start with warnings
 
-Create `selfix.config.ts`. Set `css` to your Tailwind entry and `ui` to match your component import strings:
+In `selfix.config.ts`, set `css` to your Tailwind entry and `ui` to match your component import strings:
 
 ```ts
 import { defineConfig } from "selfix"

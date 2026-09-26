@@ -31,7 +31,7 @@ Run it as a standalone command with your existing Vue and Tailwind setup. No UI 
 
 ## Try it
 
-[Follow Getting started](getting-started.md) to create a Button, catch an override, and make the check pass.
+[Follow Getting started](getting-started.md) to add selfix to your app and fix your first finding.
 
 Already have an app full of styles? [Start with one rule](adoption.md) and introduce checks as you fix findings. You can also [ask a coding agent to set it up](agent-setup.md).
 

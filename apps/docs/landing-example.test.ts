@@ -9,7 +9,7 @@ test("the published tutorial reports the shown location and accepts its correcti
   expect(source).toBeDefined()
   const linter = await createLinter({
     css: '@import "tailwindcss";',
-    config: { ui: ["./components/ui"] },
+    config: {},
   })
   const findings = linter.lint(source!, "src/Example.vue")
   expect(findings).toHaveLength(1)
