@@ -3,22 +3,24 @@ title: Themes
 description: Let selfix check classes against the theme your app actually uses.
 ---
 
-selfix needs your application's Tailwind CSS entry to know which classes exist. Point `css` at the stylesheet that imports Tailwind and defines your theme:
+selfix checks classes against your app's Tailwind CSS entry. Point `css` at the stylesheet that imports Tailwind and defines your theme:
 
 ```ts
 // In selfix.config.ts
 css: "src/style.css",
 ```
 
-A class defined only in an unrelated stylesheet will look unknown to selfix. Import that stylesheet through this entry so both your app and the check use the same definitions.
+A class defined only in a stylesheet that this entry doesn't import looks unknown to selfix. Import that stylesheet through the entry, so your app and the check use the same definitions.
 
 ## CSS import resolution
 
-Relative imports resolve from the stylesheet containing them. Tailwind imports such as `@import "tailwindcss"` work directly. File targets must end in `.css`.
+- Relative imports resolve from the stylesheet that contains them.
+- Tailwind imports such as `@import "tailwindcss"` work directly.
+- File targets must end in `.css`.
 
 ### CSS aliases
 
-If your build tool resolves a special import name, tell selfix where that CSS lives. Add an exact mapping to your config:
+If your build tool resolves a special import name, map it to the CSS file:
 
 ```ts
 cssAliases: {
@@ -26,11 +28,12 @@ cssAliases: {
 },
 ```
 
-Alias targets are local `.css` files, relative to the config directory (API: `root`). Imports inside them resolve from that file. Use exact names, not wildcards or alias chains. selfix does not read build-tool config; missing targets fail loading.
+- Targets are local `.css` files, relative to the config directory (API: `root`).
+- Imports inside a target resolve from that file.
+- Names are exact. Wildcards and alias chains don't work.
+- selfix doesn't read build-tool config. A missing target fails loading.
 
-## Nuxt UI application themes
-
-Nuxt UI generates part of its theme during `nuxt prepare`. Map `#build/ui.css` to `.nuxt/ui.css` with `cssAliases`, and prepare before each check. See [Nuxt and Nuxt UI](nuxt.md).
+For Nuxt UI, map `#build/ui.css` to `.nuxt/ui.css` and run `nuxt prepare` before each check. See [Nuxt and Nuxt UI](nuxt.md).
 
 ## Nested custom CSS
 
@@ -45,11 +48,11 @@ Nested rules count toward a class's effects:
 }
 ```
 
-Here `card` affects both layout and color. Its literal `red` is checked even when the element isn't hovered. Use supported nesting that starts with `&`; see [selector support](analysis.md#custom-css-selectors).
+Here `card` affects layout and color. selfix checks the literal `red` even though it applies only on hover. A nested selector must start with `&`. See [selector support](analysis.md#custom-css-selectors).
 
 ## Applied utilities
 
-`@apply` contributes the utilities' effects to the containing class:
+`@apply` adds the utilities' effects to the class that contains it:
 
 ```css
 @import "tailwindcss";
@@ -59,4 +62,4 @@ Here `card` affects both layout and color. Its literal `red` is checked even whe
 }
 ```
 
-Using `card` on a protected Button can report both a padding override and a raw color. Use `@apply` inside supported style rules; unknown utilities, top-level `@apply`, and a standalone `!important` argument fail loading.
+Using `card` on a protected Button can report a padding override and a raw color. Put `@apply` inside a supported style rule. Unknown utilities, top-level `@apply`, and a standalone `!important` argument fail loading.

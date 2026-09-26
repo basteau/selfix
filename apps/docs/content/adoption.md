@@ -3,13 +3,13 @@ title: Adopt in an existing project
 description: Start with one rule and tighten the check as you fix findings.
 ---
 
-You don't need to fix every styling issue before using selfix. Start with warnings for one rule. Once you've fixed the findings, make that rule an error and move to the next.
+You don't need to fix every styling issue first. Start one rule at warnings, fix its findings, make it an error, then move to the next rule.
 
-Install selfix with the [setup instructions](getting-started.md#install-selfix). Use your app's existing theme and components for the steps below.
+To install selfix, follow [Getting started](getting-started.md#install-selfix).
 
 ## Start with warnings
 
-In `selfix.config.ts`, set `css` to your Tailwind entry and `ui` to match your component import strings:
+In `selfix.config.ts`, set `css` to your Tailwind entry and `ui` to your component import strings:
 
 ```ts
 import { defineConfig } from "selfix"
@@ -28,9 +28,9 @@ export default defineConfig({
 })
 ```
 
-The five `"off"` entries matter: omitted rules default to `"error"`. If you already have a config, update its rules without replacing the other settings.
+Omitted rules default to `"error"`, so keep the five `"off"` entries. If you already have a config, change only its `rules`.
 
-Add this script to your existing `package.json`:
+Add a script to `package.json`:
 
 ```json
 {
@@ -40,13 +40,13 @@ Add this script to your existing `package.json`:
 }
 ```
 
-Run `pnpm run lint:design` from the app directory. Read the findings and look for repeated overrides. Use existing component props where they fit, or [change the contract](configuration.md#component-contracts) if callers need more control.
+Run `pnpm run lint:design` from the app directory and look for repeated overrides. Use existing component props where they fit, or [change the contract](configuration.md#component-contracts) if callers need more control.
 
-Warnings alone pass at this stage. Parse errors and loading failures still fail.
+Warnings alone pass. Parse errors and loading failures still fail.
 
 ## Set a warning limit
 
-Suppose the check reports 12 warnings. Set that count as the limit:
+If the check reports 12 warnings, set that count as the limit:
 
 ```json
 {
@@ -56,13 +56,13 @@ Suppose the check reports 12 warnings. Set that count as the limit:
 }
 ```
 
-Now 13 warnings fail the command. As you fix findings, lower the limit until it reaches zero. This limits the total count; it doesn't track which findings are new.
+Now 13 warnings fail the command. Lower the limit as you fix findings until it reaches zero. The limit counts the total, not which findings are new.
 
-When `no-restyle` is clean, change it to `"error"`. Pick another [rule](rules.md), enable it at `"warn"`, and repeat.
+When `no-restyle` is clean, set it to `"error"`. Then turn on another [rule](rules.md) at `"warn"` and repeat.
 
 ## Keep new code strict
 
-While you fix warnings in older files, hold new code to errors. Raise the severity for the directories you add:
+To hold new directories to errors while older files still warn, add an override:
 
 ```ts
 rules: { "no-restyle": "warn" },
@@ -73,22 +73,26 @@ overrides: [
 
 ## Allow styling inside component implementations
 
-A Button's implementation may need styles its callers cannot add. Use [file overrides](configuration.md#per-file-rule-overrides) to permit those styles in component files while keeping other rules active. `exclude` skips every check in a file.
+A Button's own file may need styles its callers can't add. Relax rules for component files with [file overrides](configuration.md#per-file-rule-overrides). Other rules stay active, while `exclude` would skip every check in the file.
 
 ## Workspaces
 
-Each run uses one config and one theme. Give apps with different themes separate configs. With tooling installed at the workspace root, run:
+Each run uses one config and one theme, so give apps with different themes separate configs. With tooling installed at the workspace root, run:
 
 ```sh
 pnpm exec selfix apps/store/src --config apps/store/selfix.config.ts
 pnpm exec selfix apps/admin/src --config apps/admin/selfix.config.ts
 ```
 
-In the store config, `css: "src/style.css"` resolves to `apps/store/src/style.css`. Exclusions and overrides are also config-relative. Check shared packages with their intended consuming theme. For app-owned tooling, use app-local scripts.
+Keep these points in mind:
+
+- `css`, `exclude`, and `overrides` paths are relative to the config. In the store config, `css: "src/style.css"` resolves to `apps/store/src/style.css`.
+- Check shared packages against the theme of the app that uses them.
+- If each app owns its tooling, use app-local scripts.
 
 ## Share one policy across apps
 
-The config is a module, so apps can import shared settings. A pnpm workspace package can stay TypeScript. If you install the shared config from a registry, publish it as JavaScript, because Node does not strip TypeScript types from files under `node_modules`:
+The config is a module, so apps can import shared settings:
 
 ```ts
 import { defineConfig } from "selfix"
@@ -101,17 +105,20 @@ export default defineConfig({
 })
 ```
 
-Spread `shared.rules` when an app changes rules. Otherwise the app's `rules` object replaces the shared one.
+Two points apply to shared settings:
+
+- Spread `shared.rules` when an app changes rules. Otherwise the app's `rules` object replaces the shared one.
+- A pnpm workspace package can stay TypeScript. If you install the shared config from a registry, publish it as JavaScript, because Node doesn't strip types from files under `node_modules`.
 
 ## Run the same check in CI and coding agents
 
-Run the same `lint:design` script locally and in CI, so both enforce the same warning limit. See [Run in CI](ci.md) for a GitHub Actions workflow.
+Run the same `lint:design` script locally and in CI, so both enforce the same warning limit. For a GitHub Actions workflow, see [Run in CI](ci.md).
 
-Add this to your existing coding-agent instructions:
+Add this to your coding-agent instructions:
 
 ```text
 After UI changes, run pnpm run lint:design. Correct findings using component
 props, theme classes, or agreed contracts, then rerun the check.
 ```
 
-For an agent to configure the project and prove enforcement, use [Agent setup](agent-setup.md).
+To have an agent configure the project and prove enforcement, see [Agent setup](agent-setup.md).

@@ -3,11 +3,11 @@ title: API
 description: Check Vue source and consume findings from your own Node tool.
 ---
 
-Use `createLinter` to load a theme once and check multiple Vue source strings. For terminal or CI checks, use the [CLI](cli.md).
+`createLinter` loads a theme once and checks many Vue source strings. For terminal or CI checks, use the [CLI](cli.md).
 
 ## Create a linter
 
-With selfix installed, save this as `check-design.mjs` in your project root. It reads your existing `src/style.css` and `src/Page.vue`:
+Save this as `check-design.mjs` in your project root. It reads `src/style.css` and `src/Page.vue`:
 
 ```js
 import { readFile } from "node:fs/promises"
@@ -30,29 +30,35 @@ Match `ui` to your component imports, then run `node check-design.mjs` from the 
 | `css`     | Required CSS source text.                                                                                |
 | `root`    | Base for overrides, CSS alias targets, discovery, and relative lint filenames. Defaults to cwd.          |
 | `cssBase` | Origin for stylesheet imports, relative to `root`. Defaults to `root`.                                   |
-| `config`  | [Policy settings](configuration.md); defaults to `{}`. CLI-only `css` and `exclude` fields are rejected. |
+| `config`  | [Policy settings](configuration.md). Defaults to `{}`. CLI-only `css` and `exclude` fields are rejected. |
 
 The API doesn't read `selfix.config.ts`. You load the CSS and choose the files.
 
 ## Lint source
 
-`linter.lint(source, filename?)` synchronously returns diagnostics, or `[]` for no findings. The filename defaults to `component.vue` and is preserved in results. Files outside `root` receive top-level rules only.
+`linter.lint(source, filename?)` returns diagnostics synchronously, or `[]` when there are none.
 
-For one source string, `await lintSource(source, { css, root?, cssBase?, config?, filename? })` loads the theme and checks it in one call.
+- `filename` defaults to `component.vue` and appears as-is in results.
+- Files outside `root` get top-level rules only, because overrides never match them.
+
+To load the theme and check one string in a single call, use `await lintSource(source, { css, root?, cssBase?, config?, filename? })`.
 
 ## Component discovery and reuse
 
-Discovery is opt-in: add `config: { project: {} }` for component definitions and readable prop choices. An explicit `project.root` resolves from the API `root`.
+Discovery is off in the API. To add component definitions and readable prop choices to findings, pass `config: { project: {} }`. An explicit `project.root` resolves from the API `root`.
 
-Reuse the linter until its theme, policy, or project sources change, then recreate it. Discovery captures a source snapshot; the current SFC uses the source passed to `lint`. Each CLI run creates a fresh linter.
+Reuse a linter until its theme, policy, or project sources change, then create a new one. Discovery keeps a snapshot of project sources, while the file you lint always uses the source you pass to `lint`. Each CLI run creates a fresh linter.
 
 ## Errors
 
-Parsing and unsupported-input problems return `parse-error` diagnostics. Invalid config, theme loading, and project-source loading failures throw or reject. Handle both: a failed load is not a clean result.
+- Parse errors and unsupported input return `parse-error` diagnostics.
+- Invalid config and failures to load the theme or project sources throw or reject.
+
+Handle both. A failed load is not a clean result.
 
 ## Diagnostic fields
 
-A diagnostic is one reported finding. API and JSON consumers receive these fields:
+A diagnostic is one finding. API and JSON consumers receive these fields:
 
 | Field            | Value                                    |
 | ---------------- | ---------------------------------------- |
@@ -63,8 +69,19 @@ A diagnostic is one reported finding. API and JSON consumers receive these field
 | `line`, `column` | One-based position in the original file. |
 | `offset`         | Zero-based JavaScript string position.   |
 
-Optional fields are `component`, `className`, `prop`, `slot`, `definition`, and `suggestions`. Class findings point to their containing attribute or binding. Findings within a file sort by offset, then rule name.
+Optional fields:
 
-`suggestions`, when present, is an array of complete replacement class strings. Spelling guidance currently contains at most one compiler-validated, policy-permitted replacement. The field is omitted when no unambiguous correction is available. It is advisory: there are no edit ranges or automatic source changes. The JSON output includes this field; text output appends `Did you mean "flex-col"?` while the API `message` stays unchanged, including custom messages.
+| Field         | Value                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `component`   | The component or tag name.                                                                                                                                          |
+| `className`   | The reported class.                                                                                                                                                 |
+| `prop`        | The configured class prop or SVG paint attribute.                                                                                                                   |
+| `slot`        | The literal key in a slot-map prop object.                                                                                                                          |
+| `definition`  | The component's absolute source `file`, plus optional `props.size` and `props.variant` string arrays from [discovery](configuration.md#component-source-discovery). |
+| `suggestions` | Complete replacement class strings.                                                                                                                                 |
 
-`definition` contains an absolute component `file` and optional `props.size` and `props.variant` string arrays. These come from [source discovery](configuration.md#component-source-discovery); they provide guidance without validating prop values.
+- Class findings point to their containing attribute or binding.
+- Findings in a file sort by offset, then rule name.
+- `definition` prop choices are guidance. selfix doesn't validate prop values against them.
+
+`suggestions` is advisory. It holds at most one replacement for a spelling mistake, validated by the compiler and permitted by your policy. The field is omitted when no single correction is clear. It has no edit ranges, and selfix never changes source. Text output appends `Did you mean "flex-col"?` to the message. The API `message`, including a custom message, stays unchanged.
