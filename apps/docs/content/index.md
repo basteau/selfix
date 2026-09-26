@@ -3,38 +3,38 @@ title: Introduction
 description: Catch styling drift in Vue 3 and Tailwind CSS 4 projects.
 ---
 
-You build a Button with the right padding and colors. Then a page adds `p-4`. Another adds `bg-red-500`. The same component starts looking different everywhere.
-
-selfix catches these overrides in Vue 3 and Tailwind CSS 4 projects. You choose what callers can change, and selfix checks those rules whenever you run it.
-
-## Keep the component in control
-
-A Button can own its appearance while the page controls its placement:
+selfix checks the classes in your Vue templates against your components and your Tailwind theme. Run it locally, in CI, or after a coding agent edits your UI.
 
 ```vue
-<!-- Changes the Button's padding: reported by selfix. -->
+<!-- Reported: changes the Button's padding. -->
 <Button class="p-4">Save</Button>
 
-<!-- Adds space around the Button: allowed by default. -->
+<!-- Allowed: places the Button on the page. -->
 <Button class="mt-4 w-full">Save</Button>
 ```
 
-Tell selfix which components to protect. Their **contract** defines the classes callers may add; by default, it permits layout changes such as margin and width.
+Each protected component has a contract, the set of classes a page may add. The default contract allows layout classes such as margin and width. selfix also reports raw colors, bracket values, inline styles, unknown classes, class names it cannot read, and components you ban.
 
-Findings point to the class in your `.vue` file. Use the component’s props or adjust its contract, then check again.
+## Start
 
-## Use your existing components and theme
+- [Getting started](getting-started.md). Add selfix to your app and fix your first finding.
+- [Adopt in an existing project](adoption.md). Start with warnings and turn on one rule at a time.
+- [Set up with a coding agent](agent-setup.md). Give an agent a setup task that ends with proof.
 
-selfix works with your own component library. It reads your Tailwind CSS to check that classes exist and use your theme's colors. It can also report arbitrary values, inline styles, and class names it cannot read without running code.
+## Recipes
 
-Run it as a standalone command with your existing Vue and Tailwind setup. No UI kit or other linter is required.
+Recipes cover [shadcn-vue](shadcn-vue.md), [Nuxt and Nuxt UI](nuxt.md), and [running in CI](ci.md).
 
-## Try it
+## Understand and look up
 
-[Follow Getting started](getting-started.md) to add selfix to your app and fix your first finding.
+- [How selfix works](how-it-works.md). The steps from a Vue file to a finding.
+- [Rules](rules.md). What each rule reports and how to fix it.
+- [Configuration](configuration.md). Components, contracts, overrides, and messages.
+- [Themes](themes.md). Load your Tailwind CSS and custom classes.
+- [What selfix can read](analysis.md). Supported bindings, helpers, and limits.
+- [CLI](cli.md). Commands, output, and exit codes.
+- [API](api.md). Check source and read findings from Node.
+- [Troubleshooting](troubleshooting.md). Fix unexpected results and loading errors.
+- [FAQ](faq.md). Short answers about requirements and scope.
 
-Already have an app full of styles? [Start with one rule](adoption.md) and introduce checks as you fix findings. You can also [ask a coding agent to set it up](agent-setup.md).
-
-## About selfix
-
-selfix is an independent project inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). The [repository](https://github.com/basteau/selfix) contains the source and [MIT license](https://github.com/basteau/selfix/blob/main/LICENSE). To contribute, see [Development](maintaining.md).
+selfix is open source under the [MIT license](https://github.com/basteau/selfix/blob/main/LICENSE) and inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). The [repository](https://github.com/basteau/selfix) has the source. To contribute, see [Development](maintaining.md).

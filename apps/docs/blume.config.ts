@@ -51,7 +51,7 @@ export default defineConfig({
       { label: "Recipes", items: ["/shadcn-vue", "/nuxt", "/ci"] },
       {
         label: "Guides",
-        items: ["/how-it-works", "/themes", "/analysis", "/troubleshooting"],
+        items: ["/how-it-works", "/themes", "/analysis", "/troubleshooting", "/faq"],
       },
       {
         label: "Rules",
