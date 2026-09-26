@@ -16,6 +16,8 @@ export interface LandingExample {
   rule: string
   message: string
   suggestion?: string
+  // The rest of a shortened message, shown where the full CLI line appears.
+  detail?: string
   help: string
   fixLabel: string
   fix: string
@@ -49,6 +51,8 @@ export const examples: LandingExample[] = [
     location: "6:11",
     rule: "no-restyle",
     message: `"p-4" is not allowed on <Button>: spacing changes are outside the component's contract. …`,
+    detail:
+      "Remove this override. Check the component's documented spacing props and its contract before changing surrounding layout.",
     help: "The Button owns its padding. The page still controls where it sits.",
     fixLabel: "Allowed layout",
     fix: `<Button class="mt-4 w-full">Save</Button>`,
@@ -62,7 +66,7 @@ export const examples: LandingExample[] = [
     location: "2:6",
     rule: "no-raw-colors",
     message: `Replace "text-red-600" with a semantic theme color (danger, primary).`,
-    help: "Palette colors skip your theme. Semantic colors change with it.",
+    help: "Palette colors stay fixed when you change your theme. Theme colors follow it.",
     fixLabel: "Theme color",
     fix: `<p class="text-danger">Payment failed</p>`,
     fixed: color.replace("text-red-600", "text-danger"),
@@ -76,7 +80,7 @@ export const examples: LandingExample[] = [
     rule: "no-unknown-classes",
     message: `Tailwind cannot generate "flex-cols". …`,
     suggestion: "flex-col",
-    help: "selfix asks Tailwind whether each class exists and suggests a close match.",
+    help: "selfix asks Tailwind whether each class exists and suggests a fix when only one class is a close match.",
     fixLabel: "Suggested fix",
     fix: `<ul class="flex flex-col gap-2">`,
     fixed: typo.replace("flex-cols", "flex-col"),
@@ -130,7 +134,7 @@ export const rules: RuleExample[] = [
   },
   {
     name: "no-restricted-components",
-    summary: "Banned components are reported, with a replacement if you name one.",
+    summary: "selfix reports components you ban and names the replacement you set.",
     bad: "<OldButton>",
     good: "<Button>",
   },

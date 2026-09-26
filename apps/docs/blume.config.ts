@@ -33,7 +33,7 @@ export default defineConfig({
         { name: "Spline Sans", src: "public/fonts/spline-sans/SplineSans[wght].ttf", weight: 500 },
       ],
       logo: "public/logo.svg",
-      titles: { "/": "selfix — the design-system linter for Vue and Tailwind" },
+      titles: { "/": "selfix, the design-system linter for Vue and Tailwind" },
       palette: {
         accent: "#42b883",
         background: "#ffffff",

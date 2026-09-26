@@ -37,11 +37,11 @@ const docs = `${base}/docs`
   searchEnabled={data.config.search.enabled}
   siteUrl={data.config.site}
   ogEnabled={data.config.og.enabled}
-  page={{ title: "selfix — the design-system linter for Vue and Tailwind", route: "/" }}
+  page={{ title: "selfix, the design-system linter for Vue and Tailwind", route: "/" }}
 >
   <div class="landing" id="selfix-landing">
     <section class="hero" aria-labelledby="hero-heading">
-      <h1 id="hero-heading">Catch Tailwind classes that break your design system.</h1>
+      <h1 id="hero-heading">Catch Tailwind classes that break your design system</h1>
       <p class="hero-description">selfix lints your Vue templates against your own components and Tailwind theme. It flags overrides, raw colors, and typos, then tells you or your coding agent how to fix each one.</p>
       <div class="hero-actions"><a class="action primary" href={`${docs}/getting-started`}>Get started <span aria-hidden="true">→</span></a><a class="action" href="https://github.com/basteau/selfix">View on GitHub <span aria-hidden="true">↗</span></a></div>
       <div class="install"><PackageSwitch label="Package manager for the install command" /><PackageCommand id="install-command" kind="install" /></div>
@@ -57,36 +57,36 @@ const docs = `${base}/docs`
             </div>
             <div class="example-result">
               <div class="panel-heading"><span>selfix src</span><span class="diagnostic-label">1 error</span></div>
-              <div class="diagnostic"><p class="code-muted">src/Example.vue:{example.location}</p><p><strong>{example.rule}</strong></p><p><code>{example.message}</code></p>{example.suggestion && <p><code>Did you mean "{example.suggestion}"?</code></p>}<p class="diagnostic-help">{example.help}</p></div>
-              <div class="correction"><span class="correction-label">✓ {example.fixLabel}</span><code>{example.fix}</code></div>
+              <div class="diagnostic"><p class="code-muted">src/Example.vue:{example.location}</p><p><strong>{example.rule}</strong></p><p><code>{example.message}</code></p>{example.suggestion && <p><code>Did you mean "{example.suggestion}"?</code></p>}</div>
+              <div class="correction"><span class="correction-label">✓ {example.fixLabel}</span><code>{example.fix}</code><p class="diagnostic-help">{example.help}</p></div>
             </div>
           </section>
         ))}
-        <figcaption id="example-caption">selfix output for each example. Locations point to the original Vue file.</figcaption>
+        <figcaption id="example-caption">Each example shows a shortened selfix finding and a change that passes. Locations point to the original Vue file.</figcaption>
       </figure>
     </section>
 
     <section class="compare-section" aria-labelledby="compare-heading">
-      <div class="section-heading"><h2 id="compare-heading">Type checks accept any class.</h2><p>To <code>vue-tsc</code>, <code>class</code> is any string, so a page can add padding to a Button and still pass. selfix reads the string and checks it against the Button's contract.</p></div>
+      <div class="section-heading"><h2 id="compare-heading">Type checks accept any class</h2><p>To <code>vue-tsc</code>, <code>class</code> is any string, so a page can add padding to a Button and still pass. selfix reads the string and checks it against the Button's contract.</p></div>
       <div class="compare-grid">
         <div class="terminal"><div class="panel-heading"><span>vue-tsc --noEmit</span><span class="pass-label">exit 0</span></div><pre tabindex="0" aria-label="vue-tsc output"><code><span class="code-muted">$ vue-tsc --noEmit</span>{'\n'}<span class="code-muted">(no output)</span></code></pre></div>
-        <div class="terminal"><div class="panel-heading"><span>selfix src</span><span class="diagnostic-label">exit 1</span></div><pre tabindex="0" aria-label="selfix output"><code><span class="code-muted">$ selfix src</span>{'\n'}src/Example.vue:{override.location} error <strong>{override.rule}</strong> {override.message}{'\n'}Checked 1 Vue file: 1 error, 0 warnings.</code></pre></div>
+        <div class="terminal"><div class="panel-heading"><span>selfix src</span><span class="diagnostic-label">exit 1</span></div><pre tabindex="0" aria-label="selfix output"><code><span class="code-muted">$ selfix src</span>{'\n'}src/Example.vue:{override.location} error <strong>{override.rule}</strong> {override.message.replace(/ …$/, "")} {override.detail}{'\n'}Checked 1 Vue file: 1 error, 0 warnings.</code></pre></div>
       </div>
     </section>
 
     <section class="rules-section" aria-labelledby="rules-heading">
-      <div class="section-heading"><h2 id="rules-heading">What selfix checks.</h2><p>Each row shows code that selfix reports and a change that passes.</p></div>
+      <div class="section-heading"><h2 id="rules-heading">What selfix checks</h2><p>Each row shows code that selfix reports and a change that passes.</p></div>
       <div class="rule-list">{rules.map((rule) => <a class="rule-row" href={`${docs}/rules#${rule.name}`}><h3>{rule.name}</h3><p>{rule.summary}</p><span class="rule-change"><span class="sr-only">Reported: </span><code class="rule-bad">{rule.bad}</code><span aria-hidden="true">→</span><span class="sr-only">. Passes: </span><code class="rule-good">{rule.good}</code></span><span aria-hidden="true">→</span></a>)}</div>
       <p class="section-note">Every rule is an error by default. <a href={`${docs}/adoption`}>Start with warnings and turn on one rule at a time <span aria-hidden="true">→</span></a></p>
     </section>
 
     <section class="setup-section" aria-labelledby="setup-heading">
-      <div class="section-heading"><h2 id="setup-heading">Add selfix to your project.</h2><p>One dev dependency and one config file. No ESLint, Oxlint, or UI kit required.</p></div>
+      <div class="section-heading"><h2 id="setup-heading">Add selfix to your project</h2><p>One dev dependency and one config file. No ESLint, Oxlint, or UI kit required.</p></div>
       <SetupPanel docs={docs} />
       <p class="section-note">selfix reads your templates and never runs your app code. <a href={`${docs}/analysis`}>What selfix can read <span aria-hidden="true">→</span></a></p>
     </section>
     <p class="sr-only" id="copy-status" role="status"></p>
   </div>
-  <footer slot="footer" class="landing-footer"><a class="footer-brand" href={`${base}/`}>selfix</a><p>Independent. Open source. <a href="https://github.com/basteau/selfix/blob/main/LICENSE">MIT licensed.</a><br />Inspired by <a href="https://github.com/shadcn-ui/lint">shadcn/lint</a>.</p><nav aria-label="Footer"><a href={docs}>Documentation</a><a href="https://github.com/basteau/selfix">GitHub ↗</a></nav></footer>
+  <footer slot="footer" class="landing-footer"><a class="footer-brand" href={`${base}/`}>selfix</a><p>Open source under the <a href="https://github.com/basteau/selfix/blob/main/LICENSE">MIT license</a>.<br />Inspired by <a href="https://github.com/shadcn-ui/lint">shadcn/lint</a>.</p><nav aria-label="Footer"><a href={docs}>Documentation</a><a href="https://github.com/basteau/selfix">GitHub ↗</a></nav></footer>
   <script src="../scripts/landing.js"></script>
 </PageLayout>

@@ -278,7 +278,7 @@
   font-weight: 500;
 }
 .landing .diagnostic-help {
-  margin-top: 14px;
+  margin-top: 4px;
   color: var(--blume-muted-foreground);
   font-family: var(--blume-font-body);
   font-size: 13px;
@@ -319,6 +319,10 @@
   border-radius: 8px;
   overflow: hidden;
   background: var(--blume-code-background);
+}
+.landing .terminal pre {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 .pass-label {
   color: var(--landing-accent);
