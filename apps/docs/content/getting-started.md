@@ -79,7 +79,7 @@ Doctor lists each component usage and the setting that recognizes it:
 Configuration: /app/selfix.config.ts
 Tailwind CSS loaded: /app/src/style.css
 src/Example.vue:6:3 <Button>: recognized by ui "@/components/ui"; no-restyle: error; active protection: yes; definition: unavailable
-Scanned 2 Vue files; 1 component usages; 1 actively protected.
+Scanned 2 Vue files; 1 component usage; 1 actively protected.
 …
 ```
 

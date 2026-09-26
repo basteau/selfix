@@ -529,6 +529,16 @@ it("does not treat a matching directory as a file-prefix exclusion", async () =>
 })
 
 describe("doctor", () => {
+  it("uses the singular for one component usage", async () => {
+    const dir = await project()
+    await writeFile(
+      path.join(dir, "Page.vue"),
+      `<script setup>import Button from '@/components/ui/button'</script><template><Button /></template>`,
+    )
+    const result = await invoke(["--doctor", "Page.vue"], dir)
+    expect(result.stdout).toContain("Scanned 1 Vue file; 1 component usage; 1 actively protected.")
+  })
+
   it("reports classless usages with original locations and shared recognition", async () => {
     const dir = await project()
     await writeFile(

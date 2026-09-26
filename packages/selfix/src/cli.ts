@@ -178,7 +178,7 @@ export async function run(
           )
       }
       io.out(
-        `Scanned ${files.size} Vue file${files.size === 1 ? "" : "s"}; ${usages.length} component usages; ${active} actively protected.\n`,
+        `Scanned ${files.size} Vue file${files.size === 1 ? "" : "s"}; ${usages.length} component usage${usages.length === 1 ? "" : "s"}; ${active} actively protected.\n`,
       )
       if (!active) {
         const reasons = []
