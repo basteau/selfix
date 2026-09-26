@@ -1,9 +1,9 @@
 ---
-title: Analysis limits
-description: Know what selfix checks and when it needs more explicit source.
+title: What selfix can read
+description: The Vue syntax, CSS, and SVG attributes selfix checks, and what it cannot see.
 ---
 
-selfix checks Vue classes against your Tailwind theme without running your app. A class can exist in Tailwind and still break a component's contract: `p-4` is valid, but changes a protected Button's padding.
+selfix reads your templates and CSS without running your app. For the overall flow, see [How selfix works](how-it-works.md).
 
 ## Vue class bindings
 

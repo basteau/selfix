@@ -56,7 +56,7 @@ Add `"lint:design": "selfix src"` to your existing package scripts. Run it after
 - [Configuration](https://github.com/basteau/selfix/blob/main/apps/docs/content/configuration.md): protect components and define their contracts.
 - [Agent setup](https://github.com/basteau/selfix/blob/main/apps/docs/content/agent-setup.md): let a coding agent configure and verify the check.
 
-selfix reads Vue source and Tailwind CSS without evaluating application expressions. A clean result covers the selected files and enabled checks. See [Analysis limits](https://github.com/basteau/selfix/blob/main/apps/docs/content/analysis.md) for supported syntax and configuration trust.
+selfix reads Vue source and Tailwind CSS without evaluating application expressions. A clean result covers the selected files and enabled checks. See [What selfix can read](https://github.com/basteau/selfix/blob/main/apps/docs/content/analysis.md) for supported syntax and configuration trust.
 
 ## Contributing
 
