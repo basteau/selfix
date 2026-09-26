@@ -1,5 +1,6 @@
 import { expect, it } from "vitest"
 import { createLinter, ruleNames, type Config } from "../src/index.js"
+import { canonicalUtility } from "../src/tailwind.js"
 
 const css = '@import "tailwindcss"; @theme { --color-primary: #124578; }'
 const rules = Object.fromEntries(
@@ -138,5 +139,64 @@ it("preserves configured prop and slot metadata on spelling findings", async () 
   const findings = linter.lint("<template><Button :ui=\"{base: 'flex-cols'}\" /></template>")
   expect(findings).toEqual([
     expect.objectContaining({ prop: "ui", slot: "base", suggestions: ["flex-col"] }),
+  ])
+})
+
+it.each([
+  ["p-[16px]", ["p-4"]],
+  ["p-[1rem]", ["p-4"]],
+  ["hover:p-[16px]", ["hover:p-4"]],
+  ["bg-[#124578]", ["bg-primary"]],
+  ["w-[100%]", ["w-full"]],
+  ["[padding:1rem]", ["p-4"]],
+  ["hover:p-[16px]!", ["hover:p-4!"]],
+  ["text-[#124578]/[0.5]", ["text-primary/50"]],
+])("suggests the theme utility with the same value for %s", async (token, expected) => {
+  const linter = await createLinter({ css })
+  const finding = linter
+    .lint(`<template><div class="${token}" /></template>`)
+    .find((item) => item.rule === "no-arbitrary-values")
+  expect(finding?.suggestions).toEqual(expected)
+})
+
+it.each(["p-[13px]", "w-[1234px]", "bg-[var(--primary)]"])(
+  "suggests nothing when %s has no named theme utility",
+  async (token) => {
+    const linter = await createLinter({ css })
+    const [finding] = linter.lint(`<template><div class="${token}" /></template>`)
+    expect(finding).toMatchObject({ rule: "no-arbitrary-values" })
+    expect(finding?.suggestions).toBeUndefined()
+  },
+)
+
+it("keeps value suggestions optional for Tailwind versions without canonicalization", () => {
+  const compiles = { candidatesToCss: (classes: string[]) => classes.map(() => ".x{}") }
+  const named = new Set(["p-4"])
+  expect(canonicalUtility(compiles, named, "p-[16px]")).toBeUndefined()
+  const canonical = (result: string) => ({ ...compiles, canonicalizeCandidates: () => [result] })
+  expect(canonicalUtility(canonical("p-[16px]"), named, "p-[16px]")).toBeUndefined()
+  expect(canonicalUtility(canonical("p-(--gap)"), named, "p-[var(--gap)]")).toBeUndefined()
+  expect(canonicalUtility(canonical("p-3.25"), named, "p-[13px]")).toBeUndefined()
+  expect(
+    canonicalUtility(
+      { canonicalizeCandidates: () => ["p-4"], candidatesToCss: () => [null] },
+      named,
+      "p-[16px]",
+    ),
+  ).toBeUndefined()
+  expect(canonicalUtility(canonical("md:p-4!"), named, "md:p-[16px]!")).toBe("md:p-4!")
+})
+
+it("withholds a value suggestion that another enabled rule would report", async () => {
+  const linter = await createLinter({ css })
+  const [raw] = linter.lint('<template><div class="text-[#fff]" /></template>')
+  expect(raw).toMatchObject({ rule: "no-arbitrary-values" })
+  expect(raw?.suggestions).toBeUndefined()
+  const button = linter.lint(
+    '<script setup>import { Button } from "@/components/ui"</script><template><Button class="p-[16px]" /></template>',
+  )
+  expect(button.map((item) => [item.rule, item.suggestions])).toEqual([
+    ["no-arbitrary-values", undefined],
+    ["no-restyle", undefined],
   ])
 })

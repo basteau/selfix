@@ -13,7 +13,7 @@ No. selfix checks Vue single-file component templates against Tailwind CSS 4. It
 
 ## Does selfix fix findings for me?
 
-No. Findings say what to change, and `no-unknown-classes` suggests a replacement for a single clear typo. selfix never edits your files. A coding agent can apply the fixes and run the check again.
+No. Findings say what to change. selfix suggests a replacement for a single clear typo or for an arbitrary value that matches a theme utility. selfix never edits your files. A coding agent can apply the fixes and run the check again.
 
 ## Does selfix run my code?
 

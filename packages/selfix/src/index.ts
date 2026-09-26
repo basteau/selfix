@@ -568,15 +568,43 @@ export async function createLinter(options: LinterOptions) {
               )
               continue
             }
+            // A suggestion must pass every enabled class rule that applies at this site.
+            const permitted = (candidate: string) => {
+              const replacement = tailwind.inspect(candidate)
+              return effective.every(({ name: rule, severity, policy }) => {
+                if (
+                  severity === "off" ||
+                  rule === "no-inline-styles" ||
+                  rule === "require-static-classes" ||
+                  rule === "no-restricted-components"
+                )
+                  return true
+                if (rule === "no-restyle" && !recognition(site).recognized) return true
+                const selected = policy(site.component)
+                if (matches(selected.deny, candidate, replacement.categories)) return false
+                if (rule === "no-restyle")
+                  return replacement.categories.every((category) =>
+                    matches(selected.allow, candidate, [category]),
+                  )
+                if (matches(selected.allow, candidate, replacement.categories)) return true
+                if (rule === "no-raw-colors") return !replacement.rawColor
+                if (rule === "no-arbitrary-values")
+                  return !/[-/]\[|^\[[^\]]+:/.test(baseClass(candidate))
+                return replacement.known
+              })
+            }
             const arbitrary = /[-/]\[|^\[[^\]]+:/.test(baseClass(token))
-            if (name === "no-arbitrary-values" && arbitrary)
+            if (name === "no-arbitrary-values" && arbitrary) {
+              const canonical = tailwind.canonical(token)
               report(
                 site,
                 selected,
                 `Replace "${token}" with a named theme utility instead of an arbitrary value.`,
                 token,
                 category,
+                canonical && permitted(canonical) ? [canonical] : [],
               )
+            }
             if (name === "no-raw-colors" && info.rawColor)
               report(
                 site,
@@ -586,30 +614,7 @@ export async function createLinter(options: LinterOptions) {
                 category,
               )
             if (name === "no-unknown-classes" && !info.known) {
-              const candidates = tailwind.suggest(token).filter((candidate) => {
-                const replacement = tailwind.inspect(candidate)
-                return effective.every(({ name: rule, severity, policy }) => {
-                  if (
-                    severity === "off" ||
-                    rule === "no-inline-styles" ||
-                    rule === "require-static-classes" ||
-                    rule === "no-restricted-components"
-                  )
-                    return true
-                  if (rule === "no-restyle" && !recognition(site).recognized) return true
-                  const selected = policy(site.component)
-                  if (matches(selected.deny, candidate, replacement.categories)) return false
-                  if (rule === "no-restyle")
-                    return replacement.categories.every((category) =>
-                      matches(selected.allow, candidate, [category]),
-                    )
-                  if (matches(selected.allow, candidate, replacement.categories)) return true
-                  if (rule === "no-raw-colors") return !replacement.rawColor
-                  if (rule === "no-arbitrary-values")
-                    return !/[-/]\[|^\[[^\]]+:/.test(baseClass(candidate))
-                  return replacement.known
-                })
-              })
+              const candidates = tailwind.suggest(token).filter(permitted)
               report(
                 site,
                 selected,

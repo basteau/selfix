@@ -29,6 +29,8 @@ type DesignSystem = {
     modifier?: { kind: string; value: string } | null
   }[]
   candidatesToCss(classes: string[]): (string | null)[]
+  // Added in Tailwind CSS 4.1.15; feature-detected before use.
+  canonicalizeCandidates?(candidates: string[], options?: { rem?: number }): string[]
 }
 
 type LoadOptions = {
@@ -115,6 +117,7 @@ export async function createTailwind(
   inspect(token: string): InspectResult
   isRawColor(value: string): boolean
   suggest(token: string): string[]
+  canonical(token: string): string | undefined
   colors: string[]
 }> {
   const loadedStylesheets: string[] = []
@@ -219,6 +222,7 @@ export async function createTailwind(
 
   let vocabulary: string[] | undefined
   let variants: string[] | undefined
+  let named: Set<string> | undefined
   return {
     colors,
     isRawColor(value) {
@@ -258,6 +262,10 @@ export async function createTailwind(
       }
       return [...candidates].sort()
     },
+    canonical(token: string): string | undefined {
+      named ??= new Set(designSystem.getClassList().map(([name]) => name))
+      return canonicalUtility(designSystem, named, token)
+    },
     inspect(token: string): InspectResult {
       const cached = cache.get(token)
       if (cached) return cached
@@ -267,6 +275,27 @@ export async function createTailwind(
       return result
     },
   }
+}
+
+// Tailwind maps an arbitrary value to the utility with the same value, such as `p-[16px]`
+// to `p-4`, assuming a 16px root font size. selfix keeps only named utilities from the
+// class list, so dynamic spacing multiples such as `p-3.25` and `bg-(--x)` shorthands
+// never replace a reported arbitrary value.
+export function canonicalUtility(
+  designSystem: Pick<DesignSystem, "canonicalizeCandidates" | "candidatesToCss">,
+  named: Set<string>,
+  token: string,
+): string | undefined {
+  if (typeof designSystem.canonicalizeCandidates !== "function") return undefined
+  const [result] = designSystem.canonicalizeCandidates([token], { rem: 16 })
+  if (!result || result === token || /[[(]/.test(result.split(":").at(-1)!)) return undefined
+  const utility = result
+    .split(":")
+    .at(-1)!
+    .replace(/^!|!$/g, "")
+    .replace(/\/[^/]*$/, "")
+  if (!named.has(utility)) return undefined
+  return designSystem.candidatesToCss([result])[0] ? result : undefined
 }
 
 // A single insertion, deletion, substitution, or adjacent transposition.

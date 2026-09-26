@@ -28,7 +28,7 @@ Reports classes that neither Tailwind nor your loaded CSS defines. selfix asks y
 
 - A suggestion fixes one insertion, deletion, substitution, or swap of adjacent letters in one utility or variant.
 - Every suggestion compiles and passes the other class rules set to `warn` or `error`, including contracts and file overrides.
-- Prefixes, `-`, `!`, and `/` modifiers are kept. selfix does not map colors or arbitrary values to theme tokens.
+- Prefixes, `-`, `!`, and `/` modifiers are kept. For arbitrary values, see [no-arbitrary-values](no-arbitrary-values.md#fix-a-finding).
 - Ties, multiple mistakes, arbitrary syntax, escaped names, and wrong prefixes usually get no suggestion. The finding remains.
 - selfix never edits your files.
 

@@ -84,4 +84,4 @@ Optional fields:
 - Findings in a file sort by offset, then rule name.
 - `definition` prop choices are guidance. selfix doesn't validate prop values against them.
 
-`suggestions` is advisory. It holds at most one replacement for a spelling mistake, validated by the compiler and permitted by your policy. The field is omitted when no single correction is clear. It has no edit ranges, and selfix never changes source. Text output appends `Did you mean "flex-col"?` to the message. The API `message`, including a custom message, stays unchanged.
+`suggestions` is advisory. It holds at most one replacement, for a spelling mistake or for an arbitrary value that matches a theme utility. The compiler validates it and your policy permits it. The field is omitted when no single correction is clear. It has no edit ranges, and selfix never changes source. Text output appends `Did you mean "flex-col"?` to the message. The API `message`, including a custom message, stays unchanged.
