@@ -49,7 +49,7 @@ Use `pnpm exec selfix src --doctor` to verify which setting recognizes each usag
 
 ## Component restrictions
 
-Configure exact banned names and optional replacement guidance with [`no-restricted-components`](rules.md#no-restricted-components). Its `components` option is a list of `{ name, replacement?, message? }` entries, distinct from top-level recognition regexes. Its `imports` option is a list of `{ source, name, replacement?, message? }` entries that match an authored import string and exported name, including `name: "default"`. Both lists default to empty. Severity-only overrides preserve them. Supplying either list replaces only that list, including `[]` to clear it.
+Configure exact banned names and optional replacement guidance with [`no-restricted-components`](no-restricted-components.md). Its `components` option is a list of `{ name, replacement?, message? }` entries, distinct from top-level recognition regexes. Its `imports` option is a list of `{ source, name, replacement?, message? }` entries that match an authored import string and exported name, including `name: "default"`. Both lists default to empty. Severity-only overrides preserve them. Supplying either list replaces only that list, including `[]` to clear it.
 
 ## Shared policy
 

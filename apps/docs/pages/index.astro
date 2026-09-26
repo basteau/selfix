@@ -76,7 +76,7 @@ const docs = `${base}/docs`
 
     <section class="rules-section" aria-labelledby="rules-heading">
       <div class="section-heading"><h2 id="rules-heading">What selfix checks</h2><p>Each row shows code that selfix reports and a change that passes.</p></div>
-      <div class="rule-list">{rules.map((rule) => <a class="rule-row" href={`${docs}/rules#${rule.name}`}><h3>{rule.name}</h3><p>{rule.summary}</p><span class="rule-change"><span class="sr-only">Reported: </span><code class="rule-bad">{rule.bad}</code><span aria-hidden="true">→</span><span class="sr-only">. Passes: </span><code class="rule-good">{rule.good}</code></span><span aria-hidden="true">→</span></a>)}</div>
+      <div class="rule-list">{rules.map((rule) => <a class="rule-row" href={`${docs}/${rule.name}`}><h3>{rule.name}</h3><p>{rule.summary}</p><span class="rule-change"><span class="sr-only">Reported: </span><code class="rule-bad">{rule.bad}</code><span aria-hidden="true">→</span><span class="sr-only">. Passes: </span><code class="rule-good">{rule.good}</code></span><span aria-hidden="true">→</span></a>)}</div>
       <p class="section-note">Every rule is an error by default. <a href={`${docs}/adoption`}>Start with warnings and turn on one rule at a time <span aria-hidden="true">→</span></a></p>
     </section>
 
