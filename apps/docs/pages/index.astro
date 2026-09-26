@@ -30,11 +30,11 @@ const rules = [
 >
   <div class="landing" id="selfix-landing">
     <section class="hero" aria-labelledby="hero-heading">
-      <a class="eyebrow" href={`${docs}/getting-started`}><span class="status-dot" aria-hidden="true"></span> For Vue 3 + Tailwind CSS 4 <span aria-hidden="true">→</span></a>
-      <h1 id="hero-heading">Keep every screen true<br class="desktop-break" /> to your design system.</h1>
-      <p class="hero-description">selfix checks the classes in your Vue templates against your components and Tailwind theme, then tells you, or your coding agent, what to fix.</p>
+      <h1 id="hero-heading">Catch Tailwind classes that break your design system.</h1>
+      <p class="hero-description">selfix lints your Vue templates against your own components and Tailwind theme. It flags overrides, raw colors, and typos, then tells you or your coding agent how to fix each one.</p>
       <div class="hero-actions"><a class="action primary" href={`${docs}/getting-started`}>Get started <span aria-hidden="true">→</span></a><a class="action" href="https://github.com/basteau/selfix">View on GitHub <span aria-hidden="true">↗</span></a></div>
       <p class="install"><span aria-hidden="true">$</span> <code id="install-command">pnpm add -D selfix</code><button type="button" data-copy="install-command" aria-label="Copy install command" hidden>Copy</button></p>
+      <p class="requirements">Works with Vue 3, Tailwind CSS 4, and Node.js 22.18 or later.</p>
       <figure class="example" aria-label="A styling override and its correction">
         <div class="example-source">
           <div class="panel-heading"><span>src/Example.vue</span><span class="file-type">Vue</span></div>
