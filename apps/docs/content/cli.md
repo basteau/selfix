@@ -91,18 +91,31 @@ For gradual rollout, see [warning limits](adoption.md#set-a-warning-limit).
 pnpm exec selfix src --doctor
 ```
 
-Doctor uses the same input selection, exclusions, configuration, CSS override, and path rules as ordinary lint. Its text report shows the resolved config, successfully loaded Tailwind CSS entry, scanned Vue file count, and each component usage at its original SFC line and column, including usages without classes.
+Doctor lists every component usage, including those without classes, and whether `no-restyle` protects it. It uses the same inputs, exclusions, config, and `--css` as a normal run, and it omits styling findings. In this example, `Card` is registered globally:
 
-Each usage reports:
+```text
+Configuration: /app/selfix.config.ts
+Tailwind CSS loaded: /app/src/style.css
+src/App.vue:17:9 <Button>: recognized by ui "@/components/ui"; no-restyle: error; active protection: yes; definition: /app/src/components/ui/Button.vue
+src/App.vue:21:3 <Card>: unrecognized (no recognition setting matches); no-restyle: error; active protection: no; definition: unavailable
+Scanned 2 Vue files; 2 component usages; 1 actively protected.
+…
+```
 
-- **Recognition:** the matching `components` pattern, `ui` prefix, or `componentImports` pattern. `ignoreImports` wins over all of these. Otherwise the report says no recognition setting matches.
-- **Enforcement:** the effective `no-restyle` severity after file overrides. Recognized usages with `warn` or `error` count as actively protected; `off` does not. The component's contract still determines which classes are allowed.
-- **Definition:** a verified source path, `unavailable`, or `disabled` by `project: false`. Discovery is separate from recognition: unavailable optional metadata does not disable protection.
+Each usage shows:
 
-Zero actively protected matches produce an advisory explaining the observed cause: no collected component usages, unrecognized or ignored usages, or disabled enforcement. Exact import-pattern suggestions are options for components you intend to protect. They do not establish that an import belongs to your design system, and doctor never edits your config.
+- **Recognition.** The matching `components` pattern, `ui` prefix, or `componentImports` pattern, or `unrecognized`. `ignoreImports` wins over all three.
+- **Enforcement.** The `no-restyle` severity after file overrides. For recognized usages, `warn` and `error` count as active protection, and `off` does not. The contract still decides which classes pass.
+- **Definition.** The component's source path, `unavailable`, or `disabled` when `project: false`. A missing definition never turns off protection.
 
-Doctor reports setup, so ordinary styling violations are omitted. A completed report exits `0`, including zero-match advisories and unavailable definitions. Parse errors, unsupported analysis, and unreadable class inputs remain visible and exit `1`. Configuration, theme, discovery-loading, and input failures exit `2`, including empty scans. Errors mean the inventory may be incomplete.
+For each unrecognized imported component, doctor suggests an exact `componentImports` pattern. Add it only if that component belongs to your design system. When nothing is actively protected, doctor prints an advisory with the cause, such as no usages, unrecognized or ignored usages, or `no-restyle` turned off. Doctor never edits your config.
 
-This first version supports text only. Remove `--format json` and `--max-warnings` when using `--doctor`; those combinations fail with exit `2`. Ordinary lint retains both options.
+| Exit | Meaning                                                                                             |
+| ---- | --------------------------------------------------------------------------------------------------- |
+| `0`  | The report completed, including advisories and unavailable definitions.                             |
+| `1`  | Parse errors, unsupported analysis, or class inputs selfix cannot read. The list may be incomplete. |
+| `2`  | Configuration, theme, discovery, or input failure, including an empty scan.                         |
 
-Doctor preserves existing Vue identity and source-resolution limits. Imported kebab-case usages use the local import name; globals use their template name. A static `<component :is="Button">` binding reports that local import. A namespace member such as `<UI.Button>` reports the written name and is recognized through the namespace module. Unresolved dynamic expressions, unresolved dotted tags, bare namespace imports, and `is="vue:…"` syntax are reported as unsupported. Wrapper tracing, broader package resolution, and richer prop discovery are not supported. Application expressions are never evaluated, and the report does not prove comprehensive component coverage.
+Doctor prints text only. `--format json` and `--max-warnings` fail with exit `2` when combined with `--doctor`.
+
+Doctor uses the same component identity rules as a normal run. Imported kebab-case tags use the local import name, and globals use their template name. `<component :is="Button">` reports the `Button` import. `<UI.Button>` reports the written name and is recognized through the namespace import's module. Unresolved dynamic components, unresolved dotted tags, bare namespace imports, and `is="vue:…"` are reported as unsupported. Doctor does not trace wrappers, resolve packages beyond the configured patterns, or discover richer props, so no report proves every component is covered.
