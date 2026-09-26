@@ -30,25 +30,25 @@ export default defineConfig({
 
 ## All settings
 
-| Field              | Default                                 | Purpose                                                                         |
-| ------------------ | --------------------------------------- | ------------------------------------------------------------------------------- |
-| `css`              | None, required unless `--css` is passed | Tailwind entry, relative to the config directory                                |
-| `ui`               | `["@/components/ui"]`                   | [Import prefixes](#component-recognition) of protected components               |
-| `components`       | `[]`                                    | Name regexes for global or auto-imported components                             |
-| `componentImports` | `[]`                                    | Extra import-path regexes                                                       |
-| `ignoreImports`    | `[]`                                    | Import-path regexes that are never protected                                    |
-| `rules`            | Every rule at `"error"`                 | [Rule settings](#rule-settings)                                                 |
-| `overrides`        | `[]`                                    | [Per-file rule settings](#per-file-rule-overrides)                              |
-| `classHelpers`     | `[]`                                    | Extra [class helpers](#class-helpers)                                           |
-| `classProps`       | `[]`                                    | [Props that carry classes](#configured-class-props)                             |
-| `cssAliases`       | `{}`                                    | Exact [CSS import mappings](themes.md#css-aliases)                              |
-| `exclude`          | `[]`                                    | Files the CLI skips entirely. See [file selection](cli.md#discovery-and-output) |
-| `note`             | None                                    | Text appended to every finding                                                  |
-| `project`          | Enabled in the CLI, disabled in the API | [Component source discovery](#component-source-discovery)                       |
+| Field              | Default                                                                                          | Purpose                                                                         |
+| ------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `css`              | Required in the CLI unless `--css` or `components.json` `tailwind.css` provides it. `--css` wins | Tailwind entry, relative to the config directory                                |
+| `ui`               | CLI: `aliases.ui` from `components.json`. Otherwise and in the API: `["@/components/ui"]`        | [Import prefixes](#component-recognition) of protected components               |
+| `components`       | `[]`                                                                                             | Name regexes for global or auto-imported components                             |
+| `componentImports` | `[]`                                                                                             | Extra import-path regexes                                                       |
+| `ignoreImports`    | `[]`                                                                                             | Import-path regexes that are never protected                                    |
+| `rules`            | Every rule at `"error"`                                                                          | [Rule settings](#rule-settings)                                                 |
+| `overrides`        | `[]`                                                                                             | [Per-file rule settings](#per-file-rule-overrides)                              |
+| `classHelpers`     | `[]`                                                                                             | Extra [class helpers](#class-helpers)                                           |
+| `classProps`       | `[]`                                                                                             | [Props that carry classes](#configured-class-props)                             |
+| `cssAliases`       | `{}`                                                                                             | Exact [CSS import mappings](themes.md#css-aliases)                              |
+| `exclude`          | `[]`                                                                                             | Files the CLI skips entirely. See [file selection](cli.md#discovery-and-output) |
+| `note`             | None                                                                                             | Text appended to every finding                                                  |
+| `project`          | Enabled in the CLI, disabled in the API                                                          | [Component source discovery](#component-source-discovery)                       |
 
 ## Configuration file
 
-Node loads `selfix.config.ts` directly, without type-checking, so `package.json` needs `"type": "module"`. The config file cannot use enums or `tsconfig` path aliases. `defineConfig` rejects invalid settings.
+Node loads `selfix.config.ts` directly, without type-checking, so `package.json` needs `"type": "module"`. The config file cannot use enums or `tsconfig` path aliases. `defineConfig` rejects invalid settings. In the CLI, a `components.json` in the config directory can supply `css` and `ui` when the config omits them. See [shadcn-vue](shadcn-vue.md).
 
 > **The config runs as code.** Only use config files you trust.
 

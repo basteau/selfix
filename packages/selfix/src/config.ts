@@ -117,7 +117,7 @@ export interface Config {
   classProps?: ClassProps[]
   /** Additional imported class helpers; built-in recognition remains enabled. */
   classHelpers?: ClassHelper[]
-  /** CSS entry relative to the configuration file. Required by the CLI. */
+  /** CSS entry relative to the configuration file. The CLI requires it unless --css or components.json `tailwind.css` provides it. */
   css?: string
   /** Exact CSS imports mapped to local files, relative to the config directory (API: root). */
   cssAliases?: Record<string, string>

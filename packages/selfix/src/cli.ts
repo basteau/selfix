@@ -98,8 +98,19 @@ export async function run(
     const config: Config = (await import(pathToFileURL(configPath).href)).default
     validateConfig(config)
     const configDir = path.dirname(configPath)
+    const shadcn = (!cssPath && !config.css) || !config.ui ? await shadcnDefaults(configDir) : {}
+    const fromShadcn: string[] = []
     if (!cssPath && config.css) cssPath = path.resolve(configDir, config.css)
-    if (!cssPath) throw new Error("Set css in selfix.config.ts or provide --css <file>.")
+    if (!cssPath && shadcn.css) {
+      cssPath = path.resolve(configDir, shadcn.css)
+      fromShadcn.push("css")
+    }
+    if (!cssPath)
+      throw new Error(
+        "Set css in selfix.config.ts, set tailwind.css in components.json, or provide --css <file>.",
+      )
+    const ui = config.ui ?? (shadcn.ui ? [shadcn.ui] : undefined)
+    if (!config.ui && shadcn.ui) fromShadcn.push("ui")
     const ignored = new Set(["node_modules", ".git", "dist", "coverage", ".nuxt", ".output"])
     const exclusions = (config.exclude ?? []).map(filePattern)
     const excluded = (file: string, matchFiles = true) => {
@@ -150,12 +161,15 @@ export async function run(
     }
     if (!files.size) throw new Error("No Vue files found. Check the paths and exclude settings.")
     const { css: _css, exclude: _exclude, ...linterConfig } = config
+    if (fromShadcn.includes("css") && !(await exists(cssPath)))
+      throw new Error(`components.json tailwind.css not found: ${cssPath}`)
     const linter = await createLinter({
       css: await readFile(cssPath, "utf8"),
       cssBase: path.dirname(cssPath),
       root: configDir,
       config: {
         ...linterConfig,
+        ...(ui ? { ui } : {}),
         project: config.project === false ? false : (config.project ?? {}),
       },
     })
@@ -164,6 +178,7 @@ export async function run(
       for (const file of [...files].sort())
         reports.push({ file, ...linter.doctor(await readFile(file, "utf8"), file) })
       io.out(`Configuration: ${configPath}\nTailwind CSS loaded: ${cssPath}\n`)
+      if (fromShadcn.length) io.out(`From components.json: ${fromShadcn.join(", ")}\n`)
       const usages = reports.flatMap((report) => report.usages)
       const active = usages.filter((usage) => usage.active).length
       for (const report of reports) {
@@ -221,5 +236,35 @@ export async function run(
   } catch (error) {
     io.err(`selfix: ${error instanceof Error ? error.message : String(error)}\n`)
     return 2
+  }
+}
+
+// shadcn-vue projects describe their Tailwind entry and UI import alias in components.json.
+// selfix uses them only for settings the config leaves out.
+async function shadcnDefaults(dir: string): Promise<{ css?: string; ui?: string }> {
+  const file = path.join(dir, "components.json")
+  if (!(await exists(file))) return {}
+  let data: unknown
+  try {
+    data = JSON.parse(await readFile(file, "utf8"))
+  } catch (error) {
+    throw new Error(`Invalid components.json: ${(error as Error).message}`)
+  }
+  const object = (value: unknown, key: string) => {
+    if (value === undefined) return {}
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new Error(`Invalid components.json: ${key} must be an object.`)
+    return value as Record<string, unknown>
+  }
+  const text = (value: unknown, key: string) => {
+    if (value === undefined) return undefined
+    if (typeof value !== "string" || !value)
+      throw new Error(`Invalid components.json: ${key} must be a non-empty string.`)
+    return value
+  }
+  const root = object(data, "the root")
+  return {
+    css: text(object(root.tailwind, "tailwind").css, "tailwind.css"),
+    ui: text(object(root.aliases, "aliases").ui, "aliases.ui")?.replace(/\/+$/, ""),
   }
 }

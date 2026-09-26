@@ -814,3 +814,124 @@ it.each(['<Component :is="value" />', '<div is="vue:Button" />'])(
     expect(result.stdout).toContain("component coverage is incomplete")
   },
 )
+
+describe("components.json defaults", () => {
+  const page = `<script setup>import { Button } from "@/lib/ui/button"</script><template><Button class="p-4" /></template>`
+
+  it("fills css and ui that the config leaves out", async () => {
+    const dir = await project()
+    await writeFile(path.join(dir, "selfix.config.ts"), "export default {}")
+    await writeFile(
+      path.join(dir, "components.json"),
+      JSON.stringify({ tailwind: { css: "theme.css" }, aliases: { ui: "@/lib/ui" } }),
+    )
+    await writeFile(path.join(dir, "Page.vue"), page)
+    const lint = await invoke(["Page.vue", "--format", "json"], dir)
+    expect(lint.code).toBe(1)
+    expect(JSON.parse(lint.stdout).map((finding: { rule: string }) => finding.rule)).toEqual([
+      "no-restyle",
+    ])
+    const doctor = await invoke(["Page.vue", "--doctor"], dir)
+    expect(doctor.code).toBe(0)
+    expect(doctor.stdout).toContain(`Tailwind CSS loaded: ${path.join(dir, "theme.css")}`)
+    expect(doctor.stdout).toContain("From components.json: css, ui\n")
+  })
+
+  it("keeps explicit config values", async () => {
+    const dir = await project()
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      'export default { css: "theme.css", ui: ["@/components/ui"] }',
+    )
+    await writeFile(
+      path.join(dir, "components.json"),
+      JSON.stringify({ tailwind: { css: "missing.css" }, aliases: { ui: "@/lib/ui" } }),
+    )
+    await writeFile(path.join(dir, "Page.vue"), page)
+    const result = await invoke(["Page.vue", "--doctor"], dir)
+    expect(result.code).toBe(0)
+    expect(result.stdout).not.toContain("From components.json")
+    expect(result.stdout).toContain("unrecognized")
+  })
+
+  it("ignores components.json when the config and --css set everything", async () => {
+    const dir = await project()
+    await writeFile(path.join(dir, "selfix.config.ts"), 'export default { ui: ["@/lib/ui"] }')
+    await writeFile(path.join(dir, "components.json"), "{ nope")
+    await writeFile(path.join(dir, "Page.vue"), page)
+    const result = await invoke(["Page.vue", "--css", "theme.css", "--format", "json"], dir)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toBe("")
+  })
+
+  it("lets --css win and keeps an explicit empty ui", async () => {
+    const dir = await project()
+    await writeFile(path.join(dir, "selfix.config.ts"), "export default { ui: [] }")
+    await writeFile(
+      path.join(dir, "components.json"),
+      JSON.stringify({ tailwind: { css: "missing.css" }, aliases: { ui: "@/lib/ui/" } }),
+    )
+    await writeFile(path.join(dir, "Page.vue"), page)
+    const result = await invoke(["Page.vue", "--css", "theme.css", "--doctor"], dir)
+    expect(result.code).toBe(0)
+    expect(result.stdout).not.toContain("From components.json")
+    expect(result.stdout).toContain("unrecognized")
+  })
+
+  it("strips a trailing slash from aliases.ui", async () => {
+    const dir = await project()
+    await writeFile(path.join(dir, "selfix.config.ts"), 'export default { css: "theme.css" }')
+    await writeFile(
+      path.join(dir, "components.json"),
+      JSON.stringify({ aliases: { ui: "@/lib/ui/" } }),
+    )
+    await writeFile(path.join(dir, "Page.vue"), page)
+    const result = await invoke(["Page.vue", "--doctor"], dir)
+    expect(result.stdout).toContain('recognized by ui "@/lib/ui"')
+    expect(result.stdout).toContain("From components.json: ui\n")
+  })
+
+  it("reads components.json only from the config directory", async () => {
+    const dir = await project()
+    await mkdir(path.join(dir, "sub"))
+    await writeFile(path.join(dir, "sub/selfix.config.ts"), "export default {}")
+    await writeFile(
+      path.join(dir, "components.json"),
+      JSON.stringify({ tailwind: { css: "theme.css" } }),
+    )
+    await writeFile(path.join(dir, "Page.vue"), page)
+    const result = await invoke(["Page.vue", "--config", "sub/selfix.config.ts"], dir)
+    expect(result.code).toBe(2)
+    expect(result.stderr).toContain("set tailwind.css in components.json")
+  })
+
+  it("fails on an invalid file or a missing css entry", async () => {
+    const dir = await project()
+    await writeFile(path.join(dir, "selfix.config.ts"), "export default {}")
+    await writeFile(path.join(dir, "Page.vue"), page)
+    const missing = await invoke(["Page.vue"], dir)
+    expect(missing.code).toBe(2)
+    expect(missing.stderr).toContain("set tailwind.css in components.json")
+    await writeFile(path.join(dir, "components.json"), "{ nope")
+    const invalid = await invoke(["Page.vue"], dir)
+    expect(invalid.code).toBe(2)
+    expect(invalid.stderr).toContain("Invalid components.json")
+    await writeFile(path.join(dir, "components.json"), JSON.stringify({ aliases: { ui: 1 } }))
+    const wrongType = await invoke(["Page.vue"], dir)
+    expect(wrongType.code).toBe(2)
+    expect(wrongType.stderr).toContain("aliases.ui must be a non-empty string")
+    await writeFile(path.join(dir, "components.json"), JSON.stringify({ aliases: "x" }))
+    expect((await invoke(["Page.vue"], dir)).stderr).toContain("aliases must be an object")
+    await writeFile(path.join(dir, "components.json"), "[]")
+    expect((await invoke(["Page.vue"], dir)).stderr).toContain("the root must be an object")
+    await writeFile(
+      path.join(dir, "components.json"),
+      JSON.stringify({ tailwind: { css: "nope.css" } }),
+    )
+    const absent = await invoke(["Page.vue"], dir)
+    expect(absent.code).toBe(2)
+    expect(absent.stderr).toContain(
+      `components.json tailwind.css not found: ${path.join(dir, "nope.css")}`,
+    )
+  })
+})

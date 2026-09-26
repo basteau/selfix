@@ -34,11 +34,11 @@ These use the same [patterns as overrides](configuration.md#per-file-rule-overri
 
 ### Paths
 
-| Path                                                        | Relative to                                         |
-| ----------------------------------------------------------- | --------------------------------------------------- |
-| Inputs, `--config`, `--css`                                 | Current working directory.                          |
-| Config `css`, `cssAliases`, path exclusions, file overrides | Config directory.                                   |
-| Component discovery                                         | Config directory, unless `project.root` changes it. |
+| Path                                                                           | Relative to                                         |
+| ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Inputs, `--config`, `--css`                                                    | Current working directory.                          |
+| Config `css`, `components.json`, `cssAliases`, path exclusions, file overrides | Config directory.                                   |
+| Component discovery                                                            | Config directory, unless `project.root` changes it. |
 
 The CLI doesn't search parent directories for a config. A config is required even with `--css`.
 
