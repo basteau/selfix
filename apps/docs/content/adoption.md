@@ -112,7 +112,7 @@ Two points apply to shared settings:
 
 ## Run the same check in CI and coding agents
 
-Run the same `lint:design` script locally and in CI, so both enforce the same warning limit. For a GitHub Actions workflow, see [Run in CI](ci.md).
+Run the same `lint:design` script locally and in CI, so both enforce the same warning limit. For GitHub Actions and GitLab CI examples, see [Run in CI](ci.md).
 
 Add this to your coding-agent instructions:
 

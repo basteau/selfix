@@ -44,16 +44,16 @@ The CLI doesn't search parent directories for a config. A config is required eve
 
 ## Options
 
-| Option                | Behavior                                                                   |
-| --------------------- | -------------------------------------------------------------------------- |
-| `--doctor`            | Explain component recognition, enforcement, and definition discovery.      |
-| `--config <file.ts>`  | Use this config. Defaults to `selfix.config.ts`.                           |
-| `--css <file>`        | Override the config's CSS entry.                                           |
-| `--format text\|json` | Choose output format. Defaults to `text`.                                  |
-| `--max-warnings <n>`  | Fail when warnings exceed this non-negative integer. Unlimited by default. |
-| `--help`, `-h`        | Print usage.                                                               |
-| `--version`           | Print the installed version.                                               |
-| `--`                  | Treat all remaining arguments as inputs.                                   |
+| Option                        | Behavior                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `--doctor`                    | Explain component recognition, enforcement, and definition discovery.      |
+| `--config <file.ts>`          | Use this config. Defaults to `selfix.config.ts`.                           |
+| `--css <file>`                | Override the config's CSS entry.                                           |
+| `--format text\|json\|gitlab` | Choose output format. Defaults to `text`.                                  |
+| `--max-warnings <n>`          | Fail when warnings exceed this non-negative integer. Unlimited by default. |
+| `--help`, `-h`                | Print usage.                                                               |
+| `--version`                   | Print the installed version.                                               |
+| `--`                          | Treat all remaining arguments as inputs.                                   |
 
 Help and version commands don't load your project.
 
@@ -73,7 +73,46 @@ pnpm exec selfix src --format json
 
 JSON returns a [diagnostic array](api.md#diagnostic-fields) with absolute paths and no summary; a clean check returns `[]`. Text paths are relative to the working directory.
 
-Findings go to stdout. Loading, config, and input failures go to stderr as `selfix: ...`, even in JSON mode.
+Findings go to stdout. Loading, config, and input failures go to stderr as `selfix: ...`, even in JSON and GitLab mode, and print no partial report.
+
+### GitLab Code Quality
+
+Use `gitlab` to write a [GitLab Code Quality](https://docs.gitlab.com/ci/testing/code_quality/) report. Merge requests show its findings in the Code Quality widget, and GitLab Ultimate also marks them in the diff:
+
+```sh
+pnpm exec selfix src --format gitlab > gl-code-quality-report.json
+```
+
+The report is a JSON array with one issue per finding; a clean check returns `[]`:
+
+```json
+[
+  {
+    "description": "…",
+    "check_name": "no-arbitrary-values",
+    "fingerprint": "3f1c…",
+    "severity": "major",
+    "location": { "path": "src/Page.vue", "lines": { "begin": 2 } }
+  }
+]
+```
+
+| Field                  | Value                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `description`          | The finding's message, with spelling suggestions as in text output.                    |
+| `check_name`           | The rule, or `parse-error`.                                                            |
+| `severity`             | `major` for errors and `minor` for warnings.                                           |
+| `location.path`        | The file relative to the working directory, with `/` separators.                       |
+| `location.lines.begin` | The line in the original SFC.                                                          |
+| `fingerprint`          | A SHA-256 hash of the rule, path, message, and occurrence of that message in the file. |
+
+GitLab expects paths relative to the repository root, so run selfix from the root. That's GitLab's default job directory. In a monorepo, pass the app's config and inputs instead of changing directories:
+
+```sh
+pnpm exec selfix apps/web/src --config apps/web/selfix.config.ts --format gitlab
+```
+
+Fingerprints don't include line numbers, including the parser position in a script parse error, so a finding keeps its fingerprint when unrelated edits move it. Identical findings in one file are numbered in source order. Moving or renaming the file, or changing the rule's message, gives the finding a new fingerprint.
 
 ## Exit codes
 
@@ -116,6 +155,6 @@ For each unrecognized imported component, doctor suggests an exact `componentImp
 | `1`  | Parse errors, unsupported analysis, or class inputs selfix cannot read. The list may be incomplete. |
 | `2`  | Configuration, theme, discovery, or input failure, including an empty scan.                         |
 
-Doctor prints text only. `--format json` and `--max-warnings` fail with exit `2` when combined with `--doctor`.
+Doctor prints text only. `--format json`, `--format gitlab`, and `--max-warnings` fail with exit `2` when combined with `--doctor`.
 
 Doctor uses the same component identity rules as a normal run. Imported kebab-case tags use the local import name, and globals use their template name. `<component :is="Button">` reports the `Button` import. `<UI.Button>` reports the written name and is recognized through the namespace import's module. Unresolved dynamic components, unresolved dotted tags, bare namespace imports, and `is="vue:…"` are reported as unsupported. A traced wrapper shows `wraps <Button>, which is recognized by …`. Doctor does not trace deeper wrappers, resolve packages beyond the configured patterns, or discover richer props, so no report proves every component is covered.

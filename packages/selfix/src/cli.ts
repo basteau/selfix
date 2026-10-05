@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import type { Dirent } from "node:fs"
 import { readFile, readdir, stat, glob } from "node:fs/promises"
 import path from "node:path"
@@ -13,7 +14,8 @@ Defaults to the current directory and requires selfix.config.ts.
   --doctor              Explain component recognition and protection
   --config <file.ts>     TypeScript configuration (default: selfix.config.ts)
   --css <file>           Tailwind CSS entry (overrides config.css)
-  --format text|json    Output format (default: text)
+  --format text|json|gitlab
+                        Output format (default: text); gitlab prints Code Quality JSON
   --max-warnings <n>    Fail when warnings exceed n
   --help                Show this help
   --version             Show the installed version
@@ -83,10 +85,11 @@ export async function run(
       } else if (arg.startsWith("-")) throw new Error(`Unknown option: ${arg}.`)
       else inputs.push(arg)
     }
-    if (!["text", "json"].includes(format)) throw new Error("--format must be text or json.")
-    if (doctor && (format === "json" || hasMaxWarnings))
+    if (!["text", "json", "gitlab"].includes(format))
+      throw new Error("--format must be text, json, or gitlab.")
+    if (doctor && (format !== "text" || hasMaxWarnings))
       throw new Error(
-        "--doctor supports text setup reports only. Remove --format json and --max-warnings, or run ordinary lint without --doctor.",
+        "--doctor supports text setup reports only. Remove --format json or gitlab and --max-warnings, or run ordinary lint without --doctor.",
       )
     configPath ??= path.join(cwd, "selfix.config.ts")
     if (!configPath.endsWith(".ts"))
@@ -223,10 +226,12 @@ export async function run(
     const errors = diagnostics.filter((item) => item.severity === "error").length
     const warnings = diagnostics.length - errors
     if (format === "json") io.out(`${JSON.stringify(diagnostics, null, 2)}\n`)
+    else if (format === "gitlab")
+      io.out(`${JSON.stringify(codeQuality(diagnostics, cwd), null, 2)}\n`)
     else {
       for (const item of diagnostics)
         io.out(
-          `${path.relative(cwd, item.file)}:${item.line}:${item.column} ${item.severity} ${item.rule} ${item.message}${item.suggestions?.length ? ` Did you mean ${item.suggestions.map((suggestion) => JSON.stringify(suggestion)).join(" or ")}?` : ""}\n`,
+          `${path.relative(cwd, item.file)}:${item.line}:${item.column} ${item.severity} ${item.rule} ${describe(item)}\n`,
         )
       io.out(
         `Checked ${files.size} Vue file${files.size === 1 ? "" : "s"}: ${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}.\n`,
@@ -237,6 +242,38 @@ export async function run(
     io.err(`selfix: ${error instanceof Error ? error.message : String(error)}\n`)
     return 2
   }
+}
+
+function describe(item: Diagnostic) {
+  const suggestions = item.suggestions?.map((suggestion) => JSON.stringify(suggestion))
+  return suggestions?.length
+    ? `${item.message} Did you mean ${suggestions.join(" or ")}?`
+    : item.message
+}
+
+// GitLab Code Quality issues (a subset of the Code Climate format). Fingerprints identify a
+// finding by rule, path, message, and its occurrence among identical findings in that file,
+// so they stay stable when unrelated edits shift lines. Script parse errors end with the
+// parser's "(line:column)", which is left out for the same reason.
+function codeQuality(diagnostics: Diagnostic[], cwd: string) {
+  const seen = new Map<string, number>()
+  return diagnostics.map((item) => {
+    const file = path.relative(cwd, item.file).split(path.sep).join("/")
+    const message =
+      item.rule === "parse-error" ? item.message.replace(/ \(\d+:\d+\)$/, "") : item.message
+    const identity = JSON.stringify([item.rule, file, message])
+    const occurrence = seen.get(identity) ?? 0
+    seen.set(identity, occurrence + 1)
+    return {
+      description: describe(item),
+      check_name: item.rule,
+      fingerprint: createHash("sha256")
+        .update(JSON.stringify([item.rule, file, message, occurrence]))
+        .digest("hex"),
+      severity: item.severity === "error" ? "major" : "minor",
+      location: { path: file, lines: { begin: item.line } },
+    }
+  })
 }
 
 // shadcn-vue projects describe their Tailwind entry and UI import alias in components.json.

@@ -690,12 +690,14 @@ it.each([
 
 it.each([
   ["--format", "json"],
+  ["--format", "gitlab"],
   ["--max-warnings", "0"],
 ])("doctor rejects %s %s", async (...options) => {
   const dir = await project()
   const result = await invoke(["--doctor", ...options], dir)
   expect(result.code).toBe(2)
-  expect(result.stderr).toContain("Remove --format json and --max-warnings")
+  expect(result.stdout).toBe("")
+  expect(result.stderr).toContain("Remove --format json or gitlab and --max-warnings")
 })
 
 it.each([
@@ -933,5 +935,111 @@ describe("components.json defaults", () => {
     expect(absent.stderr).toContain(
       `components.json tailwind.css not found: ${path.join(dir, "nope.css")}`,
     )
+  })
+})
+
+describe("GitLab Code Quality format", () => {
+  async function gitlab(source: string, dir?: string) {
+    if (!dir) {
+      dir = await project()
+      await mkdir(path.join(dir, "src"))
+      await writeFile(
+        path.join(dir, "selfix.config.ts"),
+        'export default { css: "theme.css", rules: { "no-inline-styles": "warn" } }',
+      )
+    }
+    await writeFile(path.join(dir, "src/Page.vue"), source)
+    const result = await invoke(["src", "--format", "gitlab"], dir)
+    return { ...result, dir, issues: result.stdout ? JSON.parse(result.stdout) : undefined }
+  }
+
+  it("prints repository-relative Code Quality issues with mapped severities", async () => {
+    const result = await gitlab(
+      '<template>\n  <div class="p-[13px]" />\n  <div style="color:red" />\n</template>',
+    )
+    expect(result.code).toBe(1)
+    expect(result.stderr).toBe("")
+    expect(result.stdout.endsWith("]\n")).toBe(true)
+    // GitLab requires exactly these fields: severity is one of info, minor, major, critical,
+    // or blocker, and location.path is repository-relative without a leading "./".
+    expect(result.issues).toEqual([
+      {
+        description: expect.stringContaining("p-[13px]"),
+        check_name: "no-arbitrary-values",
+        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+        severity: "major",
+        location: { path: "src/Page.vue", lines: { begin: 2 } },
+      },
+      {
+        description: expect.stringContaining("style"),
+        check_name: "no-inline-styles",
+        fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+        severity: "minor",
+        location: { path: "src/Page.vue", lines: { begin: 3 } },
+      },
+    ])
+  })
+
+  it("keeps fingerprints stable across shifted lines and distinct for duplicate findings", async () => {
+    const duplicate = '  <div class="p-[13px]" />\n'
+    const before = await gitlab(`<template>\n${duplicate}${duplicate}</template>`)
+    const [first, second] = before.issues
+    expect(first.description).toBe(second.description)
+    expect(first.fingerprint).not.toBe(second.fingerprint)
+    // An unrelated finding and blank lines above the duplicates, plus a third duplicate below.
+    const after = await gitlab(
+      `<template>\n  <div style="color:red" />\n\n\n${duplicate}${duplicate}${duplicate}</template>`,
+      before.dir,
+    )
+    expect(after.issues.map((issue: any) => issue.location.lines.begin)).toEqual([2, 5, 6, 7])
+    const fingerprints = after.issues.map((issue: any) => issue.fingerprint)
+    expect(fingerprints.slice(1, 3)).toEqual([first.fingerprint, second.fingerprint])
+    expect(new Set(fingerprints).size).toBe(4)
+  })
+
+  it("keeps a script parse error's fingerprint when lines shift inside the script", async () => {
+    const before = await gitlab(
+      "<script setup>\nconst = 1\n</script>\n<template><div /></template>",
+    )
+    const after = await gitlab(
+      "<script setup>\nconst ok = 1\nconst = 1\n</script>\n<template><div /></template>",
+      before.dir,
+    )
+    expect(before.issues).toHaveLength(1)
+    expect(after.issues).toHaveLength(1)
+    expect(after.issues[0].check_name).toBe("parse-error")
+    // The description keeps the parser's position; only the fingerprint ignores it.
+    expect(before.issues[0].description).toMatch(/\(2:\d+\)$/)
+    expect(after.issues[0].description).toMatch(/\(3:\d+\)$/)
+    expect(after.issues[0].fingerprint).toBe(before.issues[0].fingerprint)
+  })
+
+  it("prints an empty array for a clean check", async () => {
+    const result = await gitlab('<template><div class="p-4" /></template>')
+    expect(result.code).toBe(0)
+    expect(result.stdout).toBe("[]\n")
+    expect(result.stderr).toBe("")
+  })
+
+  it("matches other formats' exit codes and reports failures on stderr only", async () => {
+    const warning = await gitlab('<template><div style="color:red" /></template>')
+    expect(warning.code).toBe(0)
+    expect(warning.issues).toHaveLength(1)
+    const limited = await invoke(["src", "--format", "gitlab", "--max-warnings", "0"], warning.dir)
+    expect(limited.code).toBe(1)
+    expect(JSON.parse(limited.stdout)).toEqual(warning.issues)
+    await writeFile(path.join(warning.dir, "theme.css"), '@import "./missing.css";')
+    const theme = await gitlab('<template><div class="p-[13px]" /></template>', warning.dir)
+    expect(theme.code).toBe(2)
+    expect(theme.stdout).toBe("")
+    expect(theme.stderr).toMatch(/^selfix: /)
+    await writeFile(path.join(warning.dir, "invalid.ts"), "export default { typo: true }")
+    const config = await invoke(
+      ["src", "--format", "gitlab", "--config", "invalid.ts"],
+      warning.dir,
+    )
+    expect(config.code).toBe(2)
+    expect(config.stdout).toBe("")
+    expect(config.stderr).toContain("Unknown config")
   })
 })
