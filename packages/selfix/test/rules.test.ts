@@ -762,6 +762,40 @@ import Ignored from '@policy/ignored'
     },
   )
 
+  it("loads host-page selectors without classes and lints components normally", async () => {
+    const linter = await createLinter({
+      css: `${css}
+        body:has([data-reka-popper-content-wrapper], [role="dialog"]) { overflow: hidden; }
+        #app > [data-x] { color: red; }
+        :root:lang(de) { hyphens: auto; }
+        .card, body:has(dialog) { color: red; }`,
+    })
+    expect(linter.lint(button('class="p-4 card dialog"'), "Host.vue")).toEqual([
+      expect.objectContaining({ rule: "no-raw-colors", className: "card", line: 2, column: 19 }),
+      expect.objectContaining({ rule: "no-restyle", className: "p-4", line: 2, column: 19 }),
+      expect.objectContaining({ rule: "no-restyle", className: "card", line: 2, column: 19 }),
+      expect.objectContaining({ rule: "no-restyle", className: "dialog", line: 2, column: 19 }),
+      expect.objectContaining({
+        rule: "no-unknown-classes",
+        className: "dialog",
+        line: 2,
+        column: 19,
+      }),
+    ])
+  })
+
+  it.each(["body:has(.open)", ":root:has(:is(.dark))", "main:has(dialog).card"])(
+    "rejects class selector %s beside class-free host selectors even with all rules off",
+    async (selector) => {
+      await expect(
+        createLinter({
+          css: `${css} body:has([role="dialog"]) { overflow: hidden; } ${selector} { color: red; }`,
+          config: { rules: Object.fromEntries(ruleNames.map((rule) => [rule, "off"])) },
+        }),
+      ).rejects.toThrow(`Unable to inspect CSS: unsupported selector "${selector}"`)
+    },
+  )
+
   it("reports unknown slot classes only within slot content", async () => {
     const linter = await createLinter({ css, config: { rules: only("require-static-classes") } })
     const source = `<script setup>const local = 'p-2';</script>

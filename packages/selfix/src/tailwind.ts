@@ -723,28 +723,120 @@ function collectCustomClasses(
   return customClasses
 }
 
+const quotedPattern = String.raw`"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'`
+const attributePattern = String.raw`\[(?:${quotedPattern}|\\.|[^\]"'\\])*\]`
+const percentagePattern = String.raw`\d+(?:\.\d+)?%`
+// Sticky matching makes unsupported characters fail instead of yielding partial names.
+const selectorTokenPattern = new RegExp(
+  String.raw`${attributePattern}|(?:[.#]|::?)?(?:--|-[a-zA-Z_]|[a-zA-Z_])[\w-]*(?:\()?|${percentagePattern}|\s+|[&*,)>+~]`,
+  "y",
+)
+const branchTokenPattern = new RegExp(
+  String.raw`${attributePattern}|${quotedPattern}|\\[^\n\r\f]|${percentagePattern}|[\w-]+|[\u0080-\uffff]+|\s+|[.#:()&*,>+~|]`,
+  "y",
+)
+const nameStartPattern = /^(?:[\w-]|\\|[\u0080-\uffff])/
+// `[class]`, `[class~=x]`, and namespaced `[*|class]` forms, case-insensitively.
+const classAttributePattern = /^\[\s*(?:(?:\*|[\w-]*)\|)?class\s*(?:[~|^$*]?=|\])/i
+
 // This is class attribution, not selector matching or cascade evaluation.
 function selectorClasses(selector: string, parentClasses?: string[]): string[] {
+  function fail(reason: string): never {
+    throw new Error(`Unable to inspect CSS: unsupported selector "${selector}" (${reason}).`)
+  }
+
+  // Every nested branch carries an explicit or implicit parent reference, so it is checked whole.
+  if (parentClasses) return branchClasses(selector, fail, parentClasses)
+  const names = new Set<string>()
+  for (const branch of classBranches(selector, fail)) {
+    for (const name of branchClasses(branch, fail)) names.add(name)
+  }
+  return [...names]
+}
+
+// A class-free branch cannot own class declarations, so its selector functions need no
+// attribution support, but it must still be well formed. Class evidence anywhere outside
+// attribute values and strings, even inside a function, keeps the branch for attribution:
+// a class token, a parent reference, a class attribute selector, or `:scope`.
+function classBranches(selector: string, fail: (reason: string) => never): string[] {
+  const branches: string[] = []
+  let index = 0
+  let start = 0
+  let depth = 0
+  let hasClass = false
+  let previous = ""
+  let prefix = ""
+  let pseudo = false
+
+  while (index < selector.length) {
+    branchTokenPattern.lastIndex = index
+    const match = branchTokenPattern.exec(selector)
+    if (!match) fail("use unescaped class identifiers and supported compound selectors")
+    const token = match[0]
+    index = branchTokenPattern.lastIndex
+    const name = nameStartPattern.test(token)
+    if (prefix) {
+      if (prefix === ":" && token === ":") {
+        prefix = "::"
+        continue
+      }
+      if (!name) fail(`expected a name after "${prefix}"`)
+      if (prefix === ":" && token.toLowerCase() === "scope") hasClass = true
+      pseudo = prefix !== "#"
+      prefix = ""
+      previous = token
+      continue
+    }
+    if (pseudo && name) {
+      previous = token
+      continue
+    }
+    const afterPseudo = pseudo
+    pseudo = false
+    if (/^\s+$/.test(token)) continue
+    if (token === "#" || token === ":") {
+      prefix = token
+    } else if (token === "(") {
+      if (!afterPseudo) fail("parentheses must follow a pseudo-class name")
+      depth += 1
+    } else if (token === ")") {
+      if (previous === "(") fail("empty selector function")
+      if (!depth--) fail("unmatched parenthesis")
+    } else if (token === "." || token === "&" || classAttributePattern.test(token)) {
+      hasClass = true
+    } else if (/^["']/.test(token) && depth === 0) {
+      fail("quoted strings are supported only in attributes and selector functions")
+    } else if (token === "," && depth === 0) {
+      if (hasClass) branches.push(selector.slice(start, match.index))
+      start = index
+      hasClass = false
+    }
+    previous = token
+  }
+  if (prefix) fail(`expected a name after "${prefix}"`)
+  if (depth) fail("unclosed selector function")
+  if (hasClass) branches.push(selector.slice(start))
+  return branches
+}
+
+function branchClasses(
+  selector: string,
+  fail: (reason: string) => never,
+  parentClasses?: string[],
+): string[] {
   const names = new Set<string>()
   const functions: string[] = []
-  // Sticky matching makes unsupported characters fail instead of yielding partial names.
-  const tokenPattern =
-    /\[(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\\.|[^\]"'\\])*\]|(?:[.#]|::?)?(?:--|-[a-zA-Z_]|[a-zA-Z_])[\w-]*(?:\()?|\d+(?:\.\d+)?%|\s+|[&*,)>+~]/y
   let index = 0
   let previous = ""
   let relationship = false
   let hasClass = false
 
-  function fail(reason: string): never {
-    throw new Error(`Unable to inspect CSS: unsupported selector "${selector}" (${reason}).`)
-  }
-
   while (index < selector.length) {
-    tokenPattern.lastIndex = index
-    const match = tokenPattern.exec(selector)
+    selectorTokenPattern.lastIndex = index
+    const match = selectorTokenPattern.exec(selector)
     if (!match) fail("use unescaped class identifiers and supported compound selectors")
     const token = match[0]
-    index = tokenPattern.lastIndex
+    index = selectorTokenPattern.lastIndex
     if (/^\s+$/.test(token)) {
       const next = selector[index]
       if (previous && !/[,(>+~]$/.test(previous) && next && !/[,)>+~]/.test(next)) {

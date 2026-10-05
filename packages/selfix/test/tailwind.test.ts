@@ -447,6 +447,153 @@ describe("createTailwind", () => {
     }
   })
 
+  test.each([
+    'body:has([data-reka-popper-content-wrapper], [role="dialog"])',
+    ":root:lang(de)",
+    'html:lang("de-CH")',
+    "#app > [data-x]",
+    "li:nth-child(2n+1 of [data-row]), tr:nth-last-of-type(-n + 3)",
+    "main:has(> img, + footer) :dir(rtl)",
+    String.raw`#app\:shell:has([data-label="a.fake, .other"])`,
+    "*|svg:not(:has(title))",
+    "#café:has(img)",
+  ])("skips class-free selector %s without attributing classes", async (selector) => {
+    const tailwind = await createTailwind(
+      `${selector} { overflow: hidden; color: red; } .card { padding: 1rem; }`,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card")).toEqual({
+      known: true,
+      categories: ["spacing"],
+      rawColor: false,
+    })
+    for (const token of ["fake", "other", "app", "x"]) {
+      expect(tailwind.inspect(token)).toEqual({
+        known: false,
+        categories: ["unknown"],
+        rawColor: false,
+      })
+    }
+  })
+
+  test("attributes class branches of a list while skipping class-free branches", async () => {
+    const tailwind = await createTailwind(
+      `.card, body:has([role="dialog"]), :root:lang(de) { color: red; }
+       body:has(dialog) { &.panel { padding: 1rem; } &:hover { margin: 1rem; } }`,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card")).toEqual({ known: true, categories: ["color"], rawColor: true })
+    expect(tailwind.inspect("panel")).toEqual({
+      known: true,
+      categories: ["spacing"],
+      rawColor: false,
+    })
+  })
+
+  test("keeps nested ownership below class-free branches and conditions", async () => {
+    const tailwind = await createTailwind(
+      `.card, body:has(img) { &:hover { color: red; } }
+       body:has(dialog) { @media (width > 10px) { &.panel { padding: 1rem; } } }`,
+      process.cwd(),
+    )
+    expect(tailwind.inspect("card")).toEqual({ known: true, categories: ["color"], rawColor: true })
+    expect(tailwind.inspect("panel")).toEqual({
+      known: true,
+      categories: ["spacing"],
+      rawColor: false,
+    })
+  })
+
+  test("keeps failing :scope with an unsupported function inside @scope", async () => {
+    await expect(
+      createTailwind("@scope (.card) { :scope:has(img) { color: red; } }", process.cwd()),
+    ).rejects.toThrow('Unable to inspect CSS: unsupported selector ":scope:has(img)"')
+  })
+
+  test.each([
+    "body:has(.open)",
+    "body:has([data-x] .open)",
+    ":root:has(:is(.dark))",
+    "html:not(:has(.ghost))",
+    "li:nth-child(2 of .row)",
+    String.raw`body:has(.\31 0)`,
+    "main:has(dialog).card",
+    "body:has(dialog), .card:has(.child)",
+    "html:lang(de) .card",
+    "body:has(dialog) &",
+    '[class~="card"]:has(img)',
+    'div:has(img), [CLASS*="btn-"]:has(svg)',
+    "[class~=card]:nth-child(2n of [data-x])",
+    "[*|class^=card]:has(img)",
+    "[svg|class]:has(img)",
+    "[class|=card i]:lang(de)",
+    "div:has([class~=card])",
+    ":scope:has(img)",
+  ])("keeps failing a class inside or beside an unsupported function: %s", async (selector) => {
+    await expect(createTailwind(`${selector} { color: red; }`, process.cwd())).rejects.toThrow(
+      /Unable to inspect CSS: unsupported selector/,
+    )
+  })
+
+  test.each([
+    ["body:has(dialog", /Unable to inspect CSS: unclosed value delimiter/],
+    [":root:lang(de]", /Unable to inspect CSS: unmatched value delimiter/],
+    ["[data-x", /Unable to inspect CSS: unclosed value delimiter/],
+    ["body:has(dialog))", /Missing opening \(/],
+    ['html:lang("de)', /Unable to inspect CSS: unterminated string/],
+  ])("rejects unbalanced class-free selector %s", async (selector, error) => {
+    await expect(createTailwind(`${selector} { color: red; }`, process.cwd())).rejects.toThrow(
+      error,
+    )
+  })
+
+  test.each([
+    ["body:has(dialog)!", "use unescaped class identifiers and supported compound selectors"],
+    [":root:lang(de) / main", "use unescaped class identifiers and supported compound selectors"],
+    ["#app:has(img)$", "use unescaped class identifiers and supported compound selectors"],
+    ["body:", 'expected a name after ":"'],
+    [":()", 'expected a name after ":"'],
+    ["body:()", 'expected a name after ":"'],
+    ["body::::x", 'expected a name after "::"'],
+    ["body: hover", 'expected a name after ":"'],
+    ["#", 'expected a name after "#"'],
+    ["body #", 'expected a name after "#"'],
+    ['body "x"', "quoted strings are supported only in attributes and selector functions"],
+    ["body:has()", "empty selector function"],
+    ["body:lang( )", "empty selector function"],
+    ["body (img)", "parentheses must follow a pseudo-class name"],
+  ])("rejects malformed class-free selector %s", async (selector, reason) => {
+    await expect(createTailwind(`${selector} { color: red; }`, process.cwd())).rejects.toThrow(
+      `Unable to inspect CSS: unsupported selector "${selector}" (${reason}).`,
+    )
+  })
+
+  test.each([
+    "body:has(dialog) { .card { color: red; } }",
+    "body:has(dialog) { & .card { color: red; } }",
+    ":root:lang(de) { &:has(.card) { color: red; } }",
+    "body { &:has(dialog) { overflow: hidden; } }",
+  ])("keeps nested selector validation inside class-free rules: %s", async (css) => {
+    await expect(createTailwind(css, process.cwd())).rejects.toThrow(
+      /Unable to inspect CSS: unsupported selector/,
+    )
+  })
+
+  test("validates @apply inside class-free rules without attributing it", async () => {
+    const tailwind = await createTailwind(
+      '@import "tailwindcss"; body:has(dialog) { @apply overflow-hidden text-red-500; }',
+      process.cwd(),
+    )
+    expect(tailwind.inspect("text-red-500").categories).toEqual(["color"])
+    expect(tailwind.inspect("dialog").known).toBe(false)
+    await expect(
+      createTailwind(
+        '@import "tailwindcss"; :root:lang(de) { @apply missing-utility; }',
+        process.cwd(),
+      ),
+    ).rejects.toThrow(/missing-utility/)
+  })
+
   test("ignores class-like text in selector attributes", async () => {
     const tailwind = await createTailwind(
       String.raw`[data-url="a.fake"] { color: red; }

@@ -47,7 +47,13 @@ Use explicit attributes or literal objects, and keep the template and script ins
 
 Loaded custom classes add their CSS effects, including supported nesting and `@apply`. selfix counts every possible effect, not the browser's current state or cascade.
 
-selfix supports direct class selectors such as `.card` and nested states such as `&:hover`. Relationships such as `.card .child` or `& > span`, escaped class names, and unsupported selector functions fail theme loading. The error names the selector and the reason.
+selfix supports direct class selectors such as `.card` and nested states such as `&:hover`.
+
+selfix checks each selector in a list that targets classes: one with a class token such as `.card`, a parent reference `&`, a `[class…]` attribute selector, or `:scope`. These count anywhere in the selector, even inside a function. Such a selector fails theme loading if it uses a relationship such as `.card .child` or `& > span`, an escaped class name, or a selector function other than `:is()`, `:where()`, and `:not()`. So `body:has(.open)`, `.card:has(.child)`, and `[class~="card"]:has(img)` fail. The error names the selector and the reason.
+
+A selector without any of these can't target a class, so selfix skips it. Examples are `body:has([role="dialog"])`, `#app > [data-x]`, and `:root:lang(de)`. In a list such as `.card, body:has(dialog)`, selfix checks `.card` and skips the other branch. A skipped selector must still be well formed: a name follows each `#` and `:`, functions aren't empty, and quoted strings appear only in attributes and functions.
+
+Nested rules inside a skipped selector follow the usual nesting rules. `&.panel` adds its effects to `panel`, and `@apply` utilities are still validated. `&:has(dialog)` still fails because `&` counts as a class, so write it as one selector, such as `body:has(dialog)`.
 
 Rewrite an unsupported selector only if you can keep its behavior. Otherwise treat it as an analysis limit.
 

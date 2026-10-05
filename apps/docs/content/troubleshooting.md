@@ -72,7 +72,7 @@ The error names the import and where selfix tried to resolve it. Check that file
 - Config `css` paths are relative to the config directory. `--css` paths are relative to your working directory.
 - For a package import, check that the package exposes a local `.css` entry. If the import needs an explicit file, add an exact [CSS alias](themes.md#css-aliases).
 - For a generated theme, run the app's preparation step.
-- For an unsupported selector, compare it with [selector support](analysis.md#custom-css-selectors) before you change its behavior.
+- For an unsupported selector, compare it with [selector support](analysis.md#custom-css-selectors) before you change its behavior. selfix skips well-formed selectors that target no class, so the error involves a class, `&`, `[class…]`, `:scope`, or malformed syntax.
 
 Failed theme loading stops the check. Fix it before you read any results.
 
