@@ -174,7 +174,7 @@ it("cannot suppress malformed or unsupported inputs with file rules", async () =
   })
   for (const source of [
     "<template><div></template>",
-    '<template><div v-bind="attrs" /></template>',
+    '<template><div :[key]="value" /></template>',
     '<script src="./external.js"></script><template><div /></template>',
   ]) {
     const findings = linter.lint(source, "src/Implementation.vue")

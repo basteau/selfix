@@ -351,27 +351,31 @@ const Alias = Button;
       expect(result.fatal).toBe(false)
       expect(result.errors).toEqual([
         {
-          message: "Dynamic v-bind attrs may contain class or style",
-          offset: source.indexOf("v-bind"),
-        },
-        {
           message: "Dynamic v-bind argument may be class or style",
           offset: source.indexOf(":[other]"),
         },
-        {
-          message: "Dynamic v-bind attrs may contain class or style",
-          offset: source.lastIndexOf("v-bind"),
-        },
       ])
       expect(result.sites).toEqual([
-        { component: "div", tokens: [], dynamic: true, offset: source.indexOf("v-bind") },
+        {
+          component: "div",
+          tokens: [],
+          dynamic: true,
+          offset: source.indexOf("v-bind"),
+          spread: true,
+        },
         {
           component: "div",
           tokens: ["p-[13px]"],
           dynamic: false,
           offset: source.indexOf(":class"),
         },
-        { component: "div", tokens: [], dynamic: true, offset: source.lastIndexOf("v-bind") },
+        {
+          component: "div",
+          tokens: [],
+          dynamic: true,
+          offset: source.lastIndexOf("v-bind"),
+          spread: true,
+        },
       ])
     },
   )
@@ -914,10 +918,8 @@ const fallback = 'default-class';
       source.indexOf('v-bind="{'),
       source.indexOf("<style>"),
     ])
-    expect(normal.errors.map(({ offset }) => offset)).toEqual([
-      source.indexOf('v-bind="attrs'),
-      source.indexOf(":[key]"),
-    ])
+    expect(normal.errors.map(({ offset }) => offset)).toEqual([source.indexOf(":[key]")])
+    expect(normal.sites.find(({ spread }) => spread)?.offset).toBe(source.indexOf('v-bind="attrs'))
   })
 
   it("locates fallback template style compiler diagnostics in the original SFC", () => {
@@ -980,11 +982,11 @@ const maybe = { four: ok };
         tokens: [],
         dynamic: true,
         offset: source.indexOf('v-bind="attrs'),
+        spread: true,
       },
     ])
     expect(result.styles).toEqual([{ component: "div", offset: source.indexOf('v-bind="{ class') }])
     expect(result.errors.map((error) => error.message)).toEqual([
-      "Dynamic v-bind attrs may contain class or style",
       "Dynamic v-bind argument may be class or style",
     ])
   })
@@ -1003,12 +1005,10 @@ const maybe = { four: ok };
 
       expect(result.sites).toEqual([
         { component: "div", tokens: ["safe"], dynamic: true, offset: source.indexOf(':class="') },
-        { component: "div", tokens: [], dynamic: true, offset: spreadOffset },
+        { component: "div", tokens: [], dynamic: true, offset: spreadOffset, spread: true },
         { component: "div", tokens: [], dynamic: true, offset: literalOffset },
       ])
-      expect(result.errors).toEqual([
-        { message: "Dynamic v-bind attrs may contain class or style", offset: spreadOffset },
-      ])
+      expect(result.errors).toEqual([])
       expect(result.styles).toEqual([{ component: "div", offset: literalOffset }])
     },
   )
@@ -1043,4 +1043,151 @@ const button = cva("base", { variants: { tone: { danger: "danger" } } });
     ])
     expect(result.errors[0]?.message).toContain("Template <style>")
   })
+})
+
+describe("v-bind spreads", () => {
+  it.each([false, true])(
+    "treats template $attrs forwarding as checked at the call site (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<script setup>import { Button } from '@/components/ui/button'</script>
+<template>
+  <div v-bind="$attrs" />
+  <Button v-bind="$attrs" />
+  <svg v-bind="$attrs" />
+  <Button v-bind="$attrs as Record<string, unknown>" />
+</template>`
+      const result = collectVue(source, "Forward.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites).toEqual([])
+      expect(result.styles).toEqual([])
+      expect(result.svgColors).toEqual([])
+      expect(result.usages.map(({ component }) => component)).toEqual(["Button", "Button"])
+    },
+  )
+
+  it.each([
+    "<script setup>const $attrs = { class: 'p-4' }</script>",
+    "<script setup>import { props as $attrs } from './props'</script>",
+    "<script>const $attrs = { class: 'p-4' }</script><script setup>const unused = 1</script>",
+  ])("treats a script binding named $attrs as opaque: %s", (script) => {
+    const source = `${script}<template><div v-bind="$attrs" /></template>`
+    // Vue resolves the template identifier to the script binding, not the attrs global.
+    const { descriptor } = parse(source)
+    const compiled = compileTemplate({
+      source: descriptor.template!.content,
+      filename: "Shadow.vue",
+      id: "shadow",
+      compilerOptions: { bindingMetadata: compileScript(descriptor, { id: "shadow" }).bindings },
+    })
+    expect(compiled.code).toContain("$setup.$attrs")
+    const offset = source.indexOf("v-bind")
+    for (const forceCompileTemplateAst of [false, true]) {
+      const result = collectVue(source, "Shadow.vue", { forceCompileTemplateAst })
+      expect(result.errors).toEqual([])
+      expect(result.sites).toEqual([
+        { component: "div", tokens: [], dynamic: true, offset, spread: true },
+      ])
+    }
+  })
+
+  it.each(["{ ...rest, }", "local.member"])(
+    "treats $attrs under an unsupported slot scope %s as opaque",
+    (pattern) => {
+      const source = `<template><Box v-slot="${pattern}"><div v-bind="$attrs" /></Box></template>`
+      for (const forceCompileTemplateAst of [false, true]) {
+        const result = collectVue(source, "invalid-scope.vue", { forceCompileTemplateAst })
+        expect(result.errors).toContainEqual({
+          message: expect.stringContaining("Invalid or unsupported template scope:"),
+          offset: source.indexOf("v-slot="),
+        })
+        expect(result.sites).toEqual([
+          {
+            component: "div",
+            tokens: [],
+            dynamic: true,
+            offset: source.indexOf('v-bind="$attrs"'),
+            spread: true,
+          },
+        ])
+      }
+    },
+  )
+
+  it.each([
+    ["<div v-bind />", "v-bind is missing an expression"],
+    ['<div v-bind="$attrs +" />', "Invalid v-bind expression:"],
+    ['<div v-bind="{ class: }" />', "Invalid v-bind expression:"],
+  ])("keeps missing or invalid spread expressions as parse errors: %s", (element, message) => {
+    const source = `<template>${element}</template>`
+    const result = collectVue(source, "Invalid.vue")
+    // Vue's parser may report the invalid expression too; selfix's own finding must remain.
+    expect(result.errors).toContainEqual({
+      message: expect.stringContaining(message),
+      offset: source.indexOf("v-bind"),
+    })
+    expect(result.sites).toEqual([
+      { component: "div", tokens: [], dynamic: true, offset: source.indexOf("v-bind") },
+    ])
+    // The compiler fallback may reject the directive itself; either way it is never clean.
+    const fallback = collectVue(source, "Invalid.vue", { forceCompileTemplateAst: true })
+    expect(fallback.errors.length).toBeGreaterThan(0)
+  })
+
+  it.each([
+    "<script>const $attrs = {}; export default {}</script>",
+    `<script setup lang="ts">import type { Props as $attrs } from './props'</script>`,
+    `<script setup lang="ts">import { type Props as $attrs } from './props'</script>`,
+    `<script setup lang="ts">declare const $attrs: Record<string, unknown></script>`,
+  ])("keeps the attrs global when no runtime script binding declares $attrs: %s", (script) => {
+    const source = `${script}
+<template><div v-bind="$attrs" /></template>`
+    const { descriptor } = parse(source)
+    const compiled = compileTemplate({
+      source: descriptor.template!.content,
+      filename: "Plain.vue",
+      id: "plain",
+      compilerOptions: { bindingMetadata: compileScript(descriptor, { id: "plain" }).bindings },
+    })
+    expect(compiled.code).toContain("_ctx.$attrs")
+    const result = collectVue(source, "Plain.vue")
+    expect(result.errors).toEqual([])
+    expect(result.sites).toEqual([])
+  })
+
+  it.each([false, true])(
+    "treats template-scoped $attrs and other spreads as opaque (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<template>
+  <div v-for="$attrs in rows" v-bind="$attrs" />
+  <Child v-slot="{ $attrs }" v-bind="$attrs"><p v-bind="$attrs" /></Child>
+  <Child><template #item="[$attrs]"><i v-bind="$attrs" /></template></Child>
+  <a v-bind="attrs" />
+  <b v-bind="getProps()" />
+  <s v-bind="$attrs.inner" />
+  <u v-bind="{ ...$attrs, id: 'x' }" />
+  <em v-bind="{ [key]: value, ...rest, class: 'p-4' }" />
+</template>`
+      const result = collectVue(source, "Opaque.vue", { forceCompileTemplateAst })
+      const at = (needle: string) => source.indexOf(needle)
+      const spread = (component: string, offset: number) => ({
+        component,
+        tokens: [],
+        dynamic: true,
+        offset,
+        spread: true,
+      })
+      expect(result.errors).toEqual([])
+      expect(result.sites).toEqual([
+        spread("div", at('v-bind="$attrs" />')),
+        spread("p", at("<p v-bind") + 3),
+        spread("i", at("<i v-bind") + 3),
+        spread("a", at('v-bind="attrs"')),
+        spread("b", at('v-bind="getProps')),
+        spread("s", at('v-bind="$attrs.inner')),
+        spread("u", at('v-bind="{ ...$attrs')),
+        spread("em", at('v-bind="{ [key]')),
+        { component: "em", tokens: ["p-4"], dynamic: false, offset: at('v-bind="{ [key]') },
+      ])
+    },
+  )
 })

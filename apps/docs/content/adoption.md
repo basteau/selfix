@@ -30,6 +30,8 @@ export default defineConfig({
 
 Omitted rules default to `"error"`, so keep the five `"off"` entries. If you already have a config, change only its `rules`.
 
+Turning off `require-static-classes` also turns off findings for opaque spreads such as `v-bind="attrs"`. See [unsupported bindings](analysis.md#unsupported-bindings).
+
 Add a script to `package.json`:
 
 ```json

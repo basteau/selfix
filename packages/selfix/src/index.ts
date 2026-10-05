@@ -337,7 +337,17 @@ export async function createLinter(options: LinterOptions) {
       const severity = effectiveSettings(filename).find(
         (setting) => setting.name === "no-restyle",
       )!.severity
-      const issues = collected.errors.map((error) => ({ ...error, ...positionAt(error.offset) }))
+      // An opaque spread is a require-static-classes finding in lint, but doctor still
+      // names it as an analysis gap, whatever that rule's severity.
+      const spreads = collected.sites.flatMap((site) =>
+        site.spread
+          ? [{ message: "Dynamic v-bind attrs may contain class or style", offset: site.offset }]
+          : [],
+      )
+      const issues = [...collected.errors, ...spreads].map((error) => ({
+        ...error,
+        ...positionAt(error.offset),
+      }))
       if (!collected.fatal) {
         for (const site of collected.sites) {
           if (site.dynamic)
@@ -589,7 +599,9 @@ export async function createLinter(options: LinterOptions) {
               report(
                 site,
                 selected,
-                `Use complete, statically readable class names on <${site.component}>; choose between literal classes instead of constructing them.`,
+                site.spread
+                  ? `Cannot statically inspect the v-bind spread on <${site.component}>; it may pass class or style. Bind class and style as explicit attributes, or spread a literal object.`
+                  : `Use complete, statically readable class names on <${site.component}>; choose between literal classes instead of constructing them.`,
               )
             continue
           }

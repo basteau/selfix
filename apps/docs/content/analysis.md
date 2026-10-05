@@ -31,17 +31,26 @@ It can't read constructed strings such as `` `mt-${size}` ``, imported values, o
 
 ### Unsupported bindings
 
+`v-bind="$attrs"` forwards the caller's attributes. selfix checks the caller's `class` and `style` where the caller writes them, so the spread itself is not reported. Only Vue's template `$attrs` counts. A loop variable, slot prop, or script binding named `$attrs` is treated like any other spread.
+
+Other spreads can hide `class` or `style`, so [require-static-classes](require-static-classes.md) reports them:
+
+- `v-bind="attrs"`, `v-bind="getProps()"`, and other values selfix can't read.
+- Spreads, computed keys, and methods in a binding object. Readable properties in the same object are still checked.
+
+Each spread is one finding at its `v-bind`. Set its severity per file with [overrides](configuration.md#per-file-rule-overrides), or turn the rule off.
+
 These produce `parse-error`, even with every rule off:
 
-- `v-bind="attrs"`, because it can hide entire attributes.
-- Dynamic attribute names and unresolved spreads in binding objects.
+- A `v-bind` with a missing or malformed expression.
+- Dynamic attribute names.
 - Malformed Vue, external templates, template preprocessors, and external script blocks.
 
 Use explicit attributes or literal objects, and keep the template and script inside the SFC. selfix still checks the readable parts where it can.
 
 ## SVG paint attributes
 
-[no-raw-colors](no-raw-colors.md#svg-paint-attributes) checks native SVG `fill` and `stroke`. selfix keeps each value whole, so `rgb(1 2 3)` is not split into classes. An unresolved paint binding produces `parse-error` while that rule is on. Other SVG presentation attributes are not checked. Class checks on SVG elements run as usual.
+[no-raw-colors](no-raw-colors.md#svg-paint-attributes) checks native SVG `fill` and `stroke`. selfix keeps each value whole, so `rgb(1 2 3)` is not split into classes. An unresolved paint binding produces `parse-error` while that rule is on. An opaque `v-bind` spread on a native SVG element counts as an unresolved `fill` and `stroke`. `v-bind="$attrs"` is not reported, and `fill` or `stroke` that a caller passes to a component is not checked. Other SVG presentation attributes are not checked. Class checks on SVG elements run as usual.
 
 ## Custom CSS selectors
 

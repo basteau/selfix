@@ -586,6 +586,35 @@ const classes = (() => { throw new Error('must not execute') })()
   expect(result.stdout).not.toContain("must not execute")
 })
 
+it("doctor reports opaque v-bind spreads but not $attrs forwarding", async () => {
+  const dir = await project()
+  await writeFile(
+    path.join(dir, "Page.vue"),
+    `<script setup>import { Button } from '@/components/ui/button'</script>
+<template>
+  <div v-bind="$attrs" />
+  <Button v-bind="attrs" />
+  <div v-bind="{ ...rest, class: 'p-4' }" />
+</template>`,
+  )
+  await writeFile(path.join(dir, "Forward.vue"), '<template><div v-bind="$attrs" /></template>')
+  const result = await invoke(["--doctor", "Page.vue", "Forward.vue"], dir)
+  expect(result.code).toBe(1)
+  expect(result.stderr).toBe("")
+  // Opaque spreads keep the same analysis lines as before require-static-classes owned them.
+  expect(result.stdout.split("\n").filter((line) => line.includes("unsupported analysis"))).toEqual(
+    [
+      "Page.vue:4:11 error unsupported analysis: Dynamic v-bind attrs may contain class or style",
+      "Page.vue:4:11 error unsupported analysis: Cannot statically inspect class input on <Button>; enforcement coverage is incomplete.",
+      "Page.vue:5:8 error unsupported analysis: Dynamic v-bind attrs may contain class or style",
+      "Page.vue:5:8 error unsupported analysis: Cannot statically inspect class input on <div>; enforcement coverage is incomplete.",
+    ],
+  )
+  const forward = await invoke(["--doctor", "Forward.vue"], dir)
+  expect(forward.code).toBe(0)
+  expect(forward.stdout).not.toContain("unsupported analysis")
+})
+
 it("doctor shares import precedence and identity with ordinary lint", async () => {
   const dir = await project()
   await writeFile(
@@ -880,6 +909,48 @@ describe("components.json defaults", () => {
     expect(result.stdout).toContain("unrecognized")
   })
 
+  it("reports opaque v-bind spreads through configurable require-static-classes", async () => {
+    const dir = await project()
+    await mkdir(path.join(dir, "src/ui"), { recursive: true })
+    const source = '<template><div v-bind="$attrs" /><div v-bind="attrs" /></template>'
+    await writeFile(path.join(dir, "src/Page.vue"), source)
+    await writeFile(path.join(dir, "src/ui/Wrapper.vue"), source)
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      `export default { css: 'theme.css', overrides: [{ files: ['src/ui/**'], rules: { 'require-static-classes': 'warn' } }] }`,
+    )
+    const json = await invoke(["--format", "json", "src"], dir)
+    expect(json.stderr).toBe("")
+    expect(json.code).toBe(1)
+    const offset = source.indexOf('v-bind="attrs"')
+    expect(JSON.parse(json.stdout)).toEqual([
+      {
+        file: path.join(dir, "src/Page.vue"),
+        rule: "require-static-classes",
+        severity: "error",
+        message:
+          "Cannot statically inspect the v-bind spread on <div>; it may pass class or style. Bind class and style as explicit attributes, or spread a literal object.",
+        line: 1,
+        column: offset + 1,
+        offset,
+        component: "div",
+      },
+      expect.objectContaining({
+        file: path.join(dir, "src/ui/Wrapper.vue"),
+        rule: "require-static-classes",
+        severity: "warn",
+        offset,
+      }),
+    ])
+    expect((await invoke(["src/ui"], dir)).code).toBe(0)
+    await writeFile(
+      path.join(dir, "off.config.ts"),
+      `export default { css: 'theme.css', rules: { 'require-static-classes': 'off' } }`,
+    )
+    const off = await invoke(["--config", "off.config.ts", "--format", "json", "src"], dir)
+    expect(off.code).toBe(0)
+    expect(JSON.parse(off.stdout)).toEqual([])
+  })
   it("strips a trailing slash from aliases.ui", async () => {
     const dir = await project()
     await writeFile(path.join(dir, "selfix.config.ts"), 'export default { css: "theme.css" }')

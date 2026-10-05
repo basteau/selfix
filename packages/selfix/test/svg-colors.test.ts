@@ -130,4 +130,46 @@ describe("SVG colors", () => {
       linter.lint(`<template><svg :fill="null" :stroke="\`currentColor\`" /></template>`),
     ).toEqual([])
   })
+
+  it.each([false, true])(
+    "treats opaque spreads on native SVG as unreadable paint (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = `<template><svg v-bind="attrs"><path v-bind="{ ...rest, fill: 'red' }" /></svg><svg v-bind="$attrs" /></template>`
+      const svg = source.indexOf('v-bind="attrs"')
+      const path = source.indexOf('v-bind="{')
+      expect(collectVue(source, "Icon.vue", { forceCompileTemplateAst }).svgColors).toEqual([
+        { component: "svg", prop: "fill", value: undefined, offset: svg },
+        { component: "svg", prop: "stroke", value: undefined, offset: svg },
+        { component: "path", prop: "fill", value: undefined, offset: path },
+        { component: "path", prop: "stroke", value: undefined, offset: path },
+        { component: "path", prop: "fill", value: "red", offset: path },
+      ])
+    },
+  )
+
+  it("reports opaque SVG spreads through no-raw-colors even without the class rule", async () => {
+    const linter = await createLinter({ css, config: { rules } })
+    expect(
+      linter.lint(`<template><svg v-bind="attrs" /><svg v-bind="$attrs" /></template>`),
+    ).toEqual([
+      expect.objectContaining({
+        rule: "parse-error",
+        prop: "fill",
+        offset: 15,
+        message:
+          "Cannot inspect dynamic SVG fill on <svg>; use a literal color, currentColor, or a semantic CSS variable.",
+      }),
+      expect.objectContaining({
+        rule: "parse-error",
+        prop: "stroke",
+        offset: 15,
+        message: expect.stringContaining("Cannot inspect dynamic SVG stroke on <svg>"),
+      }),
+    ])
+    const off = await createLinter({
+      css,
+      config: { rules: { ...rules, "no-raw-colors": "off" } },
+    })
+    expect(off.lint(`<template><svg v-bind="attrs" /></template>`)).toEqual([])
+  })
 })

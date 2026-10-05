@@ -411,13 +411,13 @@ import Ignored from '@policy/ignored'
       config: { rules: Object.fromEntries(ruleNames.map((name) => [name, "off"])) },
     })
     const diagnostics = linter.lint(
-      '<template><div v-bind="{ ...a, ...b }" /><div class="p-[13px]" /></template>',
+      '<template><div :[key]="value" /><div class="p-[13px]" /></template>',
     )
     expect(diagnostics).toEqual([
       expect.objectContaining({
         rule: "parse-error",
         severity: "error",
-        message: "Dynamic v-bind attrs may contain class or style",
+        message: "Dynamic v-bind argument may be class or style",
       }),
     ])
     expect(linter.lint("<template><div></template>")).toEqual([
@@ -441,7 +441,10 @@ import Ignored from '@policy/ignored'
   })
 
   it("preserves independent diagnostics and consolidates binding uncertainty", async () => {
-    const linter = await createLinter({ css, config: { rules: only("no-arbitrary-values") } })
+    const linter = await createLinter({
+      css,
+      config: { rules: { ...only("no-arbitrary-values"), "require-static-classes": "error" } },
+    })
     const source = `<template>
   <div v-bind="{ ...a, ...b, [key]: value }" />
   <div class="p-[13px]" />
@@ -449,7 +452,7 @@ import Ignored from '@policy/ignored'
 </template>`
     expect(linter.lint(source, "Mixed.vue")).toEqual([
       expect.objectContaining({
-        rule: "parse-error",
+        rule: "require-static-classes",
         line: 2,
         column: 8,
         offset: source.indexOf("v-bind"),
@@ -1049,5 +1052,137 @@ function cn() { throw new Error('never run') }
     expect(() => defineConfig({ rules: only("require-static-classes", { allow: ["*"] }) })).toThrow(
       "not allow/deny",
     )
+  })
+})
+
+describe("v-bind spreads", () => {
+  const source = `<script setup>import { Button } from '@/components/ui/button'</script>
+<template>
+  <div v-bind="$attrs" />
+  <Button v-bind="$attrs" />
+  <div v-bind="attrs" />
+  <Button v-bind="{ ...rest, class: 'p-4' }" />
+</template>`
+  const plainSpread = source.indexOf('v-bind="attrs"')
+  const objectSpread = source.indexOf('v-bind="{ ...rest')
+
+  it("reports opaque spreads once under require-static-classes and ignores $attrs", async () => {
+    const linter = await createLinter({ css })
+    expect(linter.lint(source, "Spread.vue")).toEqual([
+      {
+        file: "Spread.vue",
+        rule: "require-static-classes",
+        severity: "error",
+        message:
+          "Cannot statically inspect the v-bind spread on <div>; it may pass class or style. Bind class and style as explicit attributes, or spread a literal object.",
+        line: 5,
+        column: 8,
+        offset: plainSpread,
+        component: "div",
+      },
+      expect.objectContaining({
+        rule: "no-restyle",
+        component: "Button",
+        className: "p-4",
+        offset: objectSpread,
+      }),
+      expect.objectContaining({
+        rule: "require-static-classes",
+        severity: "error",
+        component: "Button",
+        message: expect.stringContaining("v-bind spread on <Button>; it may pass class or style"),
+        line: 6,
+        column: 11,
+        offset: objectSpread,
+      }),
+    ])
+  })
+
+  it("keeps doctor coverage gaps for opaque spreads only", async () => {
+    const linter = await createLinter({
+      css,
+      config: { rules: { "require-static-classes": "off" } },
+    })
+    const { issues, usages } = linter.doctor(source, "Spread.vue")
+    expect(issues).toEqual([
+      {
+        message: "Dynamic v-bind attrs may contain class or style",
+        offset: plainSpread,
+        line: 5,
+        column: 8,
+      },
+      {
+        message:
+          "Cannot statically inspect class input on <div>; enforcement coverage is incomplete.",
+        offset: plainSpread,
+        line: 5,
+        column: 8,
+      },
+      {
+        message: "Dynamic v-bind attrs may contain class or style",
+        offset: objectSpread,
+        line: 6,
+        column: 11,
+      },
+      {
+        message:
+          "Cannot statically inspect class input on <Button>; enforcement coverage is incomplete.",
+        offset: objectSpread,
+        line: 6,
+        column: 11,
+      },
+    ])
+    expect(usages.map(({ component, recognized }) => ({ component, recognized }))).toEqual([
+      { component: "Button", recognized: true },
+      { component: "Button", recognized: true },
+    ])
+  })
+
+  it.each(["warn", "off"] as const)(
+    "follows the require-static-classes severity: %s",
+    async (severity) => {
+      const linter = await createLinter({
+        css,
+        config: { rules: { "require-static-classes": severity, "no-restyle": "off" } },
+      })
+      const findings = linter.lint(source, "Spread.vue")
+      expect(findings.map(({ rule, severity, offset }) => ({ rule, severity, offset }))).toEqual(
+        severity === "off"
+          ? []
+          : [
+              { rule: "require-static-classes", severity, offset: plainSpread },
+              { rule: "require-static-classes", severity, offset: objectSpread },
+            ],
+      )
+    },
+  )
+
+  it("applies per-file overrides, custom messages, and contracts", async () => {
+    const linter = await createLinter({
+      css,
+      config: {
+        rules: {
+          "no-restyle": "off",
+          "require-static-classes": [
+            "error",
+            {
+              message: "Spread on {{component}} in {{file}}.",
+              contracts: [{ pattern: "^Button$", message: "Button contract." }],
+            },
+          ],
+        },
+        overrides: [{ files: ["src/ui/**"], rules: { "require-static-classes": "warn" } }],
+      },
+    })
+    expect(
+      linter.lint(source, "src/Page.vue").map(({ severity, message }) => ({ severity, message })),
+    ).toEqual([
+      { severity: "error", message: "Spread on div in src/Page.vue." },
+      { severity: "error", message: "Button contract." },
+    ])
+    expect(linter.lint(source, "src/ui/Wrapper.vue").map(({ severity }) => severity)).toEqual([
+      "warn",
+      "warn",
+    ])
   })
 })

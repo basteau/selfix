@@ -39,7 +39,6 @@ it.each(["\n", "\r\n"])(
       ["require-static-classes", 4, 5, 90],
       ["no-restyle", 7, 5, 135],
       ["no-inline-styles", 8, 5, 162],
-      ["parse-error", 9, 5, 185],
       ["require-static-classes", 9, 5, 185],
       ["no-inline-styles", 12, 1, 220],
     ] as const

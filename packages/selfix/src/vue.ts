@@ -64,6 +64,8 @@ export interface ClassSite {
   importSource?: string
   prop?: string
   slot?: string
+  /** An opaque v-bind spread that may contain class or style. */
+  spread?: true
 }
 
 export interface ComponentUsage {
@@ -111,6 +113,8 @@ interface TemplateContext {
   bindings: Map<string, StaticBinding>
   helpers: ReadonlySet<string>
   shadowed: ReadonlySet<string>
+  /** A script binding named `$attrs` hides Vue's template global of that name. */
+  scriptAttrs: boolean
   errors: ParseIssue[]
   offset: number
 }
@@ -229,6 +233,8 @@ export function collectVue(
       bindings,
       helpers: collectClassHelpers([script, setup], options.classHelpers),
       shadowed: new Set(),
+      // Vue exposes top-level script bindings to the template only alongside <script setup>.
+      scriptAttrs: declaresTopLevel(parsed.descriptor.scriptSetup ? [script, setup] : [], "$attrs"),
       errors,
       offset: templateAst ? 0 : template.loc.start.offset,
     },
@@ -352,8 +358,13 @@ function shadowScope(
       message: `Invalid or unsupported template scope: ${errorMessage(error)}`,
       offset: context.offset + offset,
     })
-    // Unknown local names must never resolve to setup constants or class helpers.
-    return { ...context, bindings: new Map(), helpers: new Set() }
+    // Unknown local names must never resolve to setup constants, class helpers, or $attrs.
+    return {
+      ...context,
+      bindings: new Map(),
+      helpers: new Set(),
+      shadowed: new Set([...context.shadowed, "$attrs"]),
+    }
   }
 }
 
@@ -753,26 +764,31 @@ function collectSpreadAttrs(
     sites.push(classSite(component, [], true, context.offset + prop.loc.start.offset, importSource))
     return
   }
+  if (isTemplateAttrs(expression, context)) {
+    // Forwarded caller attributes were already checked where the caller wrote them.
+    return
+  }
+  // An opaque spread may pass class or style. It is a require-static-classes finding,
+  // so its severity stays configurable; it is never a silently clean result.
+  const offset = context.offset + prop.loc.start.offset
+  const reportOpaque = () => {
+    sites.push({ ...classSite(component, [], true, offset, importSource), spread: true })
+    // It may also hide paint, which no-raw-colors reports like an unreadable :fill or :stroke.
+    if (isSvg) {
+      for (const name of ["fill", "stroke"] as const) {
+        context.svgColors.push({ component, prop: name, value: undefined, offset })
+      }
+    }
+  }
   if (expression.type !== "ObjectExpression") {
-    context.errors.push({
-      message: "Dynamic v-bind attrs may contain class or style",
-      offset: context.offset + prop.loc.start.offset,
-    })
-    sites.push(classSite(component, [], true, context.offset + prop.loc.start.offset, importSource))
+    reportOpaque()
     return
   }
   let reportedUncertainty = false
   for (const property of expression.properties) {
     if (property.type !== "ObjectProperty" || property.computed) {
-      if (reportedUncertainty) continue
+      if (!reportedUncertainty) reportOpaque()
       reportedUncertainty = true
-      context.errors.push({
-        message: "Dynamic v-bind attrs may contain class or style",
-        offset: context.offset + prop.loc.start.offset,
-      })
-      sites.push(
-        classSite(component, [], true, context.offset + prop.loc.start.offset, importSource),
-      )
       continue
     }
     const key = propertyKey(property)
@@ -814,6 +830,17 @@ function collectSpreadAttrs(
       styles.push({ component, offset: context.offset + prop.loc.start.offset })
     }
   }
+}
+
+// Only Vue's template global qualifies; a scope or script binding with that name is opaque.
+function isTemplateAttrs(expression: ExpressionNode, context: TemplateContext): boolean {
+  while (isTsWrapper(expression)) expression = expression.expression
+  return (
+    expression.type === "Identifier" &&
+    expression.name === "$attrs" &&
+    !context.shadowed.has(expression.name) &&
+    !context.scriptAttrs
+  )
 }
 
 function svgLiteralValue(expression: ExpressionInput): string | undefined {
@@ -1071,6 +1098,40 @@ function collectClassHelpers(
     for (const statement of program?.body ?? []) visit(statement, true)
   }
   return helpers
+}
+
+// Approximates the runtime top-level names Vue exposes to the template: type-only
+// imports and ambient `declare` statements bind nothing at runtime.
+function declaresTopLevel(programs: (ProgramNode | undefined)[], name: string): boolean {
+  return programs.some((program) =>
+    (program?.body ?? []).some((statement) => {
+      const declaration =
+        statement.type === "ExportNamedDeclaration" ? statement.declaration : statement
+      if (declaration && "declare" in declaration && declaration.declare) return false
+      switch (declaration?.type) {
+        case "ImportDeclaration":
+          return (
+            declaration.importKind !== "type" &&
+            declaration.specifiers.some(
+              (specifier) =>
+                specifier.local.name === name &&
+                !(specifier.type === "ImportSpecifier" && specifier.importKind === "type"),
+            )
+          )
+        case "VariableDeclaration": {
+          const names: string[] = []
+          for (const variable of declaration.declarations) collectBindingNames(variable.id, names)
+          return names.includes(name)
+        }
+        case "FunctionDeclaration":
+        case "ClassDeclaration":
+        case "TSEnumDeclaration":
+          return declaration.id?.name === name
+        default:
+          return false
+      }
+    }),
+  )
 }
 
 function collectStaticBindings(program: ProgramNode | undefined): Map<string, StaticBinding> {
