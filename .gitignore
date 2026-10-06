@@ -6,3 +6,5 @@ packages/selfix/README.md
 .selfix-test-*/
 .blume/
 .blume-verify/
+.DS_Store
+.claude/launch.json
