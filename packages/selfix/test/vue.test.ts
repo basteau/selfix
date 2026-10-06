@@ -1190,4 +1190,38 @@ describe("v-bind spreads", () => {
       ])
     },
   )
+
+  it.each([false, true])(
+    "collects selfix- template comments with original offsets (fallback: %s)",
+    (forceCompileTemplateAst) => {
+      const source = [
+        "<script setup>// selfix-disable-next-line no-raw-colors -- script</script>",
+        "<template><!-- selfix-first -->",
+        "  <pre><!-- selfix-in-pre --></pre><textarea><!-- selfix-text --></textarea>",
+        '  <div v-if="a" /><!--  selfix-between  --><p v-else />',
+        "  <!-- an ordinary comment --><!-- selfix-last --></template>",
+        "<style>/* <!-- selfix-style --> */</style>",
+      ].join("\r\n")
+      const at = (text: string) => source.indexOf(text)
+      const comment = (text: string, written = `<!-- ${text} -->`) => ({
+        text,
+        offset: at(written),
+        end: at(written) + written.length,
+      })
+      expect(
+        collectVue(source, "comments.vue", { forceCompileTemplateAst }).templateComments,
+      ).toEqual({
+        start: at("<!-- selfix-first"),
+        end: at("</template>"),
+        comments: [
+          comment("selfix-first"),
+          comment("selfix-in-pre"),
+          comment("selfix-between", "<!--  selfix-between  -->"),
+          comment("selfix-last"),
+        ],
+      })
+      const plain = collectVue("<template><!-- notes --></template>", "plain.vue")
+      expect(plain).not.toHaveProperty("templateComments")
+    },
+  )
 })

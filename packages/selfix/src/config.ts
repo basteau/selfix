@@ -133,6 +133,8 @@ export interface Config {
   note?: string
   rules?: Rules
   overrides?: FileOverride[]
+  /** Severity for exception comments that suppress nothing; defaults to error. */
+  unusedExceptions?: Severity
 }
 
 /** Programmatic linting policy; file selection and CSS loading belong to the caller. */
@@ -263,6 +265,7 @@ export function validateConfig(config: unknown): asserts config is Config {
       "note",
       "rules",
       "overrides",
+      "unusedExceptions",
     ],
     "config",
   )
@@ -373,6 +376,11 @@ export function validateConfig(config: unknown): asserts config is Config {
       )
     }
   }
+  if (
+    obj.unusedExceptions !== undefined &&
+    !["off", "warn", "error"].includes(obj.unusedExceptions as string)
+  )
+    throw new Error("unusedExceptions must be off, warn, or error.")
   if (obj.rules !== undefined) validateRules(obj.rules)
   if (obj.overrides !== undefined) {
     if (!Array.isArray(obj.overrides)) throw new Error("overrides must be an array.")

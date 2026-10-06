@@ -87,6 +87,20 @@ export interface StyleSite {
   offset: number
 }
 
+/** A template comment whose text starts with `selfix-`, located in the original SFC. */
+export interface TemplateComment {
+  text: string
+  offset: number
+  end: number
+}
+
+/** The `selfix-` comments of a template, with the template content's offsets. */
+export interface TemplateComments {
+  start: number
+  end: number
+  comments: TemplateComment[]
+}
+
 export interface ParseIssue {
   message: string
   offset: number
@@ -140,6 +154,8 @@ export function collectVue(
   svgColors: SvgColorSite[]
   sites: ClassSite[]
   styles: StyleSite[]
+  /** Present when an analyzed template may contain exception comments. */
+  templateComments?: TemplateComments
   errors: ParseIssue[]
   fatal: boolean
   imports: ComponentAliases
@@ -241,7 +257,61 @@ export function collectVue(
     sites,
     styles,
   )
-  return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+  return {
+    usages,
+    svgColors,
+    sites,
+    styles: sortStyles(styles),
+    errors,
+    fatal,
+    imports: aliases,
+    ...(source.includes("selfix-")
+      ? { templateComments: collectComments(source, filename, template.loc.start.offset, errors) }
+      : {}),
+  }
+}
+
+// Vue keeps template comments only when asked, and its default follows NODE_ENV. Production
+// builds also drop them before measuring the template, so a comment at either end would fall
+// outside it. A second SFC parse through a compiler that keeps comments sees all of them.
+const compilerDom = createRequire(require.resolve("vue/package.json"))(
+  "@vue/compiler-dom",
+) as VueCompilerSfc.TemplateCompiler
+const keepComments: VueCompilerSfc.TemplateCompiler = {
+  compile: compilerDom.compile,
+  parse: (source, options) => compilerDom.parse(source, { ...options, comments: true }),
+}
+
+function collectComments(
+  source: string,
+  filename: string,
+  offset: number,
+  errors: ParseIssue[],
+): TemplateComments | undefined {
+  const { template } = parseSfc(source, {
+    filename,
+    sourceMap: false,
+    compiler: keepComments,
+  }).descriptor
+  if (!template?.ast) {
+    errors.push({ message: "Cannot read template comments for exception directives", offset })
+    return undefined
+  }
+  const comments: TemplateComment[] = []
+  // Vue 3.4+ provides a root node and older versions the <template> element, both located in
+  // the original SFC.
+  const visit = (node: { type: number; children?: unknown[] }) => {
+    if (node.type === 3) {
+      const comment = node as Extract<TemplateNode, { type: 3 }>
+      const text = comment.content.trim()
+      if (text.startsWith("selfix-"))
+        comments.push({ text, offset: comment.loc.start.offset, end: comment.loc.end.offset })
+    } else if (node.type === 0 || node.type === VueNode.Element) {
+      for (const child of node.children ?? []) visit(child as TemplateNode)
+    }
+  }
+  visit(template.ast)
+  return { start: template.loc.start.offset, end: template.loc.end.offset, comments }
 }
 
 function compileTemplateAst(

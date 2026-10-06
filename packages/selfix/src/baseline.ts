@@ -48,11 +48,12 @@ export async function readBaseline(file: string): Promise<Baseline> {
   return data as Baseline
 }
 
-// Counts findings per file and rule. Parse errors are never baselined.
+// Counts findings per file and rule. Parse errors and exception comment problems are never
+// baselined.
 export function countFindings(diagnostics: Diagnostic[], keyOf: (file: string) => string) {
   const found: Baseline = {}
   for (const item of diagnostics) {
-    if (item.rule === "parse-error") continue
+    if (!(ruleNames as readonly string[]).includes(item.rule)) continue
     const rules = (found[keyOf(item.file)] ??= {})
     ;(rules[item.rule] ??= { count: 0 }).count++
   }
@@ -60,7 +61,7 @@ export function countFindings(diagnostics: Diagnostic[], keyOf: (file: string) =
 }
 
 // Suppresses the first `count` findings of each file and rule in diagnostic order. Baselines
-// never contain parse errors, so those are always reported. Entries with more room than
+// contain only rule findings, so parse errors and exception problems are always reported. Entries with more room than
 // findings are unused when `inScope` says their file was checked.
 export function applyBaseline(
   diagnostics: Diagnostic[],

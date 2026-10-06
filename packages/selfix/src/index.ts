@@ -1,4 +1,5 @@
 import path from "node:path"
+import { applyExceptions } from "./exceptions.js"
 import { createProject, type ComponentDefinition } from "./project.js"
 import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
 import {
@@ -46,7 +47,7 @@ export interface Diagnostic {
   suggestions?: string[]
   definition?: ComponentDefinition
   file: string
-  rule: RuleName | "parse-error"
+  rule: RuleName | "parse-error" | "invalid-exception" | "unused-exception"
   severity: Exclude<Severity, "off">
   message: string
   line: number
@@ -56,6 +57,14 @@ export interface Diagnostic {
   className?: string
   prop?: string
   slot?: string
+}
+/** A finding hidden by a `selfix-disable-next-line` comment, with that comment's reason. */
+export interface SuppressedDiagnostic extends Diagnostic {
+  reason: string
+}
+export interface CheckResult {
+  diagnostics: Diagnostic[]
+  suppressed: SuppressedDiagnostic[]
 }
 export interface LinterOptions {
   /** Full CSS source including imports and @theme. */
@@ -327,7 +336,7 @@ export async function createLinter(options: LinterOptions) {
     return effective
   }
 
-  return {
+  const linter = {
     doctor(source: string, filename: string) {
       const collected = collectVue(source, filename, {
         classProps: config.classProps,
@@ -398,7 +407,7 @@ export async function createLinter(options: LinterOptions) {
       })
       return { usages, issues: issues.sort((a, b) => a.offset - b.offset) }
     },
-    lint(source: string, filename = "component.vue"): Diagnostic[] {
+    check(source: string, filename = "component.vue"): CheckResult {
       const collected = collectVue(source, filename, {
         classProps: config.classProps,
         classHelpers: config.classHelpers,
@@ -427,10 +436,11 @@ export async function createLinter(options: LinterOptions) {
           ...location,
         })
       }
+      const sorted = () =>
+        diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
       for (const error of collected.errors)
         emit("parse-error", "error", error.offset, error.message)
-      if (collected.fatal)
-        return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
+      if (collected.fatal) return { diagnostics: sorted(), suppressed: [] }
       // Source, filename, and import bindings are fixed for this invocation.
       const definitions = new Map<string, ComponentDefinition | undefined>()
       const definitionFor = (component: string) => {
@@ -701,9 +711,25 @@ export async function createLinter(options: LinterOptions) {
           }
         }
       }
-      return diagnostics.sort((a, b) => a.offset - b.offset || a.rule.localeCompare(b.rule))
+      const template = collected.templateComments
+      if (!template?.comments.length) return { diagnostics: sorted(), suppressed: [] }
+      const lineAt = (offset: number) => (positionAt ??= sourcePositions(source))(offset).line
+      const { kept, suppressed, problems } = applyExceptions(
+        sorted(),
+        template,
+        lineAt,
+        config.unusedExceptions ?? "error",
+      )
+      diagnostics.splice(0, diagnostics.length, ...kept)
+      for (const problem of problems)
+        emit(problem.rule, problem.severity, problem.offset, problem.message)
+      return { diagnostics: sorted(), suppressed }
+    },
+    lint(source: string, filename = "component.vue"): Diagnostic[] {
+      return linter.check(source, filename).diagnostics
     },
   }
+  return linter
 }
 
 export async function lintSource(
