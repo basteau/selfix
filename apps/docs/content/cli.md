@@ -45,19 +45,20 @@ The CLI doesn't search parent directories for a config. A config is required eve
 
 ## Options
 
-| Option                        | Behavior                                                                   |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| `--doctor`                    | Explain component recognition, enforcement, and definition discovery.      |
-| `--config <file.ts>`          | Use this config. Defaults to `selfix.config.ts`.                           |
-| `--css <file>`                | Override the config's CSS entry.                                           |
-| `--format text\|json\|gitlab` | Choose output format. Defaults to `text`.                                  |
-| `--max-warnings <n>`          | Fail when warnings exceed this non-negative integer. Unlimited by default. |
-| `--baseline <file>`           | Suppress known findings. See [Baseline](#baseline).                        |
-| `--update-baseline <file>`    | Record current findings in a baseline file.                                |
-| `--prune-baseline <file>`     | Lower baseline counts to current findings, then check.                     |
-| `--help`, `-h`                | Print usage.                                                               |
-| `--version`                   | Print the installed version.                                               |
-| `--`                          | Treat all remaining arguments as inputs.                                   |
+| Option                        | Behavior                                                                                   |
+| ----------------------------- | ------------------------------------------------------------------------------------------ |
+| `--doctor`                    | Explain component recognition, enforcement, and definition discovery.                      |
+| `--config <file.ts>`          | Use this config. Defaults to `selfix.config.ts`.                                           |
+| `--css <file>`                | Override the config's CSS entry.                                                           |
+| `--format text\|json\|gitlab` | Choose output format. Defaults to `text`.                                                  |
+| `--max-warnings <n>`          | Fail when warnings exceed this non-negative integer. Unlimited by default.                 |
+| `--unused-exceptions <level>` | Set `off`, `warn`, or `error` for unused exception comments. Overrides `unusedExceptions`. |
+| `--baseline <file>`           | Suppress known findings. See [Baseline](#baseline).                                        |
+| `--update-baseline <file>`    | Record current findings in a baseline file.                                                |
+| `--prune-baseline <file>`     | Lower baseline counts to current findings, then check.                                     |
+| `--help`, `-h`                | Print usage.                                                                               |
+| `--version`                   | Print the installed version.                                                               |
+| `--`                          | Treat all remaining arguments as inputs.                                                   |
 
 Help and version commands don't load your project.
 
@@ -67,7 +68,10 @@ Text output points to the file, line, and column of each finding, followed by a 
 
 ```text
 Checked 3 Vue files: 1 error, 0 warnings.
+Exceptions: 2 suppressed.
 ```
+
+The `Exceptions` line appears when [exception comments](configuration.md#suppress-findings) suppressed findings.
 
 Use JSON when another tool needs the findings:
 
@@ -75,7 +79,17 @@ Use JSON when another tool needs the findings:
 pnpm exec selfix src --format json
 ```
 
-JSON returns a [diagnostic array](api.md#diagnostic-fields) with absolute paths and no summary; a clean check returns `[]`. With a [baseline](#baseline), it returns an object instead. Text paths are relative to the working directory.
+JSON returns an object with the [diagnostics](api.md#diagnostic-fields), suppressed counts, and unused [baseline](#baseline) entries:
+
+```json
+{
+  "diagnostics": [],
+  "suppressed": { "inline": 2, "baseline": 0 },
+  "unused": []
+}
+```
+
+`suppressed.inline` counts findings hidden by exception comments. Without a baseline, `suppressed.baseline` is `0` and `unused` is `[]`. JSON paths are absolute, and text paths are relative to the working directory.
 
 Findings go to stdout. Loading, config, and input failures go to stderr as `selfix: ...`, even in JSON and GitLab mode, and print no partial report.
 
@@ -137,11 +151,11 @@ Keys are config-relative paths with `/` separators:
 }
 ```
 
-| Option                     | Behavior                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `--baseline <file>`        | Suppress the first `count` findings of each file and rule in source order. Report the rest and unused entries.      |
-| `--update-baseline <file>` | Replace the file with the current errors and warnings, and exit `0`. With parse errors, write nothing and exit `1`. |
-| `--prune-baseline <file>`  | Lower counts above the current findings and remove entries that reach zero, then check like `--baseline`.           |
+| Option                     | Behavior                                                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--baseline <file>`        | Suppress the first `count` findings of each file and rule in source order. Report the rest and unused entries.                                  |
+| `--update-baseline <file>` | Replace the file with the current errors and warnings, and exit `0`. With parse errors or exception comment errors, write nothing and exit `1`. |
+| `--prune-baseline <file>`  | Lower counts above the current findings and remove entries that reach zero, then check like `--baseline`.                                       |
 
 selfix can't tell which finding in a file is new. With 3 recorded and 4 current findings, it reports the last one.
 
@@ -149,7 +163,7 @@ An entry is unused when its file has fewer findings than its count. selfix lists
 
 selfix checks an entry only when its file is an input, lies in an input directory, or no longer exists. A run on `src/checkout` ignores entries for other files, while entries for excluded files under `src/checkout` become unused. `--update-baseline` replaces the whole file with findings from the current inputs, so run it with the same inputs as your check.
 
-Parse errors are never recorded or suppressed. `--baseline` and `--prune-baseline` leave the entries of a file that fails to parse untouched. Config, theme, and input failures still exit `2` and never write the file. A missing or malformed baseline file is an input failure.
+Parse errors are never recorded or suppressed. Exception comments apply first, so the findings they suppress are never recorded, and neither are `invalid-exception` and `unused-exception` findings. A new comment for a recorded finding leaves its entry unused, so run `--prune-baseline` after you add one. `--baseline` and `--prune-baseline` leave the entries of a file that fails to parse untouched. Config, theme, and input failures still exit `2` and never write the file. A missing or malformed baseline file is an input failure.
 
 Text output adds a summary line:
 
@@ -158,12 +172,12 @@ Checked 3 Vue files: 1 error, 0 warnings.
 Baseline: 4 suppressed, 0 unused.
 ```
 
-JSON output becomes an object with the unsuppressed diagnostics:
+JSON output counts baseline suppressions and lists unused entries:
 
 ```json
 {
   "diagnostics": [],
-  "suppressed": 4,
+  "suppressed": { "inline": 0, "baseline": 4 },
   "unused": [{ "file": "/app/src/Page.vue", "rule": "no-raw-colors", "count": 3, "found": 1 }]
 }
 ```
@@ -174,11 +188,11 @@ Use one baseline option per run. `--doctor` rejects all three, and `--update-bas
 
 ## Exit codes
 
-| Code | Meaning                                                                     |
-| ---- | --------------------------------------------------------------------------- |
-| `0`  | No errors; warnings within the limit, if set. Also used for help/version.   |
-| `1`  | Rule errors, parse errors, too many warnings, or unused baseline entries.   |
-| `2`  | Configuration, theme, discovery, or input failure, including an empty scan. |
+| Code | Meaning                                                                                  |
+| ---- | ---------------------------------------------------------------------------------------- |
+| `0`  | No errors; warnings within the limit, if set. Also used for help/version.                |
+| `1`  | Rule, parse, or exception comment errors, too many warnings, or unused baseline entries. |
+| `2`  | Configuration, theme, discovery, or input failure, including an empty scan.              |
 
 For gradual rollout, see [warning limits](adoption.md#set-a-warning-limit).
 
@@ -213,6 +227,6 @@ For each unrecognized imported component, doctor suggests an exact `componentImp
 | `1`  | Parse errors, unsupported analysis, or class inputs selfix cannot read. The list may be incomplete. |
 | `2`  | Configuration, theme, discovery, or input failure, including an empty scan.                         |
 
-Doctor prints text only. `--format json`, `--format gitlab`, and `--max-warnings` fail with exit `2` when combined with `--doctor`.
+Doctor prints text only. `--format json`, `--format gitlab`, `--max-warnings`, and `--unused-exceptions` fail with exit `2` when combined with `--doctor`.
 
 Doctor uses the same component identity rules as a normal run. Imported kebab-case tags use the local import name, and globals use their template name. `<component :is="Button">` reports the `Button` import. `<UI.Button>` reports the written name and is recognized through the namespace import's module. Unresolved dynamic components, unresolved dotted tags, bare namespace imports, and `is="vue:…"` are reported as unsupported. A traced wrapper shows `wraps <Button>, which is recognized by …`. Doctor does not trace deeper wrappers, resolve packages beyond the configured patterns, or discover richer props, so no report proves every component is covered.

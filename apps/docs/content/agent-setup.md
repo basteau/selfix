@@ -53,9 +53,9 @@ Create a uniquely named directory inside the app, outside any exclusions. Remove
 pnpm exec selfix <probe-directory>/Probe.vue --format json --max-warnings 0
 ```
 
-1. Write `<template><div /></template>` to `Probe.vue`. Expect `[]` and exit code `0`, which confirms the config and theme load.
+1. Write `<template><div /></template>` to `Probe.vue`. Expect empty `diagnostics` and exit code `0`, which confirms the config and theme load.
 2. Use a real protected component the way the app's pages do, with the same import string or no import if it is auto-imported. Add a class its policy rejects, such as `p-4` under the default `no-restyle` contract with standard Tailwind spacing. Expect that rule, its severity, the line and column of the class, and exit code `1`.
-3. Remove the class or use a supported prop. Expect `[]` and exit code `0`.
+3. Remove the class or use a supported prop. Expect empty `diagnostics` and exit code `0`.
 4. Delete the probe directory and run the project's `lint:design` script.
 
 ## Report

@@ -45,6 +45,7 @@ export default defineConfig({
 | `exclude`          | `[]`                                                                                             | Files the CLI skips entirely. See [file selection](cli.md#discovery-and-output) |
 | `note`             | None                                                                                             | Text appended to every finding                                                  |
 | `project`          | Enabled in the CLI, disabled in the API                                                          | [Component source discovery](#component-source-discovery)                       |
+| `unusedExceptions` | `"error"`                                                                                        | Severity of [exception comments](#suppress-findings) that suppress nothing      |
 
 ## Configuration file
 
@@ -177,7 +178,31 @@ overrides: [
 - Files outside the root never match.
 - Every matching override applies, in order. A severity changes only the severity. Options update only the fields you set, and lists and message maps replace as a whole.
 - Use `deny: []` or `contracts: []` to clear inherited values. `message: {}` clears the rule-level message, and contract messages still apply. Omitted fields and empty options keep the current settings.
-- `exclude` skips whole files and cannot be undone by an override. There are no inline suppressions, and parse and loading failures cannot be turned off.
+- `exclude` skips whole files and cannot be undone by an override. Parse and loading failures cannot be turned off.
+
+## Suppress findings
+
+Fix the finding first. If a class is acceptable everywhere, add it to `allow`. If a component accepts it, give that component a [contract](#component-contracts), and if a group of files needs it, add an override. Each of these states the policy once, in the config.
+
+For one deliberate, reviewed exception, put a comment on the line above the finding:
+
+```vue
+<template>
+  <!-- selfix-disable-next-line no-raw-colors, no-arbitrary-values -- partner brand color -->
+  <div class="bg-[#e30613]" />
+</template>
+```
+
+- The comment suppresses findings of the named rules that start on the next line. Separate rule names with commas.
+- The text after `--` is the reason, and it is required.
+- Class findings start at their `class` attribute or binding. On an element that spans several lines, put that attribute on the line after the comment.
+- A comment without a reason, or one that names an unknown rule or `parse-error`, is an `invalid-exception` error. It suppresses nothing.
+- A comment rule that suppresses nothing is an `unused-exception` finding at the comment, so stale comments fail the check. Set `unusedExceptions` to `"warn"` or `"off"` to change that, or pass `--unused-exceptions` to the CLI.
+- selfix supports only `selfix-disable-next-line`. Other `selfix-disable` and `selfix-enable` comments are invalid. Use an override for whole files.
+- Only template comments work. Findings in `<script>` and `<style>`, such as a `<style>` block reported by `no-inline-styles`, cannot be suppressed inline. Use an override or a [baseline](cli.md#baseline).
+- Parse errors and loading failures cannot be suppressed.
+
+The CLI counts suppressed findings in its summary and applies comments before a baseline. API results from [`check`](api.md#lint-source) list each suppressed finding with its `reason`.
 
 ## Class helpers
 

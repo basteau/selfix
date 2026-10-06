@@ -41,6 +41,8 @@ The API doesn't read `selfix.config.ts`. You load the CSS and choose the files.
 - `filename` defaults to `component.vue` and appears as-is in results.
 - Files outside `root` get top-level rules only, because overrides never match them.
 
+`linter.check(source, filename?)` returns `{ diagnostics, suppressed }`. `diagnostics` is the `lint` result. `suppressed` lists the findings that [exception comments](configuration.md#suppress-findings) hid, each with the comment's `reason`. The CLI uses `check`, so both report the same findings.
+
 To load the theme and check one string in a single call, use `await lintSource(source, { css, root?, cssBase?, config?, filename? })`.
 
 ## Component discovery and reuse
@@ -64,6 +66,7 @@ const rules = Object.fromEntries(ruleNames.map((name) => [name, "warn"]))
 ## Errors
 
 - Parse errors and unsupported input return `parse-error` diagnostics.
+- Malformed exception comments return `invalid-exception` diagnostics.
 - Invalid config and failures to load the theme or project sources throw or reject.
 
 Handle both. A failed load is not a clean result.
@@ -72,14 +75,14 @@ Handle both. A failed load is not a clean result.
 
 A diagnostic is one finding. API and JSON consumers receive these fields:
 
-| Field            | Value                                    |
-| ---------------- | ---------------------------------------- |
-| `file`           | The affected Vue file.                   |
-| `rule`           | A rule name, or `parse-error`.           |
-| `severity`       | `warn` or `error`.                       |
-| `message`        | Explanation and guidance.                |
-| `line`, `column` | One-based position in the original file. |
-| `offset`         | Zero-based JavaScript string position.   |
+| Field            | Value                                                                   |
+| ---------------- | ----------------------------------------------------------------------- |
+| `file`           | The affected Vue file.                                                  |
+| `rule`           | A rule name, `parse-error`, `invalid-exception`, or `unused-exception`. |
+| `severity`       | `warn` or `error`.                                                      |
+| `message`        | Explanation and guidance.                                               |
+| `line`, `column` | One-based position in the original file.                                |
+| `offset`         | Zero-based JavaScript string position.                                  |
 
 Optional fields:
 

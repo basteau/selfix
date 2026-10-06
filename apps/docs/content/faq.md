@@ -21,7 +21,7 @@ It never runs your app or evaluates your templates or scripts. Your `selfix.conf
 
 ## Can I silence one finding in the template?
 
-No. There are no inline suppressions. Add the class to the rule's `allow` list ([rule settings](configuration.md#rule-settings)), give a component a [contract](configuration.md#component-contracts), or change rules for some files with an [override](configuration.md#per-file-rule-overrides).
+Yes, with a `selfix-disable-next-line` comment that names the rules and gives a reason. See [suppress findings](configuration.md#suppress-findings). Prefer the rule's `allow` list ([rule settings](configuration.md#rule-settings)), a component [contract](configuration.md#component-contracts), or an [override](configuration.md#per-file-rule-overrides) for some files when the exception isn't one line.
 
 ## Does selfix sort or merge classes?
 
