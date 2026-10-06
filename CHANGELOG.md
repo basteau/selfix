@@ -1,5 +1,42 @@
 # Changelog
 
+## v3.0.0
+
+Existing projects can adopt selfix without fixing everything first. A baseline file records known findings so only new ones fail, and a `selfix-disable-next-line` comment with a required reason records one reviewed exception next to the code. CI can read results as GitLab Code Quality reports. Component discovery reads `unplugin-vue-components` declarations outside Nuxt, and opaque `v-bind` spreads become configurable `require-static-classes` findings instead of parse errors.
+
+[compare changes](https://github.com/basteau/selfix/compare/v2.3.0...v3.0.0)
+
+### 🚀 Enhancements
+
+- **cli:** Add GitLab Code Quality output ([6e71b291](https://github.com/basteau/selfix/commit/6e71b291))
+- **rules:** Report opaque v-bind spreads under require-static-classes ([813d9bc5](https://github.com/basteau/selfix/commit/813d9bc5))
+- **config:** ⚠️ Read GlobalComponents declarations as componentDeclarations ([b3d5fa0f](https://github.com/basteau/selfix/commit/b3d5fa0f))
+- **cli:** Add baseline files for existing findings ([ea829377](https://github.com/basteau/selfix/commit/ea829377))
+- **rules:** ⚠️ Add selfix-disable-next-line exception comments ([c35897fb](https://github.com/basteau/selfix/commit/c35897fb))
+- **cli:** ⚠️ Count inline exceptions and always print a JSON object ([738a9682](https://github.com/basteau/selfix/commit/738a9682))
+
+### 🩹 Fixes
+
+- **website:** Check a current heading after deployment ([7cc28a73](https://github.com/basteau/selfix/commit/7cc28a73))
+- **tailwind:** Skip class-free selectors during theme loading ([f14b7832](https://github.com/basteau/selfix/commit/f14b7832))
+
+### 📖 Documentation
+
+- Document exception comments and the JSON report object ([c16ce680](https://github.com/basteau/selfix/commit/c16ce680))
+
+### 🏡 Chore
+
+- Ignore macOS metadata and local preview config ([67c16a49](https://github.com/basteau/selfix/commit/67c16a49))
+
+#### ⚠️ Breaking Changes
+
+- **JSON output:** `--format json` always prints `{ diagnostics, suppressed: { inline, baseline }, unused }` instead of a bare array. Read findings from `diagnostics`. ([738a9682](https://github.com/basteau/selfix/commit/738a9682))
+- **Component declarations:** `project.nuxtComponents` is removed. Rename it to `project.componentDeclarations` with the same path, and set `nuxt: true` if your project relied on it to enable Nuxt mode. ([b3d5fa0f](https://github.com/basteau/selfix/commit/b3d5fa0f))
+- **Diagnostic rules:** `Diagnostic.rule` can now be `invalid-exception` or `unused-exception`. Template comments that start with `selfix-disable` or `selfix-enable` now suppress findings or report an error. ([c35897fb](https://github.com/basteau/selfix/commit/c35897fb))
+- **Attribute spreads:** an opaque `v-bind` spread is a `require-static-classes` finding instead of a `parse-error`, and `v-bind="$attrs"` produces none. Keep `require-static-classes` enabled to fail on spreads. ([813d9bc5](https://github.com/basteau/selfix/commit/813d9bc5))
+
+Node, Vue, and Tailwind requirements are unchanged. No new consumer dependencies are required.
+
 ## v2.3.0
 
 Findings now suggest the theme utility for an arbitrary value that matches one, and a close spelling fix for an unknown class. `no-restyle` follows single-root wrapper components, custom messages can name a component's sizes and variants, and shadcn-vue projects can leave `css` and `ui` to `components.json`. The documentation site and README were rewritten around shorter guides, one page per rule, and recipes for shadcn-vue, Nuxt, and CI.
