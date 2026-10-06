@@ -247,17 +247,31 @@ A category message beats `default`, which beats built-in guidance. A contract's 
 
 The CLI finds each component's source file to add its path and its `size` and `variant` choices to findings. Discovery never changes which components are protected. Set `project: false` to turn it off, or set these fields in `project: { ... }`:
 
-| Option           | Purpose                                                                        |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `root`           | Source directory relative to the config directory. Defaults to that directory  |
-| `aliases`        | Import patterns mapped to paths relative to `root`, with at most one `*`       |
-| `components`     | Component names mapped to `.vue` files relative to `root`                      |
-| `tsconfig`       | Metadata file relative to `root`. Detected from tsconfig, jsconfig, or Nuxt    |
-| `nuxt`           | Turns prepared Nuxt discovery on or off. Detected by default                   |
-| `nuxtComponents` | Generated declarations relative to `root`. Defaults to `.nuxt/components.d.ts` |
+| Option                  | Purpose                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| `root`                  | Source directory relative to the config directory. Defaults to that directory                        |
+| `aliases`               | Import patterns mapped to paths relative to `root`, with at most one `*`                             |
+| `components`            | Component names mapped to `.vue` files relative to `root`                                            |
+| `tsconfig`              | Metadata file relative to `root`. Detected from tsconfig, jsconfig, or Nuxt                          |
+| `nuxt`                  | Turns Nuxt mode on or off. Detected by default                                                       |
+| `componentDeclarations` | Generated auto-import declarations relative to `root`. Nuxt mode defaults to `.nuxt/components.d.ts` |
 
-- Explicit `aliases` and `components` win over discovered ones. For Nuxt, run `nuxt prepare` first. A custom Nuxt build directory needs matching metadata and [CSS paths](nuxt.md).
+- Explicit `aliases` and `components` win over discovered ones. For Nuxt, run `nuxt prepare` first. A custom Nuxt build directory needs a matching `componentDeclarations` path, `tsconfig`, and [CSS paths](nuxt.md).
+- `componentDeclarations` replaces `nuxtComponents`, which is rejected. Rename the key and keep its path. The new key does not turn on Nuxt mode, so set `nuxt: true` if your Nuxt project is not detected.
 - Missing explicit mappings, malformed metadata, and invalid resolved components fail loading.
 - A component file that cannot be parsed still gives its path, without prop choices. Unresolved or unsupported definitions omit guidance the same way.
 - Prop choices are suggestions. They do not promise the same visual result as the reported class.
 - In the API, discovery is off by default. See [API reuse](api.md#component-discovery-and-reuse). For recovery steps, see [Troubleshooting](troubleshooting.md).
+
+### Auto-imported components outside Nuxt
+
+`unplugin-vue-components` writes a `components.d.ts` that declares each auto-imported component in `GlobalComponents`. Point discovery at it so findings for `<HelloWorld>` name `src/components/HelloWorld.vue`:
+
+```ts
+export default defineConfig({
+  css: "src/style.css",
+  project: { componentDeclarations: "components.d.ts" },
+})
+```
+
+selfix reads entries typed `typeof import("./file.vue")["default"]` inside `declare module "vue"` or `declare module "@vue/runtime-core"`, and Nuxt-style `export const` entries. It skips package imports such as `typeof import("vue-router")["RouterLink"]`. Setting the path does not turn on Nuxt mode. A missing or unreadable file fails loading, and so does an entry whose `.vue` file was deleted. Regenerate the file with your dev server or build before the check.

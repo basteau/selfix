@@ -264,7 +264,14 @@ function configAliases(
   return { baseUrl, aliases }
 }
 
-function preparedComponents(file: string): Map<string, { source: string; name: string }> {
+type Mapping = { source: string; name: string }
+
+/**
+ * Read generated auto-import declarations: Nuxt's exported constants and the
+ * GlobalComponents interface that Vue augmentations (unplugin-vue-components,
+ * Nuxt) declare. Only `typeof import("./file")["export"]` types map a name.
+ */
+function componentDeclarations(file: string, hint: string): Map<string, Mapping> {
   let statements: Statement[]
   try {
     statements = babelParse(readFileSync(file, "utf8"), {
@@ -272,40 +279,81 @@ function preparedComponents(file: string): Map<string, { source: string; name: s
       plugins: [["typescript", { dts: true }]],
     }).program.body
   } catch (error) {
-    throw new Error(
-      `Unable to read prepared Nuxt components ${file}: ${String(error)}. Run your application's nuxt prepare command.`,
-    )
+    throw new Error(`Unable to read component declarations ${file}: ${String(error)}. ${hint}`)
   }
-  const result = new Map<string, { source: string; name: string }>()
+  // Older Nuxt files declare each component in both forms. Duplicates within a
+  // form stay ambiguous; across forms, only conflicting mappings are.
+  const constants = new Map<string, Mapping>()
+  const globals = new Map<string, Mapping>()
+  function add(result: Map<string, Mapping>, name: string, type: TypeNode | undefined) {
+    if (
+      type?.type !== "TSIndexedAccessType" ||
+      type.objectType.type !== "TSTypeQuery" ||
+      type.objectType.exprName.type !== "TSImportType" ||
+      type.indexType.type !== "TSLiteralType" ||
+      type.indexType.literal.type !== "StringLiteral"
+    )
+      return
+    const imported = type.objectType.exprName.argument
+    // Package specifiers need module resolution; only file paths map definitions.
+    if (
+      imported.type !== "StringLiteral" ||
+      !(imported.value.startsWith(".") || path.isAbsolute(imported.value))
+    )
+      return
+    if (result.has(name))
+      throw new Error(
+        `Ambiguous declared component ${name} in ${file}. ${hint} To override it, map ${name} in project.components.`,
+      )
+    result.set(name, {
+      source: path.resolve(path.dirname(file), imported.value),
+      name: type.indexType.literal.value,
+    })
+  }
   for (const statement of statements) {
     if (
-      statement.type !== "ExportNamedDeclaration" ||
-      statement.declaration?.type !== "VariableDeclaration"
+      statement.type === "ExportNamedDeclaration" &&
+      statement.declaration?.type === "VariableDeclaration"
+    ) {
+      for (const item of statement.declaration.declarations)
+        if (item.id.type === "Identifier" && item.id.typeAnnotation?.type === "TSTypeAnnotation")
+          add(constants, item.id.name, item.id.typeAnnotation.typeAnnotation)
+    }
+    if (
+      statement.type !== "TSModuleDeclaration" ||
+      statement.id.type !== "StringLiteral" ||
+      !["vue", "@vue/runtime-core"].includes(statement.id.value) ||
+      statement.body?.type !== "TSModuleBlock"
     )
       continue
-    for (const item of statement.declaration.declarations) {
-      if (item.id.type !== "Identifier" || item.id.typeAnnotation?.type !== "TSTypeAnnotation")
-        continue
-      const type = item.id.typeAnnotation.typeAnnotation
+    for (const item of statement.body.body) {
+      const declaration = item.type === "ExportNamedDeclaration" ? item.declaration : item
       if (
-        type.type !== "TSIndexedAccessType" ||
-        type.objectType.type !== "TSTypeQuery" ||
-        type.objectType.exprName.type !== "TSImportType" ||
-        type.indexType.type !== "TSLiteralType" ||
-        type.indexType.literal.type !== "StringLiteral"
+        declaration?.type !== "TSInterfaceDeclaration" ||
+        declaration.id.name !== "GlobalComponents"
       )
         continue
-      const imported = type.objectType.exprName.argument
-      if (imported.type !== "StringLiteral") continue
-      if (result.has(item.id.name))
-        throw new Error(`Ambiguous prepared component ${item.id.name} in ${file}`)
-      result.set(item.id.name, {
-        source: path.resolve(path.dirname(file), imported.value),
-        name: type.indexType.literal.value,
-      })
+      for (const member of declaration.body.body) {
+        if (member.type !== "TSPropertySignature" || member.computed) continue
+        const name =
+          member.key.type === "Identifier"
+            ? member.key.name
+            : member.key.type === "StringLiteral"
+              ? member.key.value
+              : undefined
+        if (name) add(globals, name, member.typeAnnotation?.typeAnnotation)
+      }
     }
   }
-  return result
+  for (const [name, mapping] of globals) {
+    const existing = constants.get(name)
+    if (existing && (existing.source !== mapping.source || existing.name !== mapping.name))
+      throw new Error(
+        `Ambiguous declared component ${name} in ${file}. ${hint} To override it, map ${name} in project.components.`,
+      )
+    constants.set(name, mapping)
+  }
+  return constants
 }
 
 export interface ComponentDefinition {
@@ -344,17 +392,25 @@ export function createProject(options: ProjectOptions) {
   const pkg = statSync(packageFile, { throwIfNoEntry: false })?.isFile()
     ? metadataJson(packageFile)
     : {}
-  const nuxtFile = path.resolve(root, options.nuxtComponents ?? ".nuxt/components.d.ts")
   const detectedNuxt = [pkg.dependencies, pkg.devDependencies, pkg.peerDependencies].some(
     (value) => value && typeof value === "object" && "nuxt" in value,
   )
+  const nuxtFile = path.join(root, ".nuxt/components.d.ts")
   const nuxt =
-    options.nuxt ??
-    Boolean(options.nuxtComponents || detectedNuxt || statSync(nuxtFile, { throwIfNoEntry: false }))
-  const generated = nuxt
-    ? preparedComponents(nuxtFile)
-    : new Map<string, { source: string; name: string }>()
-  const generatedNames = new Map<string, { source: string; name: string } | undefined>()
+    options.nuxt ?? Boolean(detectedNuxt || statSync(nuxtFile, { throwIfNoEntry: false }))
+  // A configured path replaces Nuxt's default without implying Nuxt mode.
+  const declarations = options.componentDeclarations
+    ? {
+        file: path.resolve(root, options.componentDeclarations),
+        hint: "Check project.componentDeclarations and regenerate the declarations file.",
+      }
+    : nuxt
+      ? { file: nuxtFile, hint: "Run your application's nuxt prepare command." }
+      : undefined
+  const generated = declarations
+    ? componentDeclarations(declarations.file, declarations.hint)
+    : new Map<string, Mapping>()
+  const generatedNames = new Map<string, Mapping | undefined>()
   for (const [name, mapping] of generated) {
     // Count each declaration once, even when its exact and normalized names coincide.
     // Collisions stay ambiguous even when declarations point to the same source.
@@ -404,7 +460,7 @@ export function createProject(options: ProjectOptions) {
       continue
     if (!statSync(mapping.source, { throwIfNoEntry: false })?.isFile())
       throw new Error(
-        `Prepared Nuxt component ${name} is missing: ${mapping.source}. Run your application's nuxt prepare command.`,
+        `Declared component ${name} is missing: ${mapping.source} (from ${declarations!.file}). ${declarations!.hint}`,
       )
     snapshot(mapping.source)
   }

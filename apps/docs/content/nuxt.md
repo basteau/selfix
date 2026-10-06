@@ -41,6 +41,6 @@ Use `selfix app` in your `lint:design` script and the same order in CI. Prepare 
 
 Run `pnpm exec selfix app --doctor`. `<UButton>` usages should show `recognized by components "^U[A-Z]"` and `active protection: yes`.
 
-Discovery reads `.nuxt/components.d.ts` to add each component's source file to findings, plus its `size` and `variant` choices when they are typed as string unions. See [component source discovery](configuration.md#component-source-discovery).
+Discovery reads `.nuxt/components.d.ts` to add each component's source file to findings, plus its `size` and `variant` choices when they are typed as string unions. With a custom build directory, set `project.componentDeclarations` to its `components.d.ts`. See [component source discovery](configuration.md#component-source-discovery).
 
 The [integration check](maintaining.md#integration-verification) tests a similar setup against pinned Nuxt and Nuxt UI versions.

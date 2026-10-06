@@ -106,8 +106,8 @@ export interface ProjectOptions {
   tsconfig?: string
   /** Detect Nuxt from package metadata by default; false disables it. */
   nuxt?: boolean
-  /** Prepared component declarations for a nondefault Nuxt build directory. */
-  nuxtComponents?: string
+  /** Generated GlobalComponents declarations relative to root; Nuxt defaults to .nuxt/components.d.ts. */
+  componentDeclarations?: string
 }
 
 export interface Config {
@@ -268,9 +268,13 @@ export function validateConfig(config: unknown): asserts config is Config {
   )
   if (obj.project !== undefined && obj.project !== false) {
     const project = record(obj.project, "project")
+    if (project.nuxtComponents !== undefined)
+      throw new Error(
+        "project.nuxtComponents was removed. Use project.componentDeclarations with the same path.",
+      )
     keys(
       project,
-      ["root", "aliases", "components", "tsconfig", "nuxt", "nuxtComponents"],
+      ["root", "aliases", "components", "tsconfig", "nuxt", "componentDeclarations"],
       "project",
     )
     const localPath = (value: unknown, label: string) => {
@@ -281,7 +285,7 @@ export function validateConfig(config: unknown): asserts config is Config {
       )
         throw new Error(`${label} must be a non-empty local path.`)
     }
-    for (const key of ["root", "tsconfig", "nuxtComponents"])
+    for (const key of ["root", "tsconfig", "componentDeclarations"])
       if (project[key] !== undefined) localPath(project[key], `project.${key}`)
     if (project.nuxt !== undefined && typeof project.nuxt !== "boolean")
       throw new Error("project.nuxt must be a boolean.")

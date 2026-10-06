@@ -786,6 +786,51 @@ it("doctor resolves prepared auto-imported globals without conflating discovery 
   )
 })
 
+it("discovers non-Nuxt auto-import declarations from componentDeclarations", async () => {
+  const dir = await project()
+  const button = path.join(dir, "src/Button.vue")
+  await mkdir(path.join(dir, "src"))
+  await writeFile(
+    button,
+    `<script setup lang="ts">defineProps<{size?: 'sm' | 'lg'}>()</script><template><button /></template>`,
+  )
+  await writeFile(
+    path.join(dir, "components.d.ts"),
+    `export {}
+declare module 'vue' {
+  export interface GlobalComponents {
+    UButton: typeof import('./src/Button.vue')['default']
+  }
+}`,
+  )
+  await writeFile(
+    path.join(dir, "selfix.config.ts"),
+    `export default {css:'theme.css', components:['^UButton$'], project:{componentDeclarations:'components.d.ts'}}`,
+  )
+  await writeFile(path.join(dir, "Page.vue"), '<template><UButton class="p-4" /></template>')
+  const lint = await invoke(["--format", "json", "Page.vue"], dir)
+  expect(lint.code).toBe(1)
+  expect(JSON.parse(lint.stdout)).toMatchObject([
+    {
+      rule: "no-restyle",
+      component: "UButton",
+      definition: { file: button, props: { size: ["sm", "lg"] } },
+    },
+  ])
+  const doctor = await invoke(["--doctor", "Page.vue"], dir)
+  expect(doctor.code).toBe(0)
+  expect(doctor.stdout).toContain(`active protection: yes; definition: ${button}`)
+  const old = await project()
+  await writeFile(
+    path.join(old, "selfix.config.ts"),
+    `export default {css:'theme.css', project:{nuxtComponents:'components.d.ts'}}`,
+  )
+  await writeFile(path.join(old, "Page.vue"), "<template><div /></template>")
+  const removed = await invoke(["Page.vue"], old)
+  expect(removed.code).toBe(2)
+  expect(removed.stderr).toContain("Use project.componentDeclarations")
+})
+
 it("doctor suggests escaped exact imports only once and never suggests for ignored imports", async () => {
   const dir = await project()
   await writeFile(
