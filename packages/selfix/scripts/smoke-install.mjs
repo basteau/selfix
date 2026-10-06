@@ -79,7 +79,7 @@ try {
     '<template>\n  <div class="p-[13px]" />\n</template>\n',
   )
   const cli = path.join(consumer, "node_modules/.bin/selfix")
-  const diagnostics = JSON.parse(run(cli, ["Page.vue", "--format", "json"], 1))
+  const { diagnostics } = JSON.parse(run(cli, ["Page.vue", "--format", "json"], 1))
   assert.equal(diagnostics.length, 1)
   const { message, ...diagnostic } = diagnostics[0]
   assert.deepEqual(diagnostic, {
@@ -94,7 +94,7 @@ try {
   })
   assert.ok(message.endsWith("packed-config-loaded"), "Native TypeScript config must be loaded")
   writeFileSync(path.join(consumer, "Page.vue"), '<template><div class="p-4" /></template>\n')
-  assert.deepEqual(JSON.parse(run(cli, ["Page.vue", "--format", "json"])), [])
+  assert.deepEqual(JSON.parse(run(cli, ["Page.vue", "--format", "json"])).diagnostics, [])
   writeFileSync(
     path.join(consumer, "Button.vue"),
     `<script setup lang="ts">type Size = 'sm' | 'lg'; defineProps<{size?: Size}>()</script><template><button /></template>`,
@@ -124,6 +124,10 @@ assert.equal(finding.rule, 'no-restyle');
 assert.equal(finding.file, 'Page.vue');
 assert.deepEqual(finding.definition.props, { size: ['sm', 'lg'] });
 assert.ok(finding.definition.file.endsWith('/Button.vue'));
+// Exception comments come from Vue's own template parser in every supported Vue version.
+const excepted = linter.check('<template><!-- selfix-disable-next-line no-arbitrary-values -- print -->\\n<div class="p-[13px]" />\\n</template>', 'Excepted.vue');
+assert.deepEqual(excepted.diagnostics, []);
+assert.equal(excepted.suppressed[0].reason, 'print');
 `,
   )
   run(process.execPath, ["api.mjs"])

@@ -47,7 +47,7 @@ describe("CLI", () => {
     )
     const json = await invoke(["--format", "json", "Example.vue"], dir)
     expect(json.code).toBe(1)
-    expect(JSON.parse(json.stdout)).toEqual([
+    expect(JSON.parse(json.stdout).diagnostics).toEqual([
       expect.objectContaining({ message: "Custom guidance", suggestions: ["flex-col"] }),
     ])
     const text = await invoke(["Example.vue"], dir)
@@ -79,10 +79,14 @@ describe("CLI", () => {
       expect(single.stderr).toBe("")
       if (!mode.length) {
         expect(
-          JSON.parse(single.stdout).map((item: { file: string }) => path.basename(item.file)),
+          JSON.parse(single.stdout).diagnostics.map((item: { file: string }) =>
+            path.basename(item.file),
+          ),
         ).toEqual(["Page.vue"])
         expect(
-          JSON.parse(explicit.stdout).map((item: { file: string }) => path.basename(item.file)),
+          JSON.parse(explicit.stdout).diagnostics.map((item: { file: string }) =>
+            path.basename(item.file),
+          ),
         ).toEqual(["Link.vue", "Page.vue"])
       } else {
         expect(single.stdout).toContain("Page.vue")
@@ -139,7 +143,7 @@ describe("CLI", () => {
     expect(text.stdout).toContain("<CustomButton> is restricted. Use <UButton> instead.")
     const json = await invoke(["--format", "json"], dir)
     expect(json.code).toBe(0)
-    expect(JSON.parse(json.stdout)).toEqual([
+    expect(JSON.parse(json.stdout).diagnostics).toEqual([
       expect.objectContaining({
         file,
         rule: "no-restricted-components",
@@ -154,7 +158,7 @@ describe("CLI", () => {
     await writeFile(file, '<template><component :is="choice"/></template>')
     const coverage = await invoke(["--format", "json"], dir)
     expect(coverage.code).toBe(1)
-    expect(JSON.parse(coverage.stdout)).toEqual([
+    expect(JSON.parse(coverage.stdout).diagnostics).toEqual([
       expect.objectContaining({
         rule: "parse-error",
         severity: "error",
@@ -199,7 +203,7 @@ import { CustomButton as LegacyButton } from "some-ui"
     expect(text.stdout).toContain("<LegacyButton> is restricted. Use <UButton> instead.")
     const json = await invoke(["--format", "json"], dir)
     expect(json.code).toBe(1)
-    expect(JSON.parse(json.stdout)).toEqual([
+    expect(JSON.parse(json.stdout).diagnostics).toEqual([
       expect.objectContaining({
         file,
         rule: "no-restricted-components",
@@ -236,7 +240,7 @@ import { CustomButton as LegacyButton } from "some-ui"
     expect(result.stderr).toBe("")
     expect(result.code).toBe(1)
     expect(
-      JSON.parse(result.stdout).map(
+      JSON.parse(result.stdout).diagnostics.map(
         ({ rule, severity, file }: { rule: string; severity: string; file: string }) => ({
           rule,
           severity,
@@ -286,7 +290,7 @@ import { CustomButton as LegacyButton } from "some-ui"
     const automatic = await invoke(args, path.join(dir, "app"))
     expect(automatic.stderr).toBe("")
     expect(automatic.code).toBe(1)
-    expect(JSON.parse(automatic.stdout)[0]).toMatchObject({
+    expect(JSON.parse(automatic.stdout).diagnostics[0]).toMatchObject({
       file: path.join(dir, "app/Page.vue"),
       line: 2,
       column: 19,
@@ -304,7 +308,7 @@ import { CustomButton as LegacyButton } from "some-ui"
             path.join(dir, "app"),
           )
         ).stdout,
-      )[0].definition,
+      ).diagnostics[0].definition,
     ).toEqual({ file: path.join(dir, "app/Button.vue"), props: { size: ["sm", "lg"] } })
     await writeFile(
       path.join(dir, "disabled.config.ts"),
@@ -315,7 +319,7 @@ import { CustomButton as LegacyButton } from "some-ui"
       path.join(dir, "app"),
     )
     expect(disabled.code).toBe(1)
-    expect(JSON.parse(disabled.stdout)[0]).not.toHaveProperty("definition")
+    expect(JSON.parse(disabled.stdout).diagnostics[0]).not.toHaveProperty("definition")
   })
   it("resolves CSS aliases from the config directory even with --css and a different cwd", async () => {
     const dir = await project()
@@ -332,14 +336,15 @@ import { CustomButton as LegacyButton } from "some-ui"
     )
     await writeFile(path.join(dir, "app/Page.vue"), '<template><div class="bg-brand" /></template>')
     const args = ["--config", "../selfix.config.ts", "--format", "json"]
+    const clean = `${JSON.stringify({ diagnostics: [], suppressed: { inline: 0, baseline: 0 }, unused: [] }, null, 2)}\n`
     expect(await invoke(args, path.join(dir, "app"))).toEqual({
       code: 0,
-      stdout: "[]\n",
+      stdout: clean,
       stderr: "",
     })
     expect(await invoke([...args, "--css", "main.css"], path.join(dir, "app"))).toEqual({
       code: 0,
-      stdout: "[]\n",
+      stdout: clean,
       stderr: "",
     })
     await rm(path.join(dir, ".nuxt/ui.css"))
@@ -366,7 +371,7 @@ import { CustomButton as LegacyButton } from "some-ui"
     await writeFile(path.join(dir, "Page.vue"), '<template><div class="rounded-huge" /></template>')
     const result = await invoke(["*.vue", "Page.vue", "--format", "json"], dir)
     expect(result.code).toBe(1)
-    const diagnostics = JSON.parse(result.stdout)
+    const diagnostics = JSON.parse(result.stdout).diagnostics
     expect(diagnostics).toHaveLength(1)
     expect(diagnostics[0]).toMatchObject({
       rule: "no-unknown-classes",
@@ -511,7 +516,7 @@ it("keeps exact exclusions scoped to the config root, including explicit outside
     dir,
   )
   expect(result.code).toBe(1)
-  expect(JSON.parse(result.stdout)).toEqual([
+  expect(JSON.parse(result.stdout).diagnostics).toEqual([
     expect.objectContaining({ file: path.join(dir, "Page.vue"), rule: "no-inline-styles" }),
   ])
 })
@@ -658,7 +663,7 @@ import { type TypeNamed } from '@/ui/type'
   const lint = await invoke(["--format", "json"], dir)
   expect(
     JSON.parse(lint.stdout)
-      .filter((d: { rule: string }) => d.rule === "no-restyle")
+      .diagnostics.filter((d: { rule: string }) => d.rule === "no-restyle")
       .map((d: { component: string }) => d.component),
   ).toEqual(["Action", "Exact", "FromLibrary", "Global"])
   expect((await invoke(["--doctor"], dir)).stdout).toBe(doctor.stdout)
@@ -691,7 +696,7 @@ it("doctor uses config-relative exclusions, overrides, and separate verified dis
     `no-restyle: warn; active protection: yes; definition: ${path.join(dir, "Button.vue")}`,
   )
   const lint = await invoke([...args, "--format", "json"], path.join(dir, "src"))
-  expect(JSON.parse(lint.stdout)).toEqual([
+  expect(JSON.parse(lint.stdout).diagnostics).toEqual([
     expect.objectContaining({
       rule: "no-restyle",
       severity: "warn",
@@ -810,7 +815,7 @@ declare module 'vue' {
   await writeFile(path.join(dir, "Page.vue"), '<template><UButton class="p-4" /></template>')
   const lint = await invoke(["--format", "json", "Page.vue"], dir)
   expect(lint.code).toBe(1)
-  expect(JSON.parse(lint.stdout)).toMatchObject([
+  expect(JSON.parse(lint.stdout).diagnostics).toMatchObject([
     {
       rule: "no-restyle",
       component: "UButton",
@@ -904,9 +909,9 @@ describe("components.json defaults", () => {
     await writeFile(path.join(dir, "Page.vue"), page)
     const lint = await invoke(["Page.vue", "--format", "json"], dir)
     expect(lint.code).toBe(1)
-    expect(JSON.parse(lint.stdout).map((finding: { rule: string }) => finding.rule)).toEqual([
-      "no-restyle",
-    ])
+    expect(
+      JSON.parse(lint.stdout).diagnostics.map((finding: { rule: string }) => finding.rule),
+    ).toEqual(["no-restyle"])
     const doctor = await invoke(["Page.vue", "--doctor"], dir)
     expect(doctor.code).toBe(0)
     expect(doctor.stdout).toContain(`Tailwind CSS loaded: ${path.join(dir, "theme.css")}`)
@@ -968,7 +973,7 @@ describe("components.json defaults", () => {
     expect(json.stderr).toBe("")
     expect(json.code).toBe(1)
     const offset = source.indexOf('v-bind="attrs"')
-    expect(JSON.parse(json.stdout)).toEqual([
+    expect(JSON.parse(json.stdout).diagnostics).toEqual([
       {
         file: path.join(dir, "src/Page.vue"),
         rule: "require-static-classes",
@@ -994,7 +999,7 @@ describe("components.json defaults", () => {
     )
     const off = await invoke(["--config", "off.config.ts", "--format", "json", "src"], dir)
     expect(off.code).toBe(0)
-    expect(JSON.parse(off.stdout)).toEqual([])
+    expect(JSON.parse(off.stdout).diagnostics).toEqual([])
   })
   it("strips a trailing slash from aliases.ui", async () => {
     const dir = await project()
@@ -1296,7 +1301,7 @@ describe("baseline", () => {
     const json = await invoke(["src", "--baseline", "baseline.json", "--format", "json"], dir)
     expect(json.code).toBe(1)
     const report = JSON.parse(json.stdout)
-    expect(report.suppressed).toBe(1)
+    expect(report.suppressed).toEqual({ inline: 0, baseline: 1 })
     expect(report.diagnostics).toEqual([
       expect.objectContaining({ file: path.join(dir, "src/Renamed.vue"), rule: "no-raw-colors" }),
     ])
@@ -1428,5 +1433,131 @@ describe("baseline", () => {
       expect(rejected.stdout).toBe("")
     }
     expect(await readFile(path.join(dir, "Page.vue"), "utf8")).toBe(colors(1))
+  })
+})
+
+describe("inline exceptions", () => {
+  const comment = "  <!-- selfix-disable-next-line no-raw-colors -- partner brand color -->"
+  const brand = '  <div class="bg-[#e30613]" />'
+  const excepted = ["<template>", comment, brand, brand, "</template>"].join("\n")
+  async function excepting(files: Record<string, string>, config = "") {
+    const dir = await project()
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      `export default { css: "theme.css", rules: { "no-arbitrary-values": "off" }${config} }`,
+    )
+    for (const [name, source] of Object.entries(files))
+      await writeFile(path.join(dir, name), source)
+    return dir
+  }
+
+  it("counts suppressed findings in text and JSON summaries", async () => {
+    const dir = await excepting({ "Page.vue": excepted })
+    const text = await invoke(["Page.vue"], dir)
+    expect(text.code).toBe(1)
+    const lines = text.stdout.split("\n")
+    expect(lines[0]).toMatch(/^Page\.vue:4:\d+ error no-raw-colors /)
+    expect(lines.slice(1)).toEqual([
+      "Checked 1 Vue file: 1 error, 0 warnings.",
+      "Exceptions: 1 suppressed.",
+      "",
+    ])
+    const json = await invoke(["Page.vue", "--format", "json"], dir)
+    expect(json.code).toBe(1)
+    expect(JSON.parse(json.stdout)).toEqual({
+      diagnostics: [expect.objectContaining({ rule: "no-raw-colors", line: 4 })],
+      suppressed: { inline: 1, baseline: 0 },
+      unused: [],
+    })
+  })
+
+  it("returns a clean exit code when every finding is suppressed", async () => {
+    const dir = await excepting({
+      "Page.vue": ["<template>", comment, brand, "</template>"].join("\n"),
+    })
+    expect(await invoke(["Page.vue"], dir)).toEqual({
+      code: 0,
+      stdout: "Checked 1 Vue file: 0 errors, 0 warnings.\nExceptions: 1 suppressed.\n",
+      stderr: "",
+    })
+  })
+
+  it("controls unused-exception severity with config and --unused-exceptions", async () => {
+    const unused = excepted.replaceAll("bg-[#e30613]", "p-4")
+    const dir = await excepting({ "Page.vue": unused }, ', unusedExceptions: "warn"')
+    const warned = await invoke(["Page.vue"], dir)
+    expect(warned.code).toBe(0)
+    expect(warned.stdout).toMatch(
+      /^Page\.vue:2:3 warn unused-exception Unused exception: no-raw-colors reported nothing on the next line\. Remove the comment\.\nChecked 1 Vue file: 0 errors, 1 warning\.\n$/,
+    )
+    expect((await invoke(["Page.vue", "--max-warnings", "0"], dir)).code).toBe(1)
+    const flagged = await invoke(["Page.vue", "--unused-exceptions", "error"], dir)
+    expect(flagged.code).toBe(1)
+    expect(flagged.stdout).toContain("Page.vue:2:3 error unused-exception ")
+    expect(await invoke(["Page.vue", "--unused-exceptions", "off"], dir)).toEqual({
+      code: 0,
+      stdout: "Checked 1 Vue file: 0 errors, 0 warnings.\n",
+      stderr: "",
+    })
+    expect(await invoke(["Page.vue", "--doctor", "--unused-exceptions", "warn"], dir)).toEqual({
+      code: 2,
+      stdout: "",
+      stderr: "selfix: --doctor does not check exception comments. Remove --unused-exceptions.\n",
+    })
+    const invalid = await invoke(["Page.vue", "--unused-exceptions", "ignore"], dir)
+    expect(invalid).toEqual({
+      code: 2,
+      stdout: "",
+      stderr: "selfix: --unused-exceptions must be off, warn, or error.\n",
+    })
+  })
+
+  it("applies exceptions before the baseline, and never records exception problems", async () => {
+    const dir = await excepting({
+      "Page.vue": excepted,
+      "Bad.vue": excepted.replace(" -- partner brand color", ""),
+    })
+    const update = await invoke(["--update-baseline", "baseline.json"], dir)
+    expect(update.code).toBe(1)
+    expect(update.stdout).toMatch(
+      /^Bad\.vue:2:3 error invalid-exception Exception comment needs a reason\..*\nBaseline not written: fix parse errors and exception comments first\.\n$/,
+    )
+    // An unused comment blocks the write as an error, not as a warning.
+    await writeFile(path.join(dir, "Bad.vue"), excepted.replaceAll("bg-[#e30613]", "p-4"))
+    expect((await invoke(["--update-baseline", "baseline.json"], dir)).code).toBe(1)
+    const warned = await invoke(
+      ["--update-baseline", "baseline.json", "--unused-exceptions", "warn"],
+      dir,
+    )
+    expect(warned).toEqual({ code: 0, stdout: "Wrote 1 finding to baseline.json.\n", stderr: "" })
+    await rm(path.join(dir, "Bad.vue"))
+    expect(await invoke(["--update-baseline", "baseline.json"], dir)).toEqual({
+      code: 0,
+      stdout: "Wrote 1 finding to baseline.json.\n",
+      stderr: "",
+    })
+    expect(JSON.parse(await readFile(path.join(dir, "baseline.json"), "utf8"))).toEqual({
+      "Page.vue": { "no-raw-colors": { count: 1 } },
+    })
+    const json = await invoke(["--baseline", "baseline.json", "--format", "json"], dir)
+    expect(json.code).toBe(0)
+    expect(JSON.parse(json.stdout)).toEqual({
+      diagnostics: [],
+      suppressed: { inline: 1, baseline: 1 },
+      unused: [],
+    })
+    const text = await invoke(["--baseline", "baseline.json"], dir)
+    expect(text.stdout).toBe(
+      "Checked 1 Vue file: 0 errors, 0 warnings.\nExceptions: 1 suppressed.\nBaseline: 1 suppressed, 0 unused.\n",
+    )
+  })
+
+  it("lists exception problems as GitLab issues", async () => {
+    const dir = await excepting({ "Page.vue": excepted.replace("no-raw-colors", "no-raw-color") })
+    const gitlab = await invoke(["Page.vue", "--format", "gitlab"], dir)
+    expect(gitlab.code).toBe(1)
+    expect(
+      JSON.parse(gitlab.stdout).map((issue: { check_name: string }) => issue.check_name),
+    ).toEqual(["invalid-exception", "no-raw-colors", "no-raw-colors"])
   })
 })

@@ -3,7 +3,7 @@ import type { Dirent } from "node:fs"
 import { readFile, readdir, stat, glob, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
-import { createLinter, type Config, type Diagnostic } from "./index.js"
+import { createLinter, type Config, type Diagnostic, type Severity } from "./index.js"
 import {
   applyBaseline,
   countFindings,
@@ -13,7 +13,7 @@ import {
   type Baseline,
   type UnusedEntry,
 } from "./baseline.js"
-import { filePattern, validateConfig } from "./config.js"
+import { filePattern, ruleNames, validateConfig } from "./config.js"
 
 const help = `Usage: selfix [files, directories, or quoted globs] [options]
 
@@ -26,6 +26,9 @@ Defaults to the current directory and requires selfix.config.ts.
   --format text|json|gitlab
                         Output format (default: text); gitlab prints Code Quality JSON
   --max-warnings <n>    Fail when warnings exceed n
+  --unused-exceptions off|warn|error
+                        Severity for exception comments that suppress nothing
+                        (overrides config.unusedExceptions; default: error)
   --baseline <file>     Suppress known findings counted in a baseline file
   --update-baseline <file>
                         Write current findings to a baseline file
@@ -77,6 +80,7 @@ export async function run(
     let hasMaxWarnings = false
     let baselineMode: BaselineMode | undefined
     let baselinePath = ""
+    let unusedExceptions: Severity | undefined
     for (let index = 0; index < args.length; index++) {
       const arg = args[index]
       if (arg === "--help" || arg === "-h") {
@@ -105,7 +109,9 @@ export async function run(
           throw new Error("Use only one of --baseline, --update-baseline, or --prune-baseline.")
         baselineMode = baselineOptions[arg]
         baselinePath = path.resolve(cwd, value)
-      } else if (["--config", "--css", "--format", "--max-warnings"].includes(arg)) {
+      } else if (
+        ["--config", "--css", "--format", "--max-warnings", "--unused-exceptions"].includes(arg)
+      ) {
         const value = args[++index]
         if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}.`)
         if (arg === "--config") configPath = path.resolve(cwd, value)
@@ -116,6 +122,11 @@ export async function run(
             throw new Error("--max-warnings must be a non-negative integer.")
           hasMaxWarnings = true
           maxWarnings = Number(value)
+        }
+        if (arg === "--unused-exceptions") {
+          if (!["off", "warn", "error"].includes(value))
+            throw new Error("--unused-exceptions must be off, warn, or error.")
+          unusedExceptions = value as Severity
         }
       } else if (arg.startsWith("-")) throw new Error(`Unknown option: ${arg}.`)
       else inputs.push(arg)
@@ -128,6 +139,8 @@ export async function run(
       )
     if (doctor && baselineMode)
       throw new Error("--doctor does not use a baseline. Remove the baseline option.")
+    if (doctor && unusedExceptions)
+      throw new Error("--doctor does not check exception comments. Remove --unused-exceptions.")
     if (baselineMode === "update" && (format !== "text" || hasMaxWarnings))
       throw new Error(
         "--update-baseline writes a baseline and reports no findings. Remove --format json or gitlab and --max-warnings.",
@@ -219,6 +232,7 @@ export async function run(
       config: {
         ...linterConfig,
         ...(ui ? { ui } : {}),
+        ...(unusedExceptions ? { unusedExceptions } : {}),
         project: config.project === false ? false : (config.project ?? {}),
       },
     })
@@ -267,21 +281,38 @@ export async function run(
       return reports.some((report) => report.issues.length) ? 1 : 0
     }
     const diagnostics: Diagnostic[] = []
-    for (const file of [...files].sort())
-      diagnostics.push(...linter.lint(await readFile(file, "utf8"), file))
+    let excepted = 0
+    for (const file of [...files].sort()) {
+      const result = linter.check(await readFile(file, "utf8"), file)
+      diagnostics.push(...result.diagnostics)
+      excepted += result.suppressed.length
+    }
     const location = (item: Diagnostic) =>
       `${path.relative(cwd, item.file)}:${item.line}:${item.column} ${item.severity} ${item.rule} ${describe(item)}`
     // A parse error hides a file's findings, so they are never recorded or counted as fixed.
     const parseErrors = diagnostics.filter((item) => item.rule === "parse-error")
     if (baselineMode === "update") {
-      if (parseErrors.length) {
-        for (const item of parseErrors) io.out(`${location(item)}\n`)
-        io.out("Baseline not written: fix parse errors first.\n")
+      // Parse errors and exception comment errors are fixed in the source, never recorded.
+      const unrecordable = diagnostics.filter(
+        (item) =>
+          item.severity === "error" && !(ruleNames as readonly string[]).includes(item.rule),
+      )
+      if (unrecordable.length) {
+        for (const item of unrecordable) io.out(`${location(item)}\n`)
+        io.out(
+          parseErrors.length === unrecordable.length
+            ? "Baseline not written: fix parse errors first.\n"
+            : "Baseline not written: fix parse errors and exception comments first.\n",
+        )
         return 1
       }
-      await writeFile(baselinePath, formatBaseline(countFindings(diagnostics, keyOf)))
+      const recorded = countFindings(diagnostics, keyOf)
+      const total = Object.values(recorded)
+        .flatMap((rules) => Object.values(rules))
+        .reduce((sum, { count }) => sum + count, 0)
+      await writeFile(baselinePath, formatBaseline(recorded))
       io.out(
-        `Wrote ${diagnostics.length} finding${diagnostics.length === 1 ? "" : "s"} to ${path.relative(cwd, baselinePath)}.\n`,
+        `Wrote ${total} finding${total === 1 ? "" : "s"} to ${path.relative(cwd, baselinePath)}.\n`,
       )
       return 0
     }
@@ -315,16 +346,14 @@ export async function run(
     if (format === "json")
       io.out(
         `${JSON.stringify(
-          baseline
-            ? {
-                diagnostics: reported,
-                suppressed,
-                unused: unused.map(({ key, ...entry }) => ({
-                  file: path.resolve(configDir, key),
-                  ...entry,
-                })),
-              }
-            : reported,
+          {
+            diagnostics: reported,
+            suppressed: { inline: excepted, baseline: suppressed },
+            unused: unused.map(({ key, ...entry }) => ({
+              file: path.resolve(configDir, key),
+              ...entry,
+            })),
+          },
           null,
           2,
         )}\n`,
@@ -338,6 +367,7 @@ export async function run(
       io.out(
         `Checked ${files.size} Vue file${files.size === 1 ? "" : "s"}: ${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}.\n`,
       )
+      if (excepted) io.out(`Exceptions: ${excepted} suppressed.\n`)
       if (baseline) io.out(`Baseline: ${suppressed} suppressed, ${unused.length} unused.\n`)
     }
     return errors || warnings > maxWarnings || unused.length ? 1 : 0

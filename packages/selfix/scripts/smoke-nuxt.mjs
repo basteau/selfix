@@ -80,7 +80,7 @@ try {
   const cli = fileURLToPath(new URL("../bin/selfix.mjs", import.meta.url))
   const args = [cli, "--config", "../selfix.config.ts", "--format", "json", "app.vue"]
   const cwd = path.join(consumer, "app")
-  assert.deepEqual(JSON.parse(run(process.execPath, args, 0, cwd).stdout), [])
+  assert.deepEqual(JSON.parse(run(process.execPath, args, 0, cwd).stdout).diagnostics, [])
   const failing = `<template>
   <UButton class="bg-red-500" :ui="{ leadingIcon: 'p-4' }" />
   <LocalChoice class="rounded-lg" />
@@ -88,7 +88,7 @@ try {
 </template>\n`
   const page = path.join(consumer, "app/app.vue")
   writeFileSync(page, failing)
-  const findings = JSON.parse(run(process.execPath, args, 1, cwd).stdout)
+  const findings = JSON.parse(run(process.execPath, args, 1, cwd).stdout).diagnostics
   assert.equal(findings.length, 4)
   const buttonFile = path.join(consumer, "node_modules/@nuxt/ui/dist/runtime/components/Button.vue")
   const localFile = path.join(consumer, "app/components/Choice.vue")
@@ -160,7 +160,7 @@ try {
     page,
     `<template><UButton :ui="{ leadingIcon: 'mr-2' }" /><LocalChoice size="sm" variant="solid" /><div class="bg-selfixbrand" /></template>`,
   )
-  assert.deepEqual(JSON.parse(run(process.execPath, args, 0, cwd).stdout), [])
+  assert.deepEqual(JSON.parse(run(process.execPath, args, 0, cwd).stdout).diagnostics, [])
   rmSync(generated)
   const missing = run(process.execPath, args, 2, cwd)
   assert.ok(missing.stderr.includes(generated))

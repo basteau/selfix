@@ -70,7 +70,7 @@ it("runs the declared executable through an npm-style symlink", () => {
     encoding: "utf8",
   })
   expect(result.status).toBe(1)
-  expect(JSON.parse(result.stdout)[0]).toMatchObject({ rule: "no-arbitrary-values" })
+  expect(JSON.parse(result.stdout).diagnostics[0]).toMatchObject({ rule: "no-arbitrary-values" })
 })
 
 it("publishes only the two requested consumer peer dependencies", () => {

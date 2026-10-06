@@ -16,7 +16,7 @@ function lint(cwd: string) {
   const result = spawnSync(bin, ["src", "--format", "json"], { cwd, encoding: "utf8" })
   expect(result.error).toBeUndefined()
   expect(result.stderr).toBe("")
-  return { status: result.status, diagnostics: JSON.parse(result.stdout) }
+  return { status: result.status, diagnostics: JSON.parse(result.stdout).diagnostics }
 }
 
 function fixture() {
