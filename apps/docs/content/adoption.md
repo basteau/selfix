@@ -58,9 +58,37 @@ If the check reports 12 warnings, set that count as the limit:
 }
 ```
 
-Now 13 warnings fail the command. Lower the limit as you fix findings until it reaches zero. The limit counts the total, not which findings are new.
+Now 13 warnings fail the command. Lower the limit as you fix findings until it reaches zero. The limit counts the total, not which findings are new. To catch new findings, use a baseline.
 
 When `no-restyle` is clean, set it to `"error"`. Then turn on another [rule](rules.md) at `"warn"` and repeat.
+
+## Record existing findings in a baseline
+
+With a warning limit, fixing five old findings and adding five new ones elsewhere still passes. A baseline counts findings per file and rule, so the new ones fail. It records errors too, so you can turn rules on at `"error"` right away.
+
+Record the current findings and commit the file:
+
+```sh
+pnpm exec selfix src --update-baseline selfix-baseline.json
+```
+
+Check against it in your script:
+
+```json
+{
+  "scripts": {
+    "lint:design": "selfix src --baseline selfix-baseline.json"
+  }
+}
+```
+
+When you fix findings, the check fails with unused entries until you lower the counts:
+
+```sh
+pnpm exec selfix src --prune-baseline selfix-baseline.json
+```
+
+Commit the smaller file. Don't rerun `--update-baseline` to make a failing check pass, because it records the new findings too. See [Baseline](cli.md#baseline) for the file format and output.
 
 ## Keep new code strict
 

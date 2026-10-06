@@ -1,9 +1,18 @@
 import { createHash } from "node:crypto"
 import type { Dirent } from "node:fs"
-import { readFile, readdir, stat, glob } from "node:fs/promises"
+import { readFile, readdir, stat, glob, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 import { createLinter, type Config, type Diagnostic } from "./index.js"
+import {
+  applyBaseline,
+  countFindings,
+  formatBaseline,
+  pruneBaseline,
+  readBaseline,
+  type Baseline,
+  type UnusedEntry,
+} from "./baseline.js"
 import { filePattern, validateConfig } from "./config.js"
 
 const help = `Usage: selfix [files, directories, or quoted globs] [options]
@@ -17,11 +26,28 @@ Defaults to the current directory and requires selfix.config.ts.
   --format text|json|gitlab
                         Output format (default: text); gitlab prints Code Quality JSON
   --max-warnings <n>    Fail when warnings exceed n
+  --baseline <file>     Suppress known findings counted in a baseline file
+  --update-baseline <file>
+                        Write current findings to a baseline file
+  --prune-baseline <file>
+                        Lower baseline counts to current findings, then check
   --help                Show this help
   --version             Show the installed version
 
 Exit codes: 0 clean (or warnings), 1 violations, 2 configuration/input failure.
 `
+
+type BaselineMode = "check" | "update" | "prune"
+const baselineOptions: Record<string, BaselineMode> = {
+  "--baseline": "check",
+  "--update-baseline": "update",
+  "--prune-baseline": "prune",
+}
+
+function within(dir: string, file: string) {
+  const rel = path.relative(dir, file)
+  return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
+}
 
 async function exists(file: string) {
   try {
@@ -49,6 +75,8 @@ export async function run(
     let maxWarnings = Infinity
     let doctor = false
     let hasMaxWarnings = false
+    let baselineMode: BaselineMode | undefined
+    let baselinePath = ""
     for (let index = 0; index < args.length; index++) {
       const arg = args[index]
       if (arg === "--help" || arg === "-h") {
@@ -70,7 +98,14 @@ export async function run(
         inputs.push(...args.slice(index + 1))
         break
       }
-      if (["--config", "--css", "--format", "--max-warnings"].includes(arg)) {
+      if (Object.hasOwn(baselineOptions, arg)) {
+        const value = args[++index]
+        if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}.`)
+        if (baselineMode)
+          throw new Error("Use only one of --baseline, --update-baseline, or --prune-baseline.")
+        baselineMode = baselineOptions[arg]
+        baselinePath = path.resolve(cwd, value)
+      } else if (["--config", "--css", "--format", "--max-warnings"].includes(arg)) {
         const value = args[++index]
         if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}.`)
         if (arg === "--config") configPath = path.resolve(cwd, value)
@@ -91,6 +126,15 @@ export async function run(
       throw new Error(
         "--doctor supports text setup reports only. Remove --format json or gitlab and --max-warnings, or run ordinary lint without --doctor.",
       )
+    if (doctor && baselineMode)
+      throw new Error("--doctor does not use a baseline. Remove the baseline option.")
+    if (baselineMode === "update" && (format !== "text" || hasMaxWarnings))
+      throw new Error(
+        "--update-baseline writes a baseline and reports no findings. Remove --format json or gitlab and --max-warnings.",
+      )
+    let baseline: Baseline | undefined
+    if (baselineMode === "check" || baselineMode === "prune")
+      baseline = await readBaseline(baselinePath)
     configPath ??= path.join(cwd, "selfix.config.ts")
     if (!configPath.endsWith(".ts"))
       throw new Error("Configuration must be a .ts file exporting a default config object.")
@@ -116,8 +160,9 @@ export async function run(
     if (!config.ui && shadcn.ui) fromShadcn.push("ui")
     const ignored = new Set(["node_modules", ".git", "dist", "coverage", ".nuxt", ".output"])
     const exclusions = (config.exclude ?? []).map(filePattern)
+    // Config-relative POSIX path, used by exclusions and baseline keys.
+    const keyOf = (file: string) => path.relative(configDir, file).split(path.sep).join("/")
     const excluded = (file: string, matchFiles = true) => {
-      const rel = path.relative(configDir, file).split(path.sep).join("/")
       if (
         path
           .relative(cwd, file)
@@ -127,18 +172,19 @@ export async function run(
         return true
       return (
         matchFiles &&
-        rel !== ".." &&
-        !rel.startsWith("../") &&
-        !path.isAbsolute(rel) &&
-        exclusions.some((pattern) => pattern.test(rel))
+        within(configDir, file) &&
+        exclusions.some((pattern) => pattern.test(keyOf(file)))
       )
     }
     const files = new Set<string>()
+    // Directories given as inputs (directly or by glob); baseline entries under them are checked.
+    const roots: string[] = []
     const visit = async (file: string, entryInfo?: Dirent): Promise<void> => {
       if (excluded(file, false)) return
       const info = entryInfo ?? (await stat(file))
       if (!info.isDirectory() && excluded(file)) return
       if (info.isDirectory()) {
+        if (!entryInfo) roots.push(file)
         for (const entry of await readdir(file, { withFileTypes: true })) {
           if (entry.isSymbolicLink()) continue
           if (entry.isDirectory() || entry.name.endsWith(".vue"))
@@ -223,21 +269,78 @@ export async function run(
     const diagnostics: Diagnostic[] = []
     for (const file of [...files].sort())
       diagnostics.push(...linter.lint(await readFile(file, "utf8"), file))
-    const errors = diagnostics.filter((item) => item.severity === "error").length
-    const warnings = diagnostics.length - errors
-    if (format === "json") io.out(`${JSON.stringify(diagnostics, null, 2)}\n`)
-    else if (format === "gitlab")
-      io.out(`${JSON.stringify(codeQuality(diagnostics, cwd), null, 2)}\n`)
-    else {
-      for (const item of diagnostics)
-        io.out(
-          `${path.relative(cwd, item.file)}:${item.line}:${item.column} ${item.severity} ${item.rule} ${describe(item)}\n`,
-        )
+    const location = (item: Diagnostic) =>
+      `${path.relative(cwd, item.file)}:${item.line}:${item.column} ${item.severity} ${item.rule} ${describe(item)}`
+    // A parse error hides a file's findings, so they are never recorded or counted as fixed.
+    const parseErrors = diagnostics.filter((item) => item.rule === "parse-error")
+    if (baselineMode === "update") {
+      if (parseErrors.length) {
+        for (const item of parseErrors) io.out(`${location(item)}\n`)
+        io.out("Baseline not written: fix parse errors first.\n")
+        return 1
+      }
+      await writeFile(baselinePath, formatBaseline(countFindings(diagnostics, keyOf)))
+      io.out(
+        `Wrote ${diagnostics.length} finding${diagnostics.length === 1 ? "" : "s"} to ${path.relative(cwd, baselinePath)}.\n`,
+      )
+      return 0
+    }
+    let reported = diagnostics
+    let suppressed = 0
+    let unused: UnusedEntry[] = []
+    if (baseline) {
+      // An entry is checked when its file was scanned, lies in a scanned directory, or no longer
+      // exists, so a partial run doesn't report entries for files outside its inputs.
+      const unparsed = new Set(parseErrors.map((item) => keyOf(item.file)))
+      const checked = new Set<string>()
+      for (const key of Object.keys(baseline)) {
+        if (unparsed.has(key)) continue
+        const file = path.resolve(configDir, key)
+        if (files.has(file) || roots.some((root) => within(root, file)) || !(await exists(file)))
+          checked.add(key)
+      }
+      const inScope = (key: string) => checked.has(key)
+      if (baselineMode === "prune") {
+        baseline = pruneBaseline(baseline, countFindings(diagnostics, keyOf), inScope)
+        await writeFile(baselinePath, formatBaseline(baseline))
+      }
+      ;({ reported, suppressed, unused } = applyBaseline(diagnostics, baseline, keyOf, inScope))
+    }
+    const stale = unused.map(
+      (entry) =>
+        `${path.relative(cwd, path.resolve(configDir, entry.key))}: unused baseline entry: ${entry.rule} allows ${entry.count}, found ${entry.found}.`,
+    )
+    const errors = reported.filter((item) => item.severity === "error").length
+    const warnings = reported.length - errors
+    if (format === "json")
+      io.out(
+        `${JSON.stringify(
+          baseline
+            ? {
+                diagnostics: reported,
+                suppressed,
+                unused: unused.map(({ key, ...entry }) => ({
+                  file: path.resolve(configDir, key),
+                  ...entry,
+                })),
+              }
+            : reported,
+          null,
+          2,
+        )}\n`,
+      )
+    else if (format === "gitlab") {
+      io.out(`${JSON.stringify(codeQuality(reported, cwd), null, 2)}\n`)
+      for (const line of stale) io.err(`selfix: ${line}\n`)
+    } else {
+      for (const item of reported) io.out(`${location(item)}\n`)
+      for (const line of stale) io.out(`${line}\n`)
       io.out(
         `Checked ${files.size} Vue file${files.size === 1 ? "" : "s"}: ${errors} error${errors === 1 ? "" : "s"}, ${warnings} warning${warnings === 1 ? "" : "s"}.\n`,
       )
+      if (baseline) io.out(`Baseline: ${suppressed} suppressed, ${unused.length} unused.\n`)
     }
-    return errors || warnings > maxWarnings ? 1 : 0
+    return errors || warnings > maxWarnings || unused.length ? 1 : 0
   } catch (error) {
     io.err(`selfix: ${error instanceof Error ? error.message : String(error)}\n`)
     return 2

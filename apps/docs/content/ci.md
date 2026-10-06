@@ -53,7 +53,7 @@ design-lint:
       codequality: gl-code-quality-report.json
 ```
 
-- Pass the same inputs and `--max-warnings` as your `lint:design` script. Use `pnpm exec` rather than `pnpm run`, which can print a script banner to stdout and corrupt the report.
+- Pass the same inputs, `--max-warnings`, and `--baseline` as your `lint:design` script. Use `pnpm exec` rather than `pnpm run`, which can print a script banner to stdout and corrupt the report.
 - `when: always` uploads the report when findings fail the job.
 - Report paths are relative to the directory selfix runs in, and GitLab expects them relative to the repository root. In a monorepo, run selfix from the root with the app's `--config` instead of `pnpm --filter`. See [GitLab Code Quality](cli.md#gitlab-code-quality).
 - On exit code `2`, the error goes to the job log and the report file is empty.

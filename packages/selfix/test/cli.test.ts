@@ -1159,3 +1159,274 @@ describe("GitLab Code Quality format", () => {
     expect(config.stderr).toContain("Unknown config")
   })
 })
+
+describe("baseline", () => {
+  const colors = (count: number) =>
+    `<template>\n${Array.from({ length: count }, () => '  <div class="bg-[#fff]" />').join("\n")}\n</template>`
+  async function baselined(files: Record<string, string>, baseline?: unknown) {
+    const dir = await project()
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      'export default { css: "theme.css", rules: { "no-arbitrary-values": "off" } }',
+    )
+    for (const [name, source] of Object.entries(files)) {
+      await mkdir(path.dirname(path.join(dir, name)), { recursive: true })
+      await writeFile(path.join(dir, name), source)
+    }
+    if (baseline !== undefined)
+      await writeFile(path.join(dir, "baseline.json"), JSON.stringify(baseline))
+    return dir
+  }
+
+  it("suppresses findings up to the recorded count and reports the rest", async () => {
+    const dir = await baselined(
+      { "src/Page.vue": colors(3) },
+      { "src/Page.vue": { "no-raw-colors": { count: 2 } } },
+    )
+    const result = await invoke(["--baseline", "baseline.json"], dir)
+    expect(result.stderr).toBe("")
+    expect(result.code).toBe(1)
+    const lines = result.stdout.split("\n")
+    expect(lines).toHaveLength(4)
+    expect(lines[0]).toMatch(/^src[/\\]Page\.vue:4:\d+ error no-raw-colors /)
+    expect(lines.slice(1)).toEqual([
+      "Checked 1 Vue file: 1 error, 0 warnings.",
+      "Baseline: 2 suppressed, 0 unused.",
+      "",
+    ])
+  })
+
+  it("writes a deterministic baseline of errors and warnings that a later check accepts", async () => {
+    const dir = await baselined({
+      "src/b/Page.vue": colors(2),
+      "src/a/Page.vue": '<template><div class="bg-[#fff] flex-cols" /></template>',
+    })
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      'export default { css: "theme.css", rules: { "no-arbitrary-values": "off", "no-unknown-classes": "warn" } }',
+    )
+    const first = await invoke(["--update-baseline", "baseline.json"], dir)
+    expect(first).toEqual({ code: 0, stdout: "Wrote 4 findings to baseline.json.\n", stderr: "" })
+    const written = await readFile(path.join(dir, "baseline.json"), "utf8")
+    expect(written).toBe(
+      `${JSON.stringify(
+        {
+          "src/a/Page.vue": { "no-raw-colors": { count: 1 }, "no-unknown-classes": { count: 1 } },
+          "src/b/Page.vue": { "no-raw-colors": { count: 2 } },
+        },
+        null,
+        2,
+      )}\n`,
+    )
+    expect((await invoke(["--update-baseline", "baseline.json"], dir)).code).toBe(0)
+    expect(await readFile(path.join(dir, "baseline.json"), "utf8")).toBe(written)
+    expect(await invoke(["--baseline", "baseline.json", "--max-warnings", "0"], dir)).toEqual({
+      code: 0,
+      stdout: "Checked 2 Vue files: 0 errors, 0 warnings.\nBaseline: 4 suppressed, 0 unused.\n",
+      stderr: "",
+    })
+  })
+
+  it("counts only unsuppressed warnings toward --max-warnings", async () => {
+    const dir = await baselined(
+      { "Page.vue": '<template><div class="flex-cols" /><div class="flex-rows" /></template>' },
+      { "Page.vue": { "no-unknown-classes": { count: 1 } } },
+    )
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      'export default { css: "theme.css", rules: { "no-unknown-classes": "warn" } }',
+    )
+    expect((await invoke(["--baseline", "baseline.json", "--max-warnings", "1"], dir)).code).toBe(0)
+    const over = await invoke(["--baseline", "baseline.json", "--max-warnings", "0"], dir)
+    expect(over.code).toBe(1)
+    expect(over.stdout).toContain("0 errors, 1 warning.")
+  })
+
+  it("never records or suppresses parse errors", async () => {
+    const dir = await baselined({
+      "Broken.vue": "<template><div></template>",
+      "Page.vue": colors(1),
+    })
+    await writeFile(path.join(dir, "baseline.json"), "{}\n")
+    const update = await invoke(["--update-baseline", "baseline.json"], dir)
+    expect(update.code).toBe(1)
+    expect(update.stdout).toMatch(
+      /^Broken\.vue:\d+:\d+ error parse-error .*\nBaseline not written: fix parse errors first\.\n$/,
+    )
+    expect(await readFile(path.join(dir, "baseline.json"), "utf8")).toBe("{}\n")
+    const check = await invoke(["--baseline", "baseline.json"], dir)
+    expect(check.code).toBe(1)
+    expect(check.stdout).toContain("error parse-error")
+    await writeFile(
+      path.join(dir, "baseline.json"),
+      JSON.stringify({ "Broken.vue": { "parse-error": { count: 1 } } }),
+    )
+    const invalid = await invoke(["--baseline", "baseline.json"], dir)
+    expect(invalid.code).toBe(2)
+    expect(invalid.stderr).toContain('unknown rule "parse-error" in Broken.vue')
+  })
+
+  it("reports unused entries for fixed, renamed, and removed files but not unscanned ones", async () => {
+    const dir = await baselined(
+      { "src/Fixed.vue": colors(1), "src/Renamed.vue": colors(1), "other/Kept.vue": colors(1) },
+      {
+        "src/Fixed.vue": { "no-raw-colors": { count: 3 } },
+        "src/Old.vue": { "no-raw-colors": { count: 1 } },
+        "src/Removed.vue": { "no-raw-colors": { count: 2 } },
+        "other/Kept.vue": { "no-raw-colors": { count: 1 } },
+      },
+    )
+    const text = await invoke(["src", "--baseline", "baseline.json"], dir)
+    expect(text.code).toBe(1)
+    const lines = text.stdout.split("\n")
+    expect(lines[0]).toMatch(/^src[/\\]Renamed\.vue:2:\d+ error no-raw-colors /)
+    expect(lines.slice(1)).toEqual([
+      `${path.join("src", "Fixed.vue")}: unused baseline entry: no-raw-colors allows 3, found 1.`,
+      `${path.join("src", "Old.vue")}: unused baseline entry: no-raw-colors allows 1, found 0.`,
+      `${path.join("src", "Removed.vue")}: unused baseline entry: no-raw-colors allows 2, found 0.`,
+      "Checked 2 Vue files: 1 error, 0 warnings.",
+      "Baseline: 1 suppressed, 3 unused.",
+      "",
+    ])
+    const onlyUnused = await invoke(["src/Fixed.vue", "--baseline", "baseline.json"], dir)
+    expect(onlyUnused.code).toBe(1)
+    expect(onlyUnused.stdout).toContain(
+      "0 errors, 0 warnings.\nBaseline: 1 suppressed, 3 unused.\n",
+    )
+    const json = await invoke(["src", "--baseline", "baseline.json", "--format", "json"], dir)
+    expect(json.code).toBe(1)
+    const report = JSON.parse(json.stdout)
+    expect(report.suppressed).toBe(1)
+    expect(report.diagnostics).toEqual([
+      expect.objectContaining({ file: path.join(dir, "src/Renamed.vue"), rule: "no-raw-colors" }),
+    ])
+    expect(report.unused).toEqual([
+      { file: path.join(dir, "src/Fixed.vue"), rule: "no-raw-colors", count: 3, found: 1 },
+      { file: path.join(dir, "src/Old.vue"), rule: "no-raw-colors", count: 1, found: 0 },
+      { file: path.join(dir, "src/Removed.vue"), rule: "no-raw-colors", count: 2, found: 0 },
+    ])
+    const gitlab = await invoke(["src", "--baseline", "baseline.json", "--format", "gitlab"], dir)
+    expect(gitlab.code).toBe(1)
+    expect(JSON.parse(gitlab.stdout)).toEqual([
+      expect.objectContaining({
+        check_name: "no-raw-colors",
+        location: { path: "src/Renamed.vue", lines: { begin: 2 } },
+      }),
+    ])
+    expect(gitlab.stderr).toContain(
+      `selfix: ${path.join("src", "Old.vue")}: unused baseline entry: no-raw-colors allows 1, found 0.\n`,
+    )
+  })
+
+  it("prunes unused counts without adding new findings, then checks with the result", async () => {
+    const dir = await baselined(
+      { "src/Fixed.vue": colors(1), "src/New.vue": colors(1), "other/Kept.vue": colors(1) },
+      {
+        "src/Fixed.vue": { "no-raw-colors": { count: 3 } },
+        "src/Removed.vue": { "no-raw-colors": { count: 2 } },
+        "other/Kept.vue": { "no-raw-colors": { count: 5 } },
+      },
+    )
+    const result = await invoke(["src", "--prune-baseline", "baseline.json"], dir)
+    expect(result.code).toBe(1)
+    expect(result.stdout).toMatch(/^src[/\\]New\.vue:2:\d+ error no-raw-colors /)
+    expect(result.stdout).toContain("Baseline: 1 suppressed, 0 unused.\n")
+    expect(JSON.parse(await readFile(path.join(dir, "baseline.json"), "utf8"))).toEqual({
+      "other/Kept.vue": { "no-raw-colors": { count: 5 } },
+      "src/Fixed.vue": { "no-raw-colors": { count: 1 } },
+    })
+  })
+
+  it("reports entries for excluded files inside a scanned directory", async () => {
+    const dir = await baselined(
+      { "src/Page.vue": colors(1), "src/Skip.vue": colors(1) },
+      {
+        "src/Page.vue": { "no-raw-colors": { count: 1 } },
+        "src/Skip.vue": { "no-raw-colors": { count: 1 } },
+      },
+    )
+    await writeFile(
+      path.join(dir, "selfix.config.ts"),
+      'export default { css: "theme.css", exclude: ["src/Skip.vue"], rules: { "no-arbitrary-values": "off" } }',
+    )
+    expect((await invoke(["src/Page.vue", "--baseline", "baseline.json"], dir)).code).toBe(0)
+    const result = await invoke(["src", "--baseline", "baseline.json"], dir)
+    expect(result.code).toBe(1)
+    expect(result.stdout).toContain(
+      `${path.join("src", "Skip.vue")}: unused baseline entry: no-raw-colors allows 1, found 0.\n`,
+    )
+    expect((await invoke(["src", "--prune-baseline", "baseline.json"], dir)).code).toBe(0)
+    expect(JSON.parse(await readFile(path.join(dir, "baseline.json"), "utf8"))).toEqual({
+      "src/Page.vue": { "no-raw-colors": { count: 1 } },
+    })
+  })
+
+  it("keeps entries for files that fail to parse", async () => {
+    const dir = await baselined(
+      { "Broken.vue": "<template><div></template>" },
+      { "Broken.vue": { "no-raw-colors": { count: 2 } } },
+    )
+    const check = await invoke(["--baseline", "baseline.json"], dir)
+    expect(check.code).toBe(1)
+    expect(check.stdout).toContain("error parse-error")
+    expect(check.stdout).toContain("Baseline: 0 suppressed, 0 unused.\n")
+    expect((await invoke(["--prune-baseline", "baseline.json"], dir)).code).toBe(1)
+    expect(JSON.parse(await readFile(path.join(dir, "baseline.json"), "utf8"))).toEqual({
+      "Broken.vue": { "no-raw-colors": { count: 2 } },
+    })
+  })
+
+  it("keys entries by paths relative to the config directory", async () => {
+    const dir = await baselined({ "app/src/Page.vue": colors(2) })
+    await writeFile(
+      path.join(dir, "app/selfix.config.ts"),
+      'export default { css: "../theme.css", rules: { "no-arbitrary-values": "off" } }',
+    )
+    const args = ["app/src", "--config", "app/selfix.config.ts"]
+    expect((await invoke([...args, "--update-baseline", "baseline.json"], dir)).code).toBe(0)
+    expect(JSON.parse(await readFile(path.join(dir, "baseline.json"), "utf8"))).toEqual({
+      "src/Page.vue": { "no-raw-colors": { count: 2 } },
+    })
+    expect((await invoke([...args, "--baseline", "baseline.json"], dir)).code).toBe(0)
+  })
+
+  it("fails on a missing or invalid baseline and rejects conflicting options", async () => {
+    const dir = await baselined({ "Page.vue": colors(1) })
+    for (const option of ["--baseline", "--prune-baseline"]) {
+      const missing = await invoke([option, "baseline.json"], dir)
+      expect(missing.code).toBe(2)
+      expect(missing.stderr).toContain(`Baseline not found: ${path.join(dir, "baseline.json")}`)
+    }
+    for (const content of [
+      "{",
+      "[]",
+      '{"Page.vue":{"no-raw-colors":2}}',
+      '{"Page.vue":{"no-raw-colors":{"count":0}}}',
+      '{"./Page.vue":{"no-raw-colors":{"count":1}}}',
+      '{"src\\\\Page.vue":{"no-raw-colors":{"count":1}}}',
+      '{"__proto__":{"no-raw-colors":{"count":1}}}',
+      '{"/abs/Page.vue":{"no-raw-colors":{"count":1}}}',
+    ]) {
+      await writeFile(path.join(dir, "baseline.json"), content)
+      const invalid = await invoke(["--baseline", "baseline.json"], dir)
+      expect(invalid.code).toBe(2)
+      expect(invalid.stderr).toContain("Invalid baseline")
+    }
+    for (const args of [
+      ["--baseline", "a.json", "--update-baseline", "b.json"],
+      ["--baseline", "a.json", "--prune-baseline", "a.json"],
+      ["--doctor", "--baseline", "a.json"],
+      ["--update-baseline", "a.json", "--doctor"],
+      ["--update-baseline", "a.json", "--format", "json"],
+      ["--update-baseline", "a.json", "--max-warnings", "0"],
+      ["--baseline"],
+      ["constructor", "Page.vue"],
+      ["toString"],
+    ]) {
+      const rejected = await invoke(args, dir)
+      expect(rejected.code).toBe(2)
+      expect(rejected.stdout).toBe("")
+    }
+    expect(await readFile(path.join(dir, "Page.vue"), "utf8")).toBe(colors(1))
+  })
+})

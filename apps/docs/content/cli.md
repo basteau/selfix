@@ -36,8 +36,9 @@ These use the same [patterns as overrides](configuration.md#per-file-rule-overri
 
 | Path                                                                           | Relative to                                         |
 | ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| Inputs, `--config`, `--css`                                                    | Current working directory.                          |
+| Inputs, `--config`, `--css`, baseline files                                    | Current working directory.                          |
 | Config `css`, `components.json`, `cssAliases`, path exclusions, file overrides | Config directory.                                   |
+| Paths inside a baseline file                                                   | Config directory.                                   |
 | Component discovery                                                            | Config directory, unless `project.root` changes it. |
 
 The CLI doesn't search parent directories for a config. A config is required even with `--css`.
@@ -51,6 +52,9 @@ The CLI doesn't search parent directories for a config. A config is required eve
 | `--css <file>`                | Override the config's CSS entry.                                           |
 | `--format text\|json\|gitlab` | Choose output format. Defaults to `text`.                                  |
 | `--max-warnings <n>`          | Fail when warnings exceed this non-negative integer. Unlimited by default. |
+| `--baseline <file>`           | Suppress known findings. See [Baseline](#baseline).                        |
+| `--update-baseline <file>`    | Record current findings in a baseline file.                                |
+| `--prune-baseline <file>`     | Lower baseline counts to current findings, then check.                     |
 | `--help`, `-h`                | Print usage.                                                               |
 | `--version`                   | Print the installed version.                                               |
 | `--`                          | Treat all remaining arguments as inputs.                                   |
@@ -71,7 +75,7 @@ Use JSON when another tool needs the findings:
 pnpm exec selfix src --format json
 ```
 
-JSON returns a [diagnostic array](api.md#diagnostic-fields) with absolute paths and no summary; a clean check returns `[]`. Text paths are relative to the working directory.
+JSON returns a [diagnostic array](api.md#diagnostic-fields) with absolute paths and no summary; a clean check returns `[]`. With a [baseline](#baseline), it returns an object instead. Text paths are relative to the working directory.
 
 Findings go to stdout. Loading, config, and input failures go to stderr as `selfix: ...`, even in JSON and GitLab mode, and print no partial report.
 
@@ -114,12 +118,66 @@ pnpm exec selfix apps/web/src --config apps/web/selfix.config.ts --format gitlab
 
 Fingerprints don't include line numbers, including the parser position in a script parse error, so a finding keeps its fingerprint when unrelated edits move it. Identical findings in one file are numbered in source order. Moving or renaming the file, or changing the rule's message, gives the finding a new fingerprint.
 
+## Baseline
+
+A baseline file records existing findings as counts per file and rule. A check against it suppresses up to that many findings and reports the rest, so new findings fail while old ones remain. See [adoption](adoption.md#record-existing-findings-in-a-baseline) for the workflow.
+
+```sh
+pnpm exec selfix src --update-baseline selfix-baseline.json
+pnpm exec selfix src --baseline selfix-baseline.json
+```
+
+Keys are config-relative paths with `/` separators:
+
+```json
+{
+  "src/Page.vue": {
+    "no-raw-colors": { "count": 3 }
+  }
+}
+```
+
+| Option                     | Behavior                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--baseline <file>`        | Suppress the first `count` findings of each file and rule in source order. Report the rest and unused entries.      |
+| `--update-baseline <file>` | Replace the file with the current errors and warnings, and exit `0`. With parse errors, write nothing and exit `1`. |
+| `--prune-baseline <file>`  | Lower counts above the current findings and remove entries that reach zero, then check like `--baseline`.           |
+
+selfix can't tell which finding in a file is new. With 3 recorded and 4 current findings, it reports the last one.
+
+An entry is unused when its file has fewer findings than its count. selfix lists unused entries and exits `1`, so a fixed finding can't make room for a new one. Run `--prune-baseline` to lower the counts. Renaming a file leaves its old entry unused and reports its findings as new.
+
+selfix checks an entry only when its file is an input, lies in an input directory, or no longer exists. A run on `src/checkout` ignores entries for other files, while entries for excluded files under `src/checkout` become unused. `--update-baseline` replaces the whole file with findings from the current inputs, so run it with the same inputs as your check.
+
+Parse errors are never recorded or suppressed. `--baseline` and `--prune-baseline` leave the entries of a file that fails to parse untouched. Config, theme, and input failures still exit `2` and never write the file. A missing or malformed baseline file is an input failure.
+
+Text output adds a summary line:
+
+```text
+Checked 3 Vue files: 1 error, 0 warnings.
+Baseline: 4 suppressed, 0 unused.
+```
+
+JSON output becomes an object with the unsuppressed diagnostics:
+
+```json
+{
+  "diagnostics": [],
+  "suppressed": 4,
+  "unused": [{ "file": "/app/src/Page.vue", "rule": "no-raw-colors", "count": 3, "found": 1 }]
+}
+```
+
+GitLab output lists only unsuppressed findings and writes unused entries to stderr. `--max-warnings` counts only unsuppressed warnings.
+
+Use one baseline option per run. `--doctor` rejects all three, and `--update-baseline` rejects `--format json|gitlab` and `--max-warnings`.
+
 ## Exit codes
 
 | Code | Meaning                                                                     |
 | ---- | --------------------------------------------------------------------------- |
 | `0`  | No errors; warnings within the limit, if set. Also used for help/version.   |
-| `1`  | Rule errors, parse errors, or too many warnings.                            |
+| `1`  | Rule errors, parse errors, too many warnings, or unused baseline entries.   |
 | `2`  | Configuration, theme, discovery, or input failure, including an empty scan. |
 
 For gradual rollout, see [warning limits](adoption.md#set-a-warning-limit).
