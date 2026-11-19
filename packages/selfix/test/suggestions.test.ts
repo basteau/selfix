@@ -131,10 +131,10 @@ it("honors rule allowances and disabled rules without suppressing independent fi
   }
 })
 
-it("preserves configured prop and slot metadata on spelling findings", async () => {
+it("preserves ui prop and slot metadata on spelling findings", async () => {
   const linter = await createLinter({
     css,
-    config: { rules, classProps: [{ pattern: "^Button$", props: { ui: "slot-map" } }] },
+    config: { rules, components: ["^Button$"] },
   })
   const findings = linter.lint("<template><Button :ui=\"{base: 'flex-cols'}\" /></template>")
   expect(findings).toEqual([
@@ -201,7 +201,8 @@ it("withholds a value suggestion that another enabled rule would report", async 
   const [raw] = linter.lint('<template><div class="text-[#fff]" /></template>')
   expect(raw).toMatchObject({ rule: "no-arbitrary-values" })
   expect(raw?.suggestions).toBeUndefined()
-  const button = linter.lint(
+  const protecting = await createLinter({ css, config: { components: ["^Button$"] } })
+  const button = protecting.lint(
     '<script setup>import { Button } from "@/components/ui"</script><template><Button class="p-[16px]" /></template>',
   )
   expect(button.map((item) => [item.rule, item.suggestions])).toEqual([

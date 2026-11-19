@@ -6,11 +6,11 @@ description: Reports classes your Tailwind CSS cannot generate.
 Reports classes that neither Tailwind nor your loaded CSS defines. selfix asks your Tailwind compiler about every class.
 
 ```vue
-<!-- Reported: misspelled primary. -->
-<div class="bg-prmary" />
+<!-- Reported: misspelled muted. -->
+<p class="text-mutd" />
 
 <!-- Allowed. -->
-<div class="bg-primary" />
+<p class="text-muted" />
 ```
 
 ## Fix a finding
@@ -18,10 +18,10 @@ Reports classes that neither Tailwind nor your loaded CSS defines. selfix asks y
 1. Check the spelling. When exactly one valid class is one edit away, selfix suggests it:
 
    ```text
-   src/Page.vue:3:8 error no-unknown-classes Tailwind cannot generate "flex-cols". Check the spelling and the configured CSS theme. Did you mean "flex-col"?
+   app/pages/index.vue:3:8 error no-unknown-classes Tailwind cannot generate "text-mutd". Check the spelling and the configured CSS theme. Did you mean "text-muted"?
    ```
 
-2. If the class comes from another stylesheet, import that stylesheet from your configured `css` entry. See [Themes](themes.md).
+2. If the class comes from another stylesheet, import that stylesheet from your CSS entry. See [Themes](themes.md).
 3. If a system outside your CSS supplies the class, allow it: `allow: ["external-widget"]`. This skips this rule only.
 
 ## Suggestions

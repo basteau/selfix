@@ -8,3 +8,5 @@ packages/selfix/README.md
 .blume-verify/
 .DS_Store
 .claude/launch.json
+apps/playground/auto-imports.d.ts
+apps/playground/components.d.ts

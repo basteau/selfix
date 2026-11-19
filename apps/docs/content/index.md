@@ -1,19 +1,25 @@
 ---
 title: Introduction
-description: Catch styling drift in Vue 3 and Tailwind CSS 4 projects.
+description: Catch styling drift in Nuxt UI projects.
 ---
 
-selfix checks the classes in your Vue templates against your components and your Tailwind theme. Run it locally, in CI, or after a coding agent edits your UI.
+selfix checks the classes in your Vue templates against Nuxt UI's components and the theme your app generated. Run it locally, in CI, or after a coding agent edits your UI. It needs no configuration.
 
 ```vue
-<!-- Reported: changes the Button's padding. -->
-<Button class="p-4">Save</Button>
+<!-- Reported: restyles the button. Use its size prop instead. -->
+<UButton class="p-4">Save</UButton>
+<UButton :ui="{ label: 'font-bold' }">Save</UButton>
 
-<!-- Allowed: places the Button on the page. -->
-<Button class="mt-4 w-full">Save</Button>
+<!-- Reported: a palette color and a native element. -->
+<p class="text-gray-500">Saved.</p>
+<button>Save</button>
+
+<!-- Allowed: props, theme colors, and layout classes. -->
+<UButton size="lg" class="mt-4 w-full">Save</UButton>
+<p class="text-muted">Saved.</p>
 ```
 
-Each protected component has a contract, the set of classes a page may add. The default contract allows layout classes such as margin and width. selfix also reports raw colors, bracket values, inline styles, unknown classes, class names it cannot read, and components you ban.
+Each Nuxt UI component has a contract, the set of classes a page may add in `class` and in the `ui` prop. The default contract allows layout classes such as margin and width. A finding names the props your theme offers instead. selfix also reports raw colors, bracket values, inline styles, unknown classes, class names it cannot read, and components you ban.
 
 ## Start
 
@@ -23,18 +29,18 @@ Each protected component has a contract, the set of classes a page may add. The 
 
 ## Recipes
 
-Recipes cover [shadcn-vue](shadcn-vue.md), [Nuxt and Nuxt UI](nuxt.md), and [running in CI](ci.md).
+Recipes cover [Nuxt](nuxt.md), [Vue with Vite](vue.md), and [running in CI](ci.md).
 
 ## Understand and look up
 
 - [How selfix works](how-it-works.md). The steps from a Vue file to a finding.
 - [Rules](rules.md). What each rule reports and how to fix it.
-- [Configuration](configuration.md). Components, contracts, overrides, and messages.
-- [Themes](themes.md). Load your Tailwind CSS and custom classes.
+- [Configuration](configuration.md). Your own components, contracts, overrides, and messages.
+- [Themes](themes.md). The stylesheet and the generated Nuxt UI theme.
 - [What selfix can read](analysis.md). Supported bindings, helpers, and limits.
 - [CLI](cli.md). Commands, output, and exit codes.
 - [API](api.md). Check source and read findings from Node.
 - [Troubleshooting](troubleshooting.md). Fix unexpected results and loading errors.
 - [FAQ](faq.md). Short answers about requirements and scope.
 
-selfix is open source under the [MIT license](https://github.com/basteau/selfix/blob/main/LICENSE) and inspired by [shadcn/lint](https://github.com/shadcn-ui/lint). The [repository](https://github.com/basteau/selfix) has the source. To contribute, see [Development](maintaining.md).
+selfix is open source under the [MIT license](https://github.com/basteau/selfix/blob/main/LICENSE) and inspired by [shadcn/lint](https://github.com/shadcn-ui/lint), which is the better choice for a Tailwind project without Nuxt UI. The [repository](https://github.com/basteau/selfix) has the source. To contribute, see [Development](maintaining.md).

@@ -1,12 +1,5 @@
 // Findings shown in the landing-page hero; a trailing … marks a shortened message. landing-example.test.ts lints each
-// source with this theme and checks the displayed location, message, and fix.
-export const theme = `@import "tailwindcss";
-
-@theme {
-  --color-primary: oklch(0.55 0.15 160);
-  --color-danger: oklch(0.58 0.2 25);
-}`
-
+// source in a Nuxt UI project and checks the displayed location, message, and fix.
 export interface LandingExample {
   id: string
   label: string
@@ -24,22 +17,16 @@ export interface LandingExample {
   fixed: string
 }
 
-const button = `<script setup lang="ts">
-import { Button } from "@/components/ui"
-</script>
-
-<template>
-  <Button class="p-4">Save</Button>
+const button = `<template>
+  <UButton class="p-4">Save</UButton>
 </template>`
 
 const color = `<template>
-  <p class="text-red-600">Payment failed</p>
+  <p class="text-gray-500">Saved a minute ago</p>
 </template>`
 
-const typo = `<template>
-  <ul class="flex flex-cols gap-2">
-    <li>Draft</li>
-  </ul>
+const native = `<template>
+  <button type="submit">Save</button>
 </template>`
 
 export const examples: LandingExample[] = [
@@ -48,42 +35,44 @@ export const examples: LandingExample[] = [
     label: "Override",
     source: button,
     token: "p-4",
-    location: "6:11",
+    location: "2:12",
     rule: "no-restyle",
-    message: `"p-4" is not allowed on <Button>: spacing changes are outside the component's contract. …`,
+    message: `"p-4" is not allowed on <UButton>: the component owns its spacing. …`,
     detail:
-      "Remove this override. Check the component's documented spacing props and its contract before changing surrounding layout.",
-    help: "The Button owns its padding. The page still controls where it sits.",
-    fixLabel: "Allowed layout",
-    fix: `<Button class="mt-4 w-full">Save</Button>`,
-    fixed: button.replace('class="p-4"', 'class="mt-4 w-full"'),
+      "Use size (xs, sm, md, lg, xl), or restyle it for the whole app under ui.button in app.config.ts.",
+    help: "Nuxt UI owns the button's padding. The finding lists the sizes your theme has.",
+    fixLabel: "A size from your theme",
+    fix: `<UButton size="lg" class="mt-4 w-full">Save</UButton>`,
+    fixed: button.replace('class="p-4"', 'size="lg" class="mt-4 w-full"'),
   },
   {
     id: "color",
     label: "Raw color",
     source: color,
-    token: "text-red-600",
+    token: "text-gray-500",
     location: "2:6",
     rule: "no-raw-colors",
-    message: `Replace "text-red-600" with a semantic theme color (danger, primary).`,
-    help: "Palette colors stay fixed when you change your theme. Theme colors follow it.",
+    message: `Replace "text-gray-500" with a theme color such as text-dimmed, text-muted, …`,
+    help: "Palette colors ignore your theme. Nuxt UI's semantic colors follow it, in light and dark mode.",
     fixLabel: "Theme color",
-    fix: `<p class="text-danger">Payment failed</p>`,
-    fixed: color.replace("text-red-600", "text-danger"),
+    fix: `<p class="text-muted">Saved a minute ago</p>`,
+    fixed: color.replace("text-gray-500", "text-muted"),
   },
   {
-    id: "typo",
-    label: "Typo",
-    source: typo,
-    token: "flex-cols",
-    location: "2:7",
-    rule: "no-unknown-classes",
-    message: `Tailwind cannot generate "flex-cols". …`,
-    suggestion: "flex-col",
-    help: "selfix asks Tailwind whether each class exists and suggests a fix when only one class is a close match.",
-    fixLabel: "Suggested fix",
-    fix: `<ul class="flex flex-col gap-2">`,
-    fixed: typo.replace("flex-cols", "flex-col"),
+    id: "native",
+    label: "Native element",
+    source: native,
+    token: "button",
+    location: "2:3",
+    rule: "prefer-ui-components",
+    message: "Use <UButton> instead of a native <button>, so it follows the design system.",
+    help: "A native button skips your theme. selfix names the Nuxt UI component your installed version ships.",
+    fixLabel: "Nuxt UI component",
+    fix: `<UButton type="submit">Save</UButton>`,
+    fixed: native.replace(
+      '<button type="submit">Save</button>',
+      '<UButton type="submit">Save</UButton>',
+    ),
   },
 ]
 
@@ -98,21 +87,27 @@ export interface RuleExample {
 export const rules: RuleExample[] = [
   {
     name: "no-restyle",
-    summary: "Pages can position a component but not restyle it.",
-    bad: `<Button class="p-4">`,
-    good: `<Button class="mt-4">`,
+    summary: "Pages can position a Nuxt UI component but not restyle it, in class or ui.",
+    bad: `<UButton class="p-4">`,
+    good: `<UButton size="lg">`,
+  },
+  {
+    name: "prefer-ui-components",
+    summary: "Native elements give way to the Nuxt UI component that replaces them.",
+    bad: "<button>",
+    good: "<UButton>",
   },
   {
     name: "no-raw-colors",
     summary: "Colors come from your theme, not the palette or hex values.",
-    bad: "bg-red-500",
-    good: "bg-danger",
+    bad: "text-gray-500",
+    good: "text-muted",
   },
   {
     name: "no-unknown-classes",
-    summary: "Every class must exist in your Tailwind CSS.",
-    bad: "bg-prmary",
-    good: "bg-primary",
+    summary: "Every class must exist in your theme. A clear typo gets a suggestion.",
+    bad: "text-mutd",
+    good: "text-muted",
   },
   {
     name: "no-arbitrary-values",
@@ -136,6 +131,6 @@ export const rules: RuleExample[] = [
     name: "no-restricted-components",
     summary: "selfix reports components you ban and names the replacement you set.",
     bad: "<OldButton>",
-    good: "<Button>",
+    good: "<UButton>",
   },
 ]

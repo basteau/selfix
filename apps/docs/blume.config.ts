@@ -5,7 +5,7 @@ import { markdownLinks } from "./markdown-links.js"
 export default defineConfig({
   title: "selfix",
   description:
-    "Lint Vue 3 templates against your components and Tailwind CSS 4 theme. selfix catches overrides, raw colors, and typos before they ship.",
+    "Lint Vue templates against Nuxt UI's components and your generated theme. selfix catches restyles, raw colors, and native elements before they ship.",
   logo: { image: "/logo.svg", text: "selfix" },
   content: { root: "content" },
   basePath: "/docs",
@@ -33,7 +33,7 @@ export default defineConfig({
         { name: "Spline Sans", src: "public/fonts/spline-sans/SplineSans[wght].ttf", weight: 500 },
       ],
       logo: "public/logo.svg",
-      titles: { "/": "selfix, the design-system linter for Vue and Tailwind" },
+      titles: { "/": "selfix, the design-system linter for Nuxt UI" },
       palette: {
         accent: "#42b883",
         background: "#ffffff",
@@ -48,7 +48,7 @@ export default defineConfig({
     sidebar: [
       "/",
       { label: "Get started", items: ["/getting-started", "/adoption", "/agent-setup"] },
-      { label: "Recipes", items: ["/shadcn-vue", "/nuxt", "/ci"] },
+      { label: "Recipes", items: ["/nuxt", "/vue", "/ci"] },
       {
         label: "Guides",
         items: ["/how-it-works", "/themes", "/analysis", "/troubleshooting", "/faq"],
@@ -58,6 +58,7 @@ export default defineConfig({
         items: [
           "/rules",
           "/no-restyle",
+          "/prefer-ui-components",
           "/no-raw-colors",
           "/no-unknown-classes",
           "/no-arbitrary-values",

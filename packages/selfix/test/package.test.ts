@@ -75,7 +75,8 @@ it("runs the declared executable through an npm-style symlink", () => {
 
 it("publishes only the two requested consumer peer dependencies", () => {
   expect(pkg.dependencies).toBeUndefined()
-  expect(Object.keys(pkg.peerDependencies).sort()).toEqual(["tailwindcss", "vue"])
+  expect(Object.keys(pkg.peerDependencies).sort()).toEqual(["@nuxt/ui", "tailwindcss", "vue"])
+  expect(pkg.peerDependenciesMeta).toEqual({ "@nuxt/ui": { optional: true } })
 })
 
 it("reports a missing Vue compiler capability with upgrade guidance", () => {

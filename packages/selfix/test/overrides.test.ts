@@ -132,14 +132,13 @@ it("applies matching entries in order, preserves severity-only options, and upda
   ])
 })
 
-it("matches normalized filenames relative to root, independent of CSS and discovery roots", async () => {
+it("matches normalized filenames relative to root, independent of the CSS base", async () => {
   const configBase = path.join(process.cwd(), "virtual-project")
   const linter = await createLinter({
     css,
     cssBase: process.cwd(),
     root: configBase,
     config: {
-      project: false,
       overrides: [
         { files: ["./src/Author?.vue", "component.vue"], rules: { "no-inline-styles": "off" } },
       ],
@@ -223,8 +222,7 @@ it.each([
   [{}, ["p-4"], "base"],
   [{ allow: [] }, ["p-4", "m-4"], "base"],
   [{ deny: [] }, [], "base"],
-  [{ message: { spacing: "spacing" } }, ["p-4"], "spacing"],
-  [{ message: {} }, ["p-4"], "is denied"],
+  [{ message: "spacing" }, ["p-4"], "spacing"],
 ])(
   "updates option fields without dropping unrelated restrictions: %j",
   async (options, tokens, message) => {
@@ -233,10 +231,7 @@ it.each([
       config: {
         components: ["^Button$"],
         rules: {
-          "no-restyle": [
-            "error",
-            { allow: ["spacing", "layout"], deny: ["p-4"], message: { default: "base" } },
-          ],
+          "no-restyle": ["error", { allow: ["spacing", "layout"], deny: ["p-4"], message: "base" }],
         },
         overrides: [{ files: ["Page.vue"], rules: { "no-restyle": ["warn", options] } }],
       },
@@ -276,22 +271,23 @@ it("replaces contract lists as a unit and allows explicit clearing", async () =>
   expect(linter.lint(source, "Clear.vue").map((d) => d.className)).toEqual(["p-4", "rounded-lg"])
 })
 
-it("replaces message maps instead of merging their fallback messages", async () => {
+it("replaces the rule message for selected files", async () => {
   const linter = await createLinter({
     css,
     config: {
       components: ["^Button$"],
-      rules: { "no-restyle": ["error", { message: { default: "inherited fallback" } }] },
+      rules: { "no-restyle": ["error", { message: "inherited" }] },
       overrides: [
         {
           files: ["Page.vue"],
-          rules: { "no-restyle": ["warn", { message: { spacing: "use a spacing prop" } }] },
+          rules: { "no-restyle": ["warn", { message: "use a {{category}} prop" }] },
         },
       ],
     },
   })
   const findings = linter.lint('<template><Button class="p-4 rounded-lg" /></template>', "Page.vue")
-  expect(findings[0].message).toBe("use a spacing prop")
-  expect(findings[1].message).toContain("shape changes are outside")
-  expect(findings[1].message).not.toContain("inherited fallback")
+  expect(findings.map(({ message }) => message)).toEqual(["use a spacing prop", "use a shape prop"])
+  expect(linter.lint('<template><Button class="p-4" /></template>', "Other.vue")[0].message).toBe(
+    "inherited",
+  )
 })

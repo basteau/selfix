@@ -3,7 +3,7 @@ title: Run in CI
 description: Fail pull requests that add styling drift.
 ---
 
-Run your [`lint:design` script](adoption.md) in CI, so CI and your machine enforce the same rules and warning limit.
+Run your [`lint:design` script](adoption.md) in CI, so CI and your machine enforce the same rules and warning limit. Prepare the app first, so the generated Nuxt UI theme exists.
 
 ## GitHub Actions
 
@@ -26,12 +26,13 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec nuxt prepare
       - run: pnpm run lint:design
 ```
 
 - `pnpm/action-setup` reads the pnpm version from the `packageManager` field in `package.json`. Without that field, set `with: version:` on the action.
 - In a monorepo, run the app's script with `pnpm --filter <app> run lint:design`.
-- For Nuxt, add `- run: pnpm exec nuxt prepare` before the check. See [Nuxt](nuxt.md).
+- In a Vue app, replace `nuxt prepare` with your build. See [Vue with Vite](vue.md).
 - The job fails on exit code `1` (errors, or warnings over the limit) and exit code `2` (configuration, theme, or input failure).
 
 ## GitLab CI
@@ -45,8 +46,9 @@ design-lint:
   before_script:
     - corepack enable
     - pnpm install --frozen-lockfile
+    - pnpm exec nuxt prepare
   script:
-    - pnpm exec selfix src --format gitlab > gl-code-quality-report.json
+    - pnpm exec selfix --format gitlab > gl-code-quality-report.json
   artifacts:
     when: always
     reports:
@@ -64,6 +66,7 @@ Use Node.js 22.18 or later and run:
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm exec nuxt prepare
 pnpm run lint:design
 ```
 

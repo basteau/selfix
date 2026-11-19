@@ -6,18 +6,18 @@ const { docs } = Astro.props
 const prompt =
   "Set up selfix in this project. Follow\nhttps://github.com/basteau/selfix/blob/main/apps/docs/content/agent-setup.md"
 const configuration =
-  'import { defineConfig } from "selfix"\n\nexport default defineConfig({\n  css: "src/style.css",\n  ui: ["@/components/ui"],\n})'
+  'import { defineConfig } from "selfix"\n\nexport default defineConfig({\n  components: ["^App[A-Z]"],\n  rules: {\n    "no-restyle": ["error", {\n      contracts: [\n        { pattern: "^UCard$", allow: ["layout", "spacing"] },\n      ],\n    }],\n  },\n})'
 ---
 <div class="setup-panel">
   <div class="setup-card">
     <h3>Ask your coding agent</h3>
-    <p>Paste this prompt. The agent finds your theme and components, adds a config, and checks that selfix reports a deliberate override.</p>
+    <p>Paste this prompt. The agent installs selfix, adds a script, and checks that selfix reports a deliberate override.</p>
     <div class="setup-code"><div class="panel-heading"><span>Prompt</span><button type="button" data-copy="setup-prompt" aria-label="Copy agent prompt" hidden>Copy</button></div><pre class="setup-prompt" tabindex="0" aria-label="Agent prompt"><code id="setup-prompt">{prompt}</code></pre></div>
     <a class="setup-link" href={`${docs}/agent-setup`}>What the agent does <span aria-hidden="true">→</span></a>
   </div>
   <div class="setup-card">
     <h3>Set it up yourself</h3>
-    <p>Install selfix, set <code>"type": "module"</code> in package.json, and point the config at your Tailwind entry and component imports.</p>
+    <p>Install selfix, prepare your app, and run it. There is no config to write. Add one when your design system allows more, like this:</p>
     <PackageSwitch label="Package manager for the setup commands" />
     <PackageCommand id="setup-install" kind="install" />
     <div class="setup-code"><div class="panel-heading"><span>selfix.config.ts</span><button type="button" data-copy="setup-config" aria-label="Copy configuration" hidden>Copy</button></div><pre tabindex="0" aria-label="selfix configuration"><code id="setup-config">{configuration}</code></pre></div>

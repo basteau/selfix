@@ -21,7 +21,7 @@ Reports `style` attributes, `:style` bindings, and every SFC `<style>` block, in
 
   ```ts
   "no-inline-styles": ["error", {
-    contracts: [{ pattern: "^ProgressBar$", allow: ["style"] }],
+    contracts: [{ pattern: "^UProgress$", allow: ["style"] }],
   }],
   ```
 

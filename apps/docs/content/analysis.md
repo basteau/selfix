@@ -22,6 +22,18 @@ selfix reads these forms:
 
 It can't read constructed strings such as `` `mt-${size}` ``, imported values, or computed keys. [require-static-classes](require-static-classes.md) reports them, and readable classes in the same binding are still checked. Write complete alternatives instead of assembling names.
 
+### The ui prop
+
+On [protected components](configuration.md#protected-components), `ui` is read as a slot map: an object written in the template whose values follow the class rules above.
+
+```vue
+<UButton :ui="{ base: 'w-full', label: active ? 'underline' : '' }" />
+```
+
+- A `ui` held in a variable, spread into the object, or keyed by an expression is unreadable. [require-static-classes](require-static-classes.md) reports it.
+- On other components a `ui` prop is left alone. It may mean anything there.
+- Slot names are not validated. `vue-tsc` does that.
+
 ### Helpers and scope
 
 - `cn`, `clsx`, and `twMerge` arguments follow the same rules as class bindings. See [class helpers](configuration.md#class-helpers) for recognized imports and how to add your own.
@@ -71,10 +83,13 @@ Rewrite an unsupported selector only if you can keep its behavior. Otherwise tre
 A clean result covers only the selected files and enabled rules. selfix doesn't check:
 
 - Excluded files.
-- Component props you haven't configured as [class props](configuration.md#configured-class-props).
+- Classes that reach a component through props other than `class` and `ui`, such as `active-class`.
+- `ui` inside `items` arrays, and theme classes in `app.config.ts`.
 - Dynamic values when `require-static-classes` is off.
 - JSX, TSX, or class calls that appear only in script.
-- Styles passed through wrappers deeper than one level, or through wrappers with several roots or `inheritAttrs: false`. See [wrapper components](no-restyle.md#wrapper-components).
+- Styles passed through wrappers. If `AppButton` wraps `UButton`, a class on `AppButton` is checked only when `AppButton` is [named in your config](configuration.md#protected-components).
+
+Nuxt UI components are recognized by their registered name or their import, not by following your build. A component you register globally under another name is not recognized. Add it to `components` instead.
 
 Static `<component :is="Imported">` bindings and single-member namespace tags such as `<UI.Button>` use the resolved component, as described in [no-restricted-components](no-restricted-components.md). Other dynamic expressions and `is="vue:…"` don't inherit an imported component's contract.
 

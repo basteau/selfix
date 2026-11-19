@@ -1,27 +1,9 @@
 import { defineConfig } from "selfix"
 
+// selfix finds the stylesheet, the Nuxt UI theme, and its components on its own.
+// This contract gives callers one more freedom: spacing inside a card.
 export default defineConfig({
-  css: "src/style.css",
-  ui: ["./components/ui", "./Button.vue"],
-  overrides: [
-    {
-      files: ["src/components/ui/**/*.vue"],
-      rules: { "no-inline-styles": "off", "no-restyle": "off" },
-    },
-  ],
   rules: {
-    "no-restyle": [
-      "error",
-      {
-        contracts: [
-          {
-            pattern: "^Button$",
-            allow: ["layout"],
-            message:
-              "Button owns its appearance. Use its variant prop; keep only layout classes here.",
-          },
-        ],
-      },
-    ],
+    "no-restyle": ["error", { contracts: [{ pattern: "^UCard$", allow: ["layout", "spacing"] }] }],
   },
 })

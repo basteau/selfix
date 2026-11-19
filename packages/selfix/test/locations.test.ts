@@ -20,10 +20,7 @@ it.each(["\n", "\r\n"])(
     ].join(newline)
     const linter = await createLinter({
       css: '@import "tailwindcss";',
-      config: {
-        components: ["^Button$"],
-        classProps: [{ pattern: "^Button$", props: { ui: "slot-map" } }],
-      },
+      config: { components: ["^Button$"] },
     })
     const findings = linter.lint(source, "Positions.vue")
     // Explicit original-SFC positions: the emoji occupies two JS string units.

@@ -1,39 +1,61 @@
 ---
 title: Themes
-description: Let selfix check classes against the theme your app actually uses.
+description: How selfix loads the theme your app uses, and what counts as a theme color.
 ---
 
-selfix checks classes against your app's Tailwind CSS entry. Point `css` at the stylesheet that imports Tailwind and defines your theme:
+selfix checks classes against the same theme your app renders with. It needs your Tailwind CSS entry and the theme Nuxt UI generated for your app, and it finds both.
+
+## The CSS entry
+
+By default selfix uses the one stylesheet in your project that imports `tailwindcss`, or its parts such as `tailwindcss/theme.css`. In a Nuxt UI app that is usually `app/assets/css/main.css`:
+
+```css
+@import "tailwindcss";
+@import "@nuxt/ui";
+```
+
+If the project has several such stylesheets, choose one:
 
 ```ts
 // In selfix.config.ts
-css: "src/style.css",
+css: "app/assets/css/main.css",
 ```
 
 A class defined only in a stylesheet that this entry doesn't import looks unknown to selfix. Import that stylesheet through the entry, so your app and the check use the same definitions.
 
-## CSS import resolution
-
 - Relative imports resolve from the stylesheet that contains them.
-- Tailwind imports such as `@import "tailwindcss"` work directly.
-- File targets must end in `.css`.
+- Package imports must point to a `.css` file the package exposes.
+- selfix doesn't read build-tool config, so it doesn't resolve import aliases other than Nuxt UI's.
 
-### CSS aliases
+## The generated Nuxt UI theme
 
-If your build tool resolves a special import name, map it to the CSS file:
+Nuxt UI writes part of its theme when your app is prepared: the colors from your config, and the variants of every component. selfix reads those files instead of the package defaults, so your own `theme.colors` are known.
 
-```ts
-cssAliases: {
-  "@company/theme": "src/theme.css",
-},
-```
+| Project       | Generated in            | Written by                               |
+| ------------- | ----------------------- | ---------------------------------------- |
+| Nuxt          | `.nuxt`                 | `nuxt prepare`, `nuxt dev`, `nuxt build` |
+| Vue with Vite | `node_modules/.nuxt-ui` | Starting or building with Vite           |
 
-- Targets are local `.css` files, relative to the config directory (API: `root`).
-- Imports inside a target resolve from that file.
-- Names are exact. Wildcards and alias chains don't work.
-- selfix doesn't read build-tool config. A missing target fails loading.
+- If your project lists `@nuxt/ui` in `package.json`, or your stylesheet imports it, and the generated theme is missing, selfix stops with an error instead of checking against a fallback.
+- A generated component theme that selfix cannot read is an error too, not an unprotected component.
+- selfix cannot tell when the files are stale. Prepare again after you change colors or upgrade Nuxt UI.
+- For a custom build directory, set `buildDir`. It is relative to the config file.
 
-For Nuxt UI, map `#build/ui.css` to `.nuxt/ui.css` and run `nuxt prepare` before each check. See [Nuxt and Nuxt UI](nuxt.md).
+## Theme colors
+
+[no-raw-colors](no-raw-colors.md) accepts the colors your theme declares:
+
+- Nuxt UI's semantic tokens, such as `text-muted`, `bg-elevated`, and `border-default`.
+- Nuxt UI's color aliases and their shades: `primary`, `secondary`, `success`, `info`, `warning`, `error`, `neutral`, and aliases you add. `bg-primary`, `text-error`, and `bg-neutral-100` pass.
+- Colors you declare yourself:
+
+  ```css
+  @theme {
+    --color-brand: #3456d1;
+  }
+  ```
+
+Tailwind's palette is reported: `red-500`, `gray-900`, `white`, `black`. Redefining `--color-red-500` in your CSS leaves it a palette color.
 
 ## Nested custom CSS
 
@@ -55,11 +77,9 @@ Here `card` affects layout and color. selfix checks the literal `red` even thoug
 `@apply` adds the utilities' effects to the class that contains it:
 
 ```css
-@import "tailwindcss";
-
 .card {
   @apply p-4 bg-red-500;
 }
 ```
 
-Using `card` on a protected Button can report a padding override and a raw color. Put `@apply` inside a supported style rule. Unknown utilities, top-level `@apply`, and a standalone `!important` argument fail loading.
+Using `card` on a `UButton` can report a padding override and a raw color. Put `@apply` inside a supported style rule. Unknown utilities, top-level `@apply`, and a standalone `!important` argument fail loading.

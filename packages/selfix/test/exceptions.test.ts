@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process"
 import { expect, it } from "vitest"
-import { createLinter, type LinterConfig } from "../src/index.js"
+import { createLinter, type Config } from "../src/index.js"
 
 const css = '@import "tailwindcss";'
-const linterWith = (config: LinterConfig = {}) => createLinter({ css, config })
+const linterWith = (config: Config = {}) => createLinter({ css, config })
 const rules = (diagnostics: { rule: string; line: number }[]) =>
   diagnostics.map(({ rule, line }) => [rule, line])
 
@@ -64,7 +64,7 @@ it.each([
   ],
   [
     "selfix-disable-next-line no-raw-colors, no-raw-color -- brand",
-    'Exception comment names unknown rule "no-raw-color". Separate rule names with commas; rules are no-restricted-components, no-restyle, no-raw-colors, no-arbitrary-values, no-inline-styles, no-unknown-classes, require-static-classes.',
+    'Exception comment names unknown rule "no-raw-color". Separate rule names with commas; rules are no-restricted-components, prefer-ui-components, no-restyle, no-raw-colors, no-arbitrary-values, no-inline-styles, no-unknown-classes, require-static-classes.',
   ],
   [
     "selfix-disable-next-line parse-error -- generated",
@@ -125,7 +125,7 @@ it("reports unused exceptions at the comment with the configured severity", asyn
     '  <div class="bg-[#e30613]" />',
     "</template>",
   ].join("\n")
-  const config: LinterConfig = { rules: { "no-arbitrary-values": "off" } }
+  const config: Config = { rules: { "no-arbitrary-values": "off" } }
   const unused = (await linterWith(config)).lint(source, "Unused.vue")
   expect(unused).toEqual([
     expect.objectContaining({

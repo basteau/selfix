@@ -9,16 +9,15 @@ To install selfix, follow [Getting started](getting-started.md#install-selfix).
 
 ## Start with warnings
 
-In `selfix.config.ts`, set `css` to your Tailwind entry and `ui` to your component import strings:
+Create `selfix.config.ts` next to `package.json`:
 
 ```ts
 import { defineConfig } from "selfix"
 
 export default defineConfig({
-  css: "src/style.css",
-  ui: ["./components/ui"],
   rules: {
     "no-restyle": "warn",
+    "prefer-ui-components": "off",
     "no-raw-colors": "off",
     "no-arbitrary-values": "off",
     "no-inline-styles": "off",
@@ -28,7 +27,7 @@ export default defineConfig({
 })
 ```
 
-Omitted rules default to `"error"`, so keep the five `"off"` entries. If you already have a config, change only its `rules`.
+Omitted rules default to `"error"`, so keep the six `"off"` entries. If you already have a config, change only its `rules`.
 
 Turning off `require-static-classes` also turns off findings for opaque spreads such as `v-bind="attrs"`. See [unsupported bindings](analysis.md#unsupported-bindings).
 
@@ -37,12 +36,12 @@ Add a script to `package.json`:
 ```json
 {
   "scripts": {
-    "lint:design": "selfix src"
+    "lint:design": "selfix"
   }
 }
 ```
 
-Run `pnpm run lint:design` from the app directory and look for repeated overrides. Use existing component props where they fit, or [change the contract](configuration.md#component-contracts) if callers need more control.
+Run `pnpm run lint:design` from the app directory and look for repeated overrides. They usually point to a prop to use, a default to set in `app.config.ts`, or a [contract](configuration.md#component-contracts) the component should have.
 
 Warnings alone pass. Parse errors and loading failures still fail.
 
@@ -53,14 +52,14 @@ If the check reports 12 warnings, set that count as the limit:
 ```json
 {
   "scripts": {
-    "lint:design": "selfix src --max-warnings 12"
+    "lint:design": "selfix --max-warnings 12"
   }
 }
 ```
 
 Now 13 warnings fail the command. Lower the limit as you fix findings until it reaches zero. The limit counts the total, not which findings are new. To catch new findings, use a baseline.
 
-When `no-restyle` is clean, set it to `"error"`. Then turn on another [rule](rules.md) at `"warn"` and repeat.
+When `no-restyle` is clean, set it to `"error"`. Then turn on another [rule](rules.md) at `"warn"` and repeat. `no-unknown-classes` and `no-raw-colors` are good next steps: they find typos and palette colors that Nuxt UI has a token for.
 
 ## Record existing findings in a baseline
 
@@ -69,7 +68,7 @@ With a warning limit, fixing five old findings and adding five new ones elsewher
 Record the current findings and commit the file:
 
 ```sh
-pnpm exec selfix src --update-baseline selfix-baseline.json
+pnpm exec selfix --update-baseline selfix-baseline.json
 ```
 
 Check against it in your script:
@@ -77,7 +76,7 @@ Check against it in your script:
 ```json
 {
   "scripts": {
-    "lint:design": "selfix src --baseline selfix-baseline.json"
+    "lint:design": "selfix --baseline selfix-baseline.json"
   }
 }
 ```
@@ -85,7 +84,7 @@ Check against it in your script:
 When you fix findings, the check fails with unused entries until you lower the counts:
 
 ```sh
-pnpm exec selfix src --prune-baseline selfix-baseline.json
+pnpm exec selfix --prune-baseline selfix-baseline.json
 ```
 
 Commit the smaller file. Don't rerun `--update-baseline` to make a failing check pass, because it records the new findings too. See [Baseline](cli.md#baseline) for the file format and output.
@@ -97,27 +96,33 @@ To hold new directories to errors while older files still warn, add an override:
 ```ts
 rules: { "no-restyle": "warn" },
 overrides: [
-  { files: ["src/features/checkout/**/*.vue"], rules: { "no-restyle": "error" } },
+  { files: ["app/pages/checkout/**/*.vue"], rules: { "no-restyle": "error" } },
 ],
 ```
 
 ## Allow styling inside component implementations
 
-A Button's own file may need styles its callers can't add. Relax rules for component files with [file overrides](configuration.md#per-file-rule-overrides). Other rules stay active, while `exclude` would skip every check in the file.
+Your own components wrap Nuxt UI and native elements, and may need styles their callers can't add. Relax `no-restyle` and `prefer-ui-components` for those files with [file overrides](configuration.md#per-file-rule-overrides). Other rules stay active, while `exclude` would skip every check in the file.
 
 ## Workspaces
 
-Each run uses one config and one theme, so give apps with different themes separate configs. With tooling installed at the workspace root, run:
+Each run uses one project: one theme, one prepared Nuxt UI, one config. Run selfix from each app:
 
 ```sh
-pnpm exec selfix apps/store/src --config apps/store/selfix.config.ts
-pnpm exec selfix apps/admin/src --config apps/admin/selfix.config.ts
+pnpm --filter store exec selfix
+pnpm --filter admin exec selfix
+```
+
+Or name each app's config from the workspace root:
+
+```sh
+pnpm exec selfix apps/store/app --config apps/store/selfix.config.ts
 ```
 
 Keep these points in mind:
 
-- `css`, `exclude`, and `overrides` paths are relative to the config. In the store config, `css: "src/style.css"` resolves to `apps/store/src/style.css`.
-- Check shared packages against the theme of the app that uses them.
+- The project root is the config's directory, or the working directory without a config. selfix looks there for the generated Nuxt UI theme.
+- `css`, `buildDir`, `exclude`, and `overrides` paths are relative to the config.
 - If each app owns its tooling, use app-local scripts.
 
 ## Share one policy across apps
@@ -130,7 +135,6 @@ import shared from "@acme/design-lint"
 
 export default defineConfig({
   ...shared,
-  css: "src/style.css",
   rules: { ...shared.rules, "no-raw-colors": "warn" },
 })
 ```
@@ -147,8 +151,9 @@ Run the same `lint:design` script locally and in CI, so both enforce the same wa
 Add this to your coding-agent instructions:
 
 ```text
-After UI changes, run pnpm run lint:design. Correct findings using component
-props, theme classes, or agreed contracts, then rerun the check.
+After UI changes, run pnpm run lint:design. Correct findings with component
+props, theme classes, or app.config.ts, then rerun the check. Do not change
+selfix.config.ts to make a finding pass.
 ```
 
 To have an agent configure the project and prove enforcement, see [Agent setup](agent-setup.md).

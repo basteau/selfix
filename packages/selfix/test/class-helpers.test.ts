@@ -17,7 +17,6 @@ import { cn as custom } from '@/utils'
 import join from 'my-classes'
 </script>
 <template><div :class="custom(join('p-[13px]'))" /></template>`
-    expect(linter.doctor(source, "helpers.vue").issues).toEqual([])
     expect(linter.lint(source, "helpers.vue")).toEqual([
       expect.objectContaining({
         rule: "no-arbitrary-values",

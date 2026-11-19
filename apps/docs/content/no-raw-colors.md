@@ -10,19 +10,22 @@ Reports Tailwind palette colors, literal colors, and raw colors in custom CSS an
 <div class="bg-red-500 text-[#fff]" />
 
 <!-- Allowed: colors from your theme. -->
-<div class="bg-primary text-on-primary" />
+<div class="bg-default text-muted" />
 ```
 
 ## Fix a finding
 
-Add purpose-based colors to your Tailwind entry and use them:
+The message lists theme colors that work for that utility:
+
+```text
+Replace "text-gray-500" with a theme color such as text-dimmed, text-muted, text-toned, text-default, text-highlighted, text-inverted, text-primary, text-secondary.
+```
+
+Use one of Nuxt UI's semantic colors. They follow your theme, in light and dark mode. If the design needs a color Nuxt UI doesn't have, add an alias to `theme.colors` or declare it in your Tailwind entry:
 
 ```css
-@import "tailwindcss";
-
 @theme {
-  --color-primary: #3456d1;
-  --color-on-primary: #ffffff;
+  --color-brand: #3456d1;
 }
 ```
 
@@ -34,7 +37,9 @@ For a deliberate exception, allow the class: `allow: ["bg-red-500"]`.
 
 ## What passes
 
-- Theme colors, `currentColor`, and the `bg-transparent` utility.
+- Nuxt UI's semantic colors such as `text-muted`, `bg-elevated`, and `border-default`.
+- Nuxt UI's color aliases and their shades, such as `bg-primary`, `text-error`, and `bg-neutral-100`. `neutral` passes because it follows the gray you chose.
+- Colors you declare in `@theme`, `currentColor`, and the `bg-transparent` utility.
 - In SVG `fill` and `stroke`: `currentColor`, `none`, semantic variables such as `var(--color-primary)`, and paint servers such as `url(#gradient)`.
 
 Stock palette variables such as `var(--color-red-500)` and raw fallbacks such as `var(--color-primary, #fff)` are reported.
@@ -64,5 +69,5 @@ The rule checks native SVG `fill` and `stroke`, including literal string binding
 ## Limits
 
 - Inline `style` properties are not color-checked. [no-inline-styles](no-inline-styles.md) reports them.
-- Component props and HTML inside SVG `foreignObject` are not checked.
+- Colors in component props such as `color="red"` and HTML inside SVG `foreignObject` are not checked.
 - Paint servers are allowed without following their targets.

@@ -1,6 +1,6 @@
 import { createRequire } from "node:module"
 import type * as VueCompilerSfc from "vue/compiler-sfc"
-import { normalizePropName, type ClassProps, type ClassHelper } from "./config.js"
+import type { ClassHelper } from "./config.js"
 
 const require = createRequire(import.meta.url)
 const { version: vueVersion } = require("vue/package.json") as { version: string }
@@ -82,9 +82,17 @@ export interface SvgColorSite {
   offset: number
 }
 
+/** A native element, with its static type attribute when one is written. */
+export interface NativeElement {
+  tag: string
+  type?: string
+  offset: number
+}
+
 export interface StyleSite {
   component: string
   offset: number
+  importSource?: string
 }
 
 /** A template comment whose text starts with `selfix-`, located in the original SFC. */
@@ -122,7 +130,7 @@ type ComponentAliases = Map<string, ComponentAlias>
 interface TemplateContext {
   svgColors: SvgColorSite[]
   usages: ComponentUsage[]
-  classProps: { pattern: RegExp; props: Map<string, "class" | "slot-map"> }[]
+  natives: NativeElement[]
   aliases: ComponentAliases
   bindings: Map<string, StaticBinding>
   helpers: ReadonlySet<string>
@@ -135,7 +143,6 @@ interface TemplateContext {
 
 interface CollectVueOptions {
   forceCompileTemplateAst?: boolean
-  classProps?: ClassProps[]
   classHelpers?: ClassHelper[]
 }
 
@@ -151,6 +158,7 @@ export function collectVue(
   options: CollectVueOptions = {},
 ): {
   usages: ComponentUsage[]
+  natives: NativeElement[]
   svgColors: SvgColorSite[]
   sites: ClassSite[]
   styles: StyleSite[]
@@ -197,6 +205,17 @@ export function collectVue(
   const bindings = collectStaticBindings(setup)
   const usages: ComponentUsage[] = []
   const svgColors: SvgColorSite[] = []
+  const natives: NativeElement[] = []
+  const collected = () => ({
+    usages,
+    natives,
+    svgColors,
+    sites,
+    styles: [...styles].sort((left, right) => left.offset - right.offset),
+    errors,
+    fatal,
+    imports: aliases,
+  })
   const sites: ClassSite[] = []
   const styles: StyleSite[] = []
 
@@ -209,21 +228,21 @@ export function collectVue(
 
   const template = parsed.descriptor.template
   if (!template) {
-    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return collected()
   }
   if (template.src) {
     errors.push({
       message: "External template src is not supported",
       offset: template.loc.start.offset,
     })
-    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return collected()
   }
   if (template.lang && template.lang !== "html") {
     errors.push({
       message: `Template language "${template.lang}" is not supported`,
       offset: template.loc.start.offset,
     })
-    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return collected()
   }
   const templateAst = options.forceCompileTemplateAst ? undefined : template.ast
   const errorsBeforeCompile = errors.length
@@ -231,7 +250,7 @@ export function collectVue(
     templateAst ?? compileTemplateAst(template.content, filename, template.loc.start.offset, errors)
   fatal ||= errors.length > errorsBeforeCompile
   if (!ast) {
-    return { usages, svgColors, sites, styles: sortStyles(styles), errors, fatal, imports: aliases }
+    return collected()
   }
 
   walkTemplate(
@@ -239,12 +258,7 @@ export function collectVue(
     {
       usages,
       svgColors,
-      classProps: (options.classProps ?? []).map((entry) => ({
-        pattern: new RegExp(entry.pattern),
-        props: new Map(
-          Object.entries(entry.props).map(([name, mode]) => [normalizePropName(name), mode]),
-        ),
-      })),
+      natives,
       aliases,
       bindings,
       helpers: collectClassHelpers([script, setup], options.classHelpers),
@@ -258,13 +272,7 @@ export function collectVue(
     styles,
   )
   return {
-    usages,
-    svgColors,
-    sites,
-    styles: sortStyles(styles),
-    errors,
-    fatal,
-    imports: aliases,
+    ...collected(),
     ...(source.includes("selfix-")
       ? { templateComments: collectComments(source, filename, template.loc.start.offset, errors) }
       : {}),
@@ -631,7 +639,14 @@ function collectElement(
     })
   }
 
-  const configured = context.classProps.find(({ pattern }) => pattern.test(component))?.props
+  if (node.tagType === 0) {
+    const type = node.props.find((prop) => prop.type === VueNode.Attribute && prop.name === "type")
+    context.natives.push({
+      tag: component,
+      offset: context.offset + node.loc.start.offset,
+      ...(type?.type === VueNode.Attribute && type.value ? { type: type.value.content } : {}),
+    })
+  }
 
   if (isTemplateStyleElement(node)) {
     styles.push({ component: "style", offset: context.offset + node.loc.start.offset })
@@ -669,18 +684,11 @@ function collectElement(
       }
     }
     if (prop.type === VueNode.Attribute) {
-      const name = normalizePropName(prop.name)
-      const mode = configured?.get(name)
-      if (mode) {
+      if (isComponent && prop.name === "ui") {
+        // A slot map is an object; a plain string cannot be read as one.
         sites.push({
-          ...classSite(
-            component,
-            mode === "class" && prop.value ? splitClasses(prop.value.content) : [],
-            mode === "slot-map",
-            context.offset + prop.loc.start.offset,
-            importSource,
-          ),
-          prop: name,
+          ...classSite(component, [], true, context.offset + prop.loc.start.offset, importSource),
+          prop: "ui",
         })
       }
       if (prop.name === "class" && prop.value) {
@@ -695,40 +703,26 @@ function collectElement(
         )
       }
       if (prop.name === "style") {
-        styles.push({ component, offset: context.offset + prop.loc.start.offset })
+        styles.push(styleSite(component, context.offset + prop.loc.start.offset, importSource))
       }
       continue
     }
 
-    if (prop.name === "bind" && prop.arg?.type === VueNode.SimpleExpression && prop.arg.isStatic) {
-      // The compiled AST prefixes .prop/.attr arguments; retain the original prop name.
-      let name = normalizePropName(prop.arg.content)
-      if (!configured?.has(name)) name = normalizePropName(prop.arg.loc.source)
-      const mode = configured?.get(name)
-      if (mode) {
-        const offset = context.offset + prop.loc.start.offset
-        let expression: ExpressionNode | undefined
-        const content =
-          expressionContent(prop.exp) ??
-          (supportsSameNameBinding
-            ? prop.arg.content.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase())
-            : undefined)
-        try {
-          if (content) expression = parseExpression(content)
-        } catch (error) {
-          context.errors.push({
-            message: `Invalid class prop expression: ${errorMessage(error)}`,
-            offset,
-          })
-        }
-        collectPropValue(
-          expression,
-          mode,
-          { ...classSite(component, [], true, offset, importSource), prop: name },
-          context,
-          sites,
-        )
+    if (isComponent && isBoundAttribute(prop, "ui")) {
+      const offset = context.offset + prop.loc.start.offset
+      let expression: ExpressionNode | undefined
+      const content = expressionContent(prop.exp) ?? (supportsSameNameBinding ? "ui" : undefined)
+      try {
+        if (content) expression = parseExpression(content)
+      } catch (error) {
+        context.errors.push({ message: `Invalid ui expression: ${errorMessage(error)}`, offset })
       }
+      collectSlotMap(
+        expression,
+        { ...classSite(component, [], true, offset, importSource), prop: "ui" },
+        context,
+        sites,
+      )
     }
 
     if (isBoundAttribute(prop, "class")) {
@@ -755,15 +749,15 @@ function collectElement(
       )
     }
     if (isBoundAttribute(prop, "style")) {
-      styles.push({ component, offset: context.offset + prop.loc.start.offset })
+      styles.push(styleSite(component, context.offset + prop.loc.start.offset, importSource))
     }
     if (isFullBind(prop)) {
-      collectSpreadAttrs(prop, component, importSource, context, sites, styles, configured, isSvg)
+      collectSpreadAttrs(prop, component, importSource, context, sites, styles, isComponent, isSvg)
     }
     if (isDynamicBindArg(prop)) {
       context.errors.push({
-        message: configured?.size
-          ? "Dynamic v-bind argument may be class, style, or a configured class prop"
+        message: isComponent
+          ? "Dynamic v-bind argument may be class, style, or ui"
           : "Dynamic v-bind argument may be class or style",
         offset: context.offset + prop.loc.start.offset,
       })
@@ -771,19 +765,15 @@ function collectElement(
   }
 }
 
-function collectPropValue(
+/** Reads a Nuxt UI `ui` value: a literal object whose keys name component slots. */
+function collectSlotMap(
   expression: ExpressionInput | undefined,
-  mode: "class" | "slot-map",
   site: ClassSite,
   context: TemplateContext,
   sites: ClassSite[],
 ): void {
   if (!expression) {
     sites.push(site)
-    return
-  }
-  if (mode === "class") {
-    sites.push({ ...site, ...collectExpression(expression, context) })
     return
   }
   while (isTsWrapper(expression)) expression = expression.expression
@@ -811,7 +801,7 @@ function collectSpreadAttrs(
   context: TemplateContext,
   sites: ClassSite[],
   styles: StyleSite[],
-  configured: Map<string, "class" | "slot-map"> | undefined,
+  isComponent: boolean,
   isSvg = false,
 ): void {
   const content = expressionContent(prop.exp)
@@ -870,15 +860,12 @@ function collectSpreadAttrs(
         offset: context.offset + prop.loc.start.offset,
       })
     }
-    const name = key === undefined ? undefined : normalizePropName(key)
-    const mode = name === undefined ? undefined : configured?.get(name)
-    if (mode) {
-      collectPropValue(
+    if (isComponent && key === "ui") {
+      collectSlotMap(
         property.value,
-        mode,
         {
           ...classSite(component, [], true, context.offset + prop.loc.start.offset, importSource),
-          prop: name,
+          prop: "ui",
         },
         context,
         sites,
@@ -897,7 +884,7 @@ function collectSpreadAttrs(
       )
     }
     if (key === "style") {
-      styles.push({ component, offset: context.offset + prop.loc.start.offset })
+      styles.push(styleSite(component, context.offset + prop.loc.start.offset, importSource))
     }
   }
 }
@@ -1331,22 +1318,30 @@ function splitClasses(value: string): string[] {
   return value.trim().split(/\s+/u).filter(Boolean)
 }
 
+function camelize(name: string): string {
+  return name.replace(/-(\w)/gu, (_, letter: string) => letter.toUpperCase())
+}
+
+/** PascalCase for a tag written in kebab-case: u-button becomes UButton. */
+export function pascalCase(name: string): string {
+  const camel = camelize(name)
+  return camel.charAt(0).toUpperCase() + camel.slice(1)
+}
+
 export function resolveComponentAlias(
   tag: string,
   aliases: ComponentAliases,
 ): ComponentAlias | undefined {
   // Match Vue's exact, camelized, then PascalCase binding lookup.
-  const camelName = tag.replace(/-(\w)/gu, (_, letter: string) => letter.toUpperCase())
-  const pascalName = camelName.charAt(0).toUpperCase() + camelName.slice(1)
-  return aliases.get(tag) ?? aliases.get(camelName) ?? aliases.get(pascalName)
+  return aliases.get(tag) ?? aliases.get(camelize(tag)) ?? aliases.get(pascalCase(tag))
 }
 
 function dedupe(values: string[]): string[] {
   return [...new Set(values)]
 }
 
-function sortStyles(styles: StyleSite[]): StyleSite[] {
-  return [...styles].sort((left, right) => left.offset - right.offset)
+function styleSite(component: string, offset: number, importSource?: string): StyleSite {
+  return importSource ? { component, offset, importSource } : { component, offset }
 }
 
 function classSite(
@@ -1403,57 +1398,4 @@ function issue(error: SyntaxError | unknown, baseOffset: number): ParseIssue {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
-}
-
-// Vue passes a caller's class to a component's single root only through attribute
-// fallthrough. That stops when `inheritAttrs` is anything but `true`, or when the
-// component declares `class` as a prop. Reads the scripts without running them.
-export function forwardsClass(scripts: (string | undefined)[]): boolean {
-  let forwards = true
-  const keyName = (node: { type: string; name?: string; value?: unknown } | undefined) =>
-    node?.type === "Identifier"
-      ? node.name
-      : node?.type === "StringLiteral"
-        ? node.value
-        : undefined
-  const visit = (node: unknown, inProps: boolean): void => {
-    if (!forwards || !node || typeof node !== "object") return
-    if (Array.isArray(node)) return node.forEach((item) => visit(item, inProps))
-    const item = node as Record<string, unknown> & { type?: string }
-    if (item.type === "ObjectProperty" || item.type === "ObjectMethod") {
-      const key = keyName(item.key as Parameters<typeof keyName>[0])
-      if (
-        key === "inheritAttrs" &&
-        (item.value as { type?: string; value?: unknown })?.type !== "BooleanLiteral"
-      )
-        forwards = false
-      if (key === "inheritAttrs" && (item.value as { value?: unknown })?.value === false)
-        forwards = false
-      if (key === "class" && inProps) forwards = false
-      if (key === "props") return visit(item.value, true)
-    }
-    if (
-      item.type === "TSPropertySignature" &&
-      keyName(item.key as Parameters<typeof keyName>[0]) === "class"
-    )
-      forwards = false
-    if (item.type === "StringLiteral" && inProps && item.value === "class") forwards = false
-    if (
-      item.type === "CallExpression" &&
-      (item.callee as { type?: string; name?: string })?.type === "Identifier" &&
-      (item.callee as { name?: string }).name === "defineProps"
-    )
-      return visit([item.arguments, item.typeParameters], true)
-    for (const [field, value] of Object.entries(item))
-      if (field !== "loc" && field !== "start" && field !== "end") visit(value, inProps)
-  }
-  for (const script of scripts) {
-    if (!script?.trim()) continue
-    try {
-      visit(babelParse(script, { sourceType: "module", plugins: ["typescript"] }).program, false)
-    } catch {
-      return false
-    }
-  }
-  return forwards
 }

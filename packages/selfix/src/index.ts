@@ -1,22 +1,24 @@
+import { readFileSync } from "node:fs"
 import path from "node:path"
 import { applyExceptions } from "./exceptions.js"
-import { createProject, type ComponentDefinition } from "./project.js"
-import { baseCandidate, createTailwind, type Category } from "./tailwind.js"
+import { loadNuxtUi, type ComponentTheme } from "./nuxt-ui.js"
+import { baseCandidate, createTailwind, findEntry, type Category } from "./tailwind.js"
 import {
   collectVue,
-  forwardsClass,
-  parseSfc,
+  pascalCase,
   resolveComponentAlias,
   type ComponentUsage,
+  type NativeElement,
 } from "./vue.js"
 import {
   ruleNames,
-  validateLinterConfig,
+  validateConfig,
   filePattern,
-  type LinterConfig,
+  type Config,
   type RuleName,
   type RuleOptions,
   type ImportRestriction,
+  type PreferUiComponentsOptions,
   type RestrictedComponentOptions,
   type Severity,
 } from "./config.js"
@@ -26,13 +28,11 @@ export type {
   ComponentRestriction,
   ImportRestriction,
   RestrictedComponentOptions,
+  PreferUiComponentsOptions,
   Rules,
-  ClassProps,
   ClassHelper,
   FileOverride,
-  ProjectOptions,
   Config,
-  LinterConfig,
   Contract,
   Message,
   RuleName,
@@ -40,12 +40,10 @@ export type {
   RuleSetting,
   Severity,
 } from "./config.js"
-export type { ComponentDefinition, ComponentProps } from "./project.js"
 export type { Category } from "./tailwind.js"
 
 export interface Diagnostic {
   suggestions?: string[]
-  definition?: ComponentDefinition
   file: string
   rule: RuleName | "parse-error" | "invalid-exception" | "unused-exception"
   severity: Exclude<Severity, "off">
@@ -67,38 +65,75 @@ export interface CheckResult {
   suppressed: SuppressedDiagnostic[]
 }
 export interface LinterOptions {
-  /** Full CSS source including imports and @theme. */
-  css: string
-  /** Project root for overrides, CSS aliases, and relative filenames; defaults to cwd. */
+  /** Project root: where Nuxt UI is installed and config paths start. Defaults to cwd. */
   root?: string
-  /** Origin for stylesheet imports, relative to root; defaults to root. */
+  config?: Config
+  /** Stylesheet source to lint against, instead of the file named or found through config.css. */
+  css?: string
+  /** Directory the imports in `css` resolve from, relative to root. Defaults to root. */
   cssBase?: string
-  config?: LinterConfig
 }
 
-function componentName(name: string): string {
-  const camel = name.replace(/-(\w)/gu, (_, letter: string) => letter.toUpperCase())
-  return camel.charAt(0).toUpperCase() + camel.slice(1)
-}
+type Imports = ReturnType<typeof collectVue>["imports"]
+type AnyOptions = RuleOptions & RestrictedComponentOptions & PreferUiComponentsOptions
 
-function matchesRestrictedName(
-  name: string,
-  site: ComponentUsage,
-  imports: ReturnType<typeof collectVue>["imports"],
-): boolean {
+// Native elements and the Nuxt UI components that replace them.
+const nativeReplacements: Record<string, string> = {
+  button: "Button",
+  input: "Input",
+  select: "Select",
+  textarea: "Textarea",
+  hr: "Separator",
+  kbd: "Kbd",
+  progress: "Progress",
+  dialog: "Modal",
+}
+const inputReplacements: Record<string, string | false> = {
+  checkbox: "Checkbox",
+  radio: "RadioGroup",
+  range: "Slider",
+  file: "FileUpload",
+  number: "InputNumber",
+  date: "InputDate",
+  time: "InputTime",
+  color: "ColorPicker",
+  button: "Button",
+  submit: "Button",
+  reset: "Button",
+  hidden: false,
+  image: false,
+}
+// The props that usually answer a restyle of each category.
+const variantProps: Partial<Record<Category, string[]>> = {
+  color: ["color", "variant"],
+  spacing: ["size"],
+  typography: ["size"],
+  shape: ["variant"],
+  effects: ["variant"],
+  unknown: ["color", "variant", "size"],
+}
+// Rules that judge a class token, and so decide whether a suggested class is acceptable.
+const classRules = new Set<RuleName>([
+  "no-restyle",
+  "no-raw-colors",
+  "no-arbitrary-values",
+  "no-unknown-classes",
+])
+
+function matchesRestrictedName(name: string, site: ComponentUsage, imports: Imports): boolean {
   const alias = resolveComponentAlias(name, imports)
   // An imported usage matches its local binding. A written namespace
   // member such as UI.Button is not that local name, so it matches
   // only the exact configured name.
   if (alias) return alias.local === site.component && site.importSource !== undefined
   if (site.importSource !== undefined) return name === site.component
-  return componentName(name) === componentName(site.component)
+  return pascalCase(name) === pascalCase(site.component)
 }
 
 function matchesRestrictedImport(
   entry: ImportRestriction,
   site: ComponentUsage,
-  imports: ReturnType<typeof collectVue>["imports"],
+  imports: Imports,
 ): boolean {
   if (site.importSource === undefined) return false
   const alias = imports.get(site.component)
@@ -133,7 +168,9 @@ function preparePolicy(options: RuleOptions, defaultAllow: string[]) {
     message: options.message,
   }
 }
-function prepareOptions(options: RuleOptions, defaultAllow: string[]) {
+/** Selects a rule's policy for a component: its first matching contract, or the rule itself. */
+function prepareOptions(name: RuleName, options: RuleOptions) {
+  const defaultAllow = name === "no-restyle" ? ["layout"] : []
   const fallback = preparePolicy(options, defaultAllow)
   const contracts = (options.contracts ?? []).map((contract) => ({
     regex: new RegExp(contract.pattern),
@@ -143,33 +180,28 @@ function prepareOptions(options: RuleOptions, defaultAllow: string[]) {
     contracts.find(({ regex }) => regex.test(component))?.selected ?? fallback
 }
 
+/** Says why a class is rejected and which design-system choice answers it. */
 function restyleMessage(
   token: string,
   component: string,
   category: Category,
   denied: boolean,
+  theme: ComponentTheme | undefined,
+  themeConfig: string,
 ): string {
   if (denied)
-    return `"${token}" is denied by the design-system policy for <${component}>. Remove this class; choose a replacement only if the component's contract permits it.`
+    return `"${token}" is denied by the design-system policy for <${component}>. Remove this class.`
   const reason =
     category === "unknown"
-      ? "selfix could not classify all of its CSS effects"
-      : `${category} changes are outside the component's contract`
-  const guidance: Record<Category, string> = {
-    layout:
-      "Remove this override. Check the component's layout contract before changing placement or sizing.",
-    spacing:
-      "Remove this override. Check the component's documented spacing props and its contract before changing surrounding layout.",
-    color: "Remove this override. Check the component's documented props for color choices.",
-    typography: "Remove this override. Check the component's documented props for text styling.",
-    shape: "Remove this override. Check the component's documented props for borders and shape.",
-    effects: "Remove this override. Check the component's documented props for visual effects.",
-    motion:
-      "Remove this override. Check the component's documented props for animation and transitions.",
-    unknown:
-      "Remove this class or inspect its CSS declarations and the component's contract before choosing a replacement.",
-  }
-  return `"${token}" is not allowed on <${component}>: ${reason}. ${guidance[category]}`
+      ? "selfix could not classify what this class changes"
+      : `the component owns its ${category}`
+  const props = (variantProps[category] ?? [])
+    .filter((prop) => theme?.variants[prop]?.length)
+    .map((prop) => `${prop} (${theme!.variants[prop]!.join(", ")})`)
+  const guidance = theme
+    ? `${props.length ? `Use ${props.join(" or ")}, or restyle` : "Restyle"} it for the whole app under ui.${theme.key} in ${themeConfig}.`
+    : "Use the component's props, or widen its contract if callers need this control."
+  return `"${token}" is not allowed on <${component}>: ${reason}. ${guidance}`
 }
 
 function sourcePositions(source: string) {
@@ -192,42 +224,44 @@ function sourcePositions(source: string) {
   }
 }
 
-export async function createLinter(options: LinterOptions) {
-  if ("base" in options)
-    throw new Error(
-      "The base option was removed. Use cssBase for stylesheet imports and root for project paths.",
-    )
-  if ("configBase" in options)
-    throw new Error("The configBase option was removed. Use root for project paths.")
-  const { css, config = {} } = options
+function readStylesheet(file: string): string {
+  try {
+    return readFileSync(file, "utf8")
+  } catch (error) {
+    throw new Error(`Unable to read the Tailwind CSS entry ${file}. Check css in the config.`, {
+      cause: error,
+    })
+  }
+}
+
+export async function createLinter(options: LinterOptions = {}) {
+  const { config = {} } = options
+  validateConfig(config)
   for (const key of ["root", "cssBase"] as const) {
     const value = options[key]
     if (value !== undefined && (typeof value !== "string" || !value.trim()))
       throw new Error(`${key} must be a non-empty directory path.`)
   }
   const root = path.resolve(options.root ?? process.cwd())
-  const cssBase = path.resolve(root, options.cssBase ?? ".")
-  validateLinterConfig(config)
-  const cssAliases = Object.fromEntries(
-    Object.entries(config.cssAliases ?? {}).map(([id, target]) => [id, path.resolve(root, target)]),
+  const nuxtUi = loadNuxtUi(root, config)
+  const entry =
+    options.css === undefined
+      ? config.css
+        ? path.resolve(root, config.css)
+        : findEntry(root)
+      : undefined
+  const tailwind = await createTailwind(
+    entry ? readStylesheet(entry) : options.css!,
+    entry ? path.dirname(entry) : path.resolve(root, options.cssBase ?? "."),
+    // Without a loaded theme, a stylesheet that imports Nuxt UI fails at this path.
+    { "#build/ui.css": nuxtUi?.css ?? path.resolve(root, config.buildDir ?? ".nuxt", "ui.css") },
   )
-  const tailwind = await createTailwind(css, cssBase, cssAliases)
-  const project = config.project
-    ? createProject({ ...config.project, root: path.resolve(root, config.project.root ?? ".") })
-    : undefined
   const settings = ruleNames.map((name) => {
     const setting = config.rules?.[name] ?? "error"
-    const [severity, options]: [Severity, RuleOptions & RestrictedComponentOptions] = Array.isArray(
-      setting,
-    )
+    const [severity, options]: [Severity, AnyOptions] = Array.isArray(setting)
       ? setting
       : [setting, {}]
-    return {
-      name,
-      severity,
-      options,
-      policy: prepareOptions(options, name === "no-restyle" ? ["layout"] : []),
-    }
+    return { name, severity, options, policy: prepareOptions(name, options) }
   })
   const overrides = (config.overrides ?? []).map((override) => ({
     patterns: override.files.map(filePattern),
@@ -237,72 +271,45 @@ export async function createLinter(options: LinterOptions) {
       options: Array.isArray(setting) ? setting[1] : undefined,
     })),
   }))
-  const ignoreImports = (config.ignoreImports ?? []).map((pattern) => new RegExp(pattern))
-  const components = (config.components ?? []).map((pattern) => new RegExp(pattern))
-  const componentImports = (config.componentImports ?? []).map((pattern) => new RegExp(pattern))
-  function recognition(site: Pick<ComponentUsage, "component" | "importSource">) {
-    const source = site.importSource
-    const ignored = source && ignoreImports.find((pattern) => pattern.test(source))
-    if (ignored)
-      return {
-        recognized: false,
-        reason: `ignored by ignoreImports ${JSON.stringify(ignored.source)}`,
-      }
-    const component = components.find((pattern) => pattern.test(site.component))
-    if (component)
-      return {
-        recognized: true,
-        reason: `recognized by components ${JSON.stringify(component.source)}`,
-      }
-    const prefix = source
-      ? (config.ui ?? ["@/components/ui"]).find(
-          (prefix) => source === prefix || source.startsWith(`${prefix}/`),
-        )
-      : undefined
-    if (prefix !== undefined)
-      return { recognized: true, reason: `recognized by ui ${JSON.stringify(prefix)}` }
-    const imported = source && componentImports.find((pattern) => pattern.test(source))
-    if (imported)
-      return {
-        recognized: true,
-        reason: `recognized by componentImports ${JSON.stringify(imported.source)}`,
-      }
-    return { recognized: false, reason: "unrecognized (no recognition setting matches)" }
+  const ownComponents = (config.components ?? []).map((pattern) => new RegExp(pattern))
+
+  /**
+   * How policy sees a component. Contracts and component patterns match one name
+   * however the tag is written: UCard for <UCard>, <u-card>, and <LazyUCard>.
+   */
+  function identify(site: { component: string; importSource?: string }, imports?: Imports) {
+    const imported = site.importSource ? imports?.get(site.component)?.imported : undefined
+    const component = nuxtUi?.component(
+      site.component,
+      site.importSource,
+      imported === "default" || imported === "*" ? undefined : imported,
+    )
+    // Native tags are lowercase words; any other spelling is a component name. Nuxt
+    // registers a Lazy variant of every component, which is the same component.
+    const written = /[-A-Z]/.test(site.component)
+    const name = component
+      ? nuxtUi!.tag(component.name)!
+      : written
+        ? pascalCase(site.component).replace(/^Lazy(?=[A-Z])/, "")
+        : site.component
+    return {
+      name,
+      theme: component?.theme,
+      /** Nuxt UI's themed components and the project's own are protected from restyling. */
+      protected:
+        component !== undefined || (written && ownComponents.some((pattern) => pattern.test(name))),
+    }
   }
 
-  // One level of wrapper tracing. A component whose template has a single root that is a
-  // recognized component, and that keeps Vue's attribute fallthrough, passes its caller's
-  // class to that component. Needs component source discovery to read the wrapper.
-  const wrappers = new Map<string, ComponentUsage | undefined>()
-  function wrappedBy(file: string): ComponentUsage | undefined {
-    if (wrappers.has(file)) return wrappers.get(file)
-    let target: ComponentUsage | undefined
-    const source = project?.read(file)
-    if (source !== undefined) {
-      const { descriptor } = parseSfc(source, { filename: file, sourceMap: false })
-      const roots = (descriptor.template?.ast?.children ?? []).filter(
-        (node) => node.type !== 3 && !(node.type === 2 && !node.content.trim()),
-      )
-      const root = roots.length === 1 && roots[0]!.type === 1 ? roots[0]! : undefined
-      // A v-for root renders a fragment, which receives no fallthrough attributes.
-      const repeated = root?.props.some((prop) => prop.type === 7 && prop.name === "for")
-      if (
-        root &&
-        !repeated &&
-        forwardsClass([descriptor.script?.content, descriptor.scriptSetup?.content])
-      ) {
-        const inner = collectVue(source, file, {
-          classProps: config.classProps,
-          classHelpers: config.classHelpers,
-        })
-        const usage = inner.fatal
-          ? undefined
-          : inner.usages.find((item) => item.offset === root.loc.start.offset)
-        if (usage && !usage.unsupported && recognition(usage).recognized) target = usage
-      }
-    }
-    wrappers.set(file, target)
-    return target
+  function nativeReplacement(native: NativeElement, options: PreferUiComponentsOptions) {
+    const specific =
+      native.tag === "input" ? inputReplacements[native.type?.toLowerCase() ?? ""] : undefined
+    // Hidden and image inputs have no component, whatever a project configures for input.
+    if (specific === false) return undefined
+    const configured = options.elements?.[native.tag]
+    if (configured !== undefined) return configured || undefined
+    if (!nuxtUi) return undefined
+    return (specific && nuxtUi.tag(specific)) || nuxtUi.tag(nativeReplacements[native.tag] ?? "")
   }
 
   function effectiveSettings(filename: string) {
@@ -325,10 +332,7 @@ export async function createLinter(options: LinterOptions) {
                 Object.entries(replacement.options).filter(([, value]) => value !== undefined),
               ),
             }
-            selected.policy = prepareOptions(
-              selected.options,
-              selected.name === "no-restyle" ? ["layout"] : [],
-            )
+            selected.policy = prepareOptions(selected.name, selected.options)
           }
         }
       }
@@ -337,81 +341,10 @@ export async function createLinter(options: LinterOptions) {
   }
 
   const linter = {
-    doctor(source: string, filename: string) {
-      const collected = collectVue(source, filename, {
-        classProps: config.classProps,
-        classHelpers: config.classHelpers,
-      })
-      const positionAt = sourcePositions(source)
-      const severity = effectiveSettings(filename).find(
-        (setting) => setting.name === "no-restyle",
-      )!.severity
-      // An opaque spread is a require-static-classes finding in lint, but doctor still
-      // names it as an analysis gap, whatever that rule's severity.
-      const spreads = collected.sites.flatMap((site) =>
-        site.spread
-          ? [{ message: "Dynamic v-bind attrs may contain class or style", offset: site.offset }]
-          : [],
-      )
-      const issues = [...collected.errors, ...spreads].map((error) => ({
-        ...error,
-        ...positionAt(error.offset),
-      }))
-      if (!collected.fatal) {
-        for (const site of collected.sites) {
-          if (site.dynamic)
-            issues.push({
-              message: `Cannot statically inspect class input on <${site.component}>; enforcement coverage is incomplete.`,
-              offset: site.offset,
-              ...positionAt(site.offset),
-            })
-        }
-      }
-      const usages = (collected.fatal ? [] : collected.usages).map((site) => {
-        if (site.unsupported)
-          issues.push({
-            message: site.unsupported,
-            offset: site.offset,
-            ...positionAt(site.offset),
-          })
-        const definition = site.unsupported
-          ? undefined
-          : project?.resolve(
-              site.component,
-              collected.imports.get(site.component),
-              path.resolve(root, filename),
-              source,
-            )
-        let match = recognition(site)
-        const inner = !match.recognized && definition ? wrappedBy(definition.file) : undefined
-        if (inner)
-          match = {
-            recognized: true,
-            reason: `wraps <${inner.component}>, which is ${recognition(inner).reason}`,
-          }
-        return {
-          ...site,
-          ...positionAt(site.offset),
-          ...match,
-          severity,
-          active: !site.unsupported && match.recognized && severity !== "off",
-          definition: project ? (definition?.file ?? "unavailable") : "disabled",
-          suggestion:
-            !site.unsupported &&
-            !match.recognized &&
-            match.reason.startsWith("unrecognized") &&
-            site.importSource
-              ? `componentImports: [${JSON.stringify("^" + site.importSource.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$")}]`
-              : undefined,
-        }
-      })
-      return { usages, issues: issues.sort((a, b) => a.offset - b.offset) }
-    },
+    /** Whether Nuxt UI was found; without it only `config.components` are protected. */
+    nuxtUi: nuxtUi !== undefined,
     check(source: string, filename = "component.vue"): CheckResult {
-      const collected = collectVue(source, filename, {
-        classProps: config.classProps,
-        classHelpers: config.classHelpers,
-      })
+      const collected = collectVue(source, filename, { classHelpers: config.classHelpers })
       const diagnostics: Diagnostic[] = []
       let positionAt: ReturnType<typeof sourcePositions> | undefined
       const emit = (
@@ -421,7 +354,7 @@ export async function createLinter(options: LinterOptions) {
         message: string,
         component?: string,
         className?: string,
-        location: Pick<Diagnostic, "prop" | "slot" | "definition" | "suggestions"> = {},
+        location: Pick<Diagnostic, "prop" | "slot" | "suggestions"> = {},
       ) => {
         positionAt ??= sourcePositions(source)
         diagnostics.push({
@@ -441,29 +374,12 @@ export async function createLinter(options: LinterOptions) {
       for (const error of collected.errors)
         emit("parse-error", "error", error.offset, error.message)
       if (collected.fatal) return { diagnostics: sorted(), suppressed: [] }
-      // Source, filename, and import bindings are fixed for this invocation.
-      const definitions = new Map<string, ComponentDefinition | undefined>()
-      const definitionFor = (component: string) => {
-        if (!definitions.has(component))
-          definitions.set(
-            component,
-            project?.resolve(
-              component,
-              collected.imports.get(component),
-              path.resolve(root, filename),
-              source,
-            ),
-          )
-        return definitions.get(component)
-      }
-      // The component whose no-restyle contract applies to a class site, if any.
-      const restyled = (site: (typeof collected.sites)[number]) => {
-        if (recognition(site).recognized) return { component: site.component, via: undefined }
-        if (site.prop !== undefined) return undefined
-        const definition = definitionFor(site.component)
-        const inner = definition && wrappedBy(definition.file)
-        return inner ? { component: inner.component, via: site.component } : undefined
-      }
+      // Each class site with the component policy sees. ui is Nuxt UI's convention, so it
+      // is read on protected components only; elsewhere the prop may mean anything.
+      const sites = collected.sites.flatMap((site) => {
+        const owner = identify(site, collected.imports)
+        return site.prop && !owner.protected ? [] : [{ site, owner }]
+      })
       const effective = effectiveSettings(filename)
       for (const { name, severity, policy, options } of effective) {
         if (severity === "off") continue
@@ -492,6 +408,20 @@ export async function createLinter(options: LinterOptions) {
           }
           continue
         }
+        if (name === "prefer-ui-components") {
+          for (const native of collected.natives) {
+            const replacement = nativeReplacement(native, options)
+            if (replacement)
+              emit(
+                name,
+                severity,
+                native.offset,
+                `Use <${replacement}> instead of a native <${native.tag}>, so it follows the design system.`,
+                native.tag,
+              )
+          }
+          continue
+        }
         const report = (
           site: { component: string; offset: number; prop?: string; slot?: string },
           selected: ReturnType<typeof preparePolicy>,
@@ -499,23 +429,22 @@ export async function createLinter(options: LinterOptions) {
           token = "",
           category: Category = "unknown",
           suggestions: string[] = [],
-          wrapped?: { component: string; via: string },
+          theme?: ComponentTheme,
         ) => {
           const custom =
             typeof selected.message === "string"
               ? selected.message
               : (selected.message?.[category] ?? selected.message?.default)
-          const definition = name === "no-restyle" ? definitionFor(site.component) : undefined
           const fields: Record<string, string> = {
-            component: wrapped?.component ?? site.component,
+            component: site.component,
             className: token,
             category,
             file: filename,
             rule: name,
             prop: site.prop ?? "",
             slot: site.slot ?? "",
-            sizes: definition?.props?.size?.join(", ") ?? "",
-            variants: definition?.props?.variant?.join(", ") ?? "",
+            sizes: theme?.variants.size?.join(", ") ?? "",
+            variants: theme?.variants.variant?.join(", ") ?? "",
           }
           // `{{sizes|none defined}}` falls back to the text after `|` when the field is empty.
           const message = (custom ?? fallback).replace(/\{\{(.*?)\}\}/g, (_, key: string) => {
@@ -523,45 +452,17 @@ export async function createLinter(options: LinterOptions) {
             const field = bar < 0 ? key : key.slice(0, bar)
             return fields[field] || (bar < 0 ? "" : key.slice(bar + 1))
           })
-          const through = wrapped
-            ? ` <${wrapped.via}> passes its class to <${wrapped.component}>.`
-            : ""
-          const context =
-            site.prop === undefined
-              ? ""
-              : ` [prop ${JSON.stringify(site.prop)}${site.slot === undefined ? "" : `, slot ${JSON.stringify(site.slot)}`}]`
-          const details = definition
-            ? ` Definition: ${definition.file}.` +
-              (["size", "variant"] as const)
-                .map((name) => {
-                  const values = definition.props?.[name]
-                  return values
-                    ? ` Accepted ${name} values: ${values.map((value) => JSON.stringify(value)).join(", ")}.`
-                    : ""
-                })
-                .join("") +
-              (definition.props
-                ? " These choices do not guarantee a visual replacement for this class."
-                : "")
-            : ""
-          emit(
-            name,
-            severity,
-            site.offset,
-            message + through + details + context,
-            site.component,
-            token || undefined,
-            {
-              ...(suggestions.length ? { suggestions } : {}),
-              ...(definition ? { definition: structuredClone(definition) } : {}),
-              ...(site.prop === undefined ? {} : { prop: site.prop }),
-              ...(site.slot === undefined ? {} : { slot: site.slot }),
-            },
-          )
+          const where =
+            site.prop === "ui" ? ` In ${["ui", site.slot].filter(Boolean).join(".")}.` : ""
+          emit(name, severity, site.offset, message + where, site.component, token || undefined, {
+            ...(suggestions.length ? { suggestions } : {}),
+            ...(site.prop === undefined ? {} : { prop: site.prop }),
+            ...(site.slot === undefined ? {} : { slot: site.slot }),
+          })
         }
         if (name === "no-inline-styles") {
           for (const site of collected.styles) {
-            const selected = policy(site.component)
+            const selected = policy(identify(site, collected.imports).name)
             if (matches(selected.allow, "style", []) && !matches(selected.deny, "style", []))
               continue
             report(
@@ -574,7 +475,7 @@ export async function createLinter(options: LinterOptions) {
         }
         if (name === "no-raw-colors") {
           for (const site of collected.svgColors) {
-            const selected = policy(site.component)
+            const selected = policy(identify(site).name)
             const denied = matches(selected.deny, site.prop, ["color"])
             if (!denied && matches(selected.allow, site.prop, ["color"])) continue
             if (site.value === undefined) {
@@ -600,10 +501,9 @@ export async function createLinter(options: LinterOptions) {
             }
           }
         }
-        for (const site of collected.sites) {
-          const target = restyled(site)
-          if (name === "no-restyle" && !target) continue
-          const selected = policy(name === "no-restyle" ? target!.component : site.component)
+        for (const { site, owner } of sites) {
+          if (name === "no-restyle" && !owner.protected) continue
+          const selected = policy(owner.name)
           if (name === "require-static-classes") {
             if (site.dynamic)
               report(
@@ -633,11 +533,18 @@ export async function createLinter(options: LinterOptions) {
                 report(
                   site,
                   selected,
-                  restyleMessage(token, target!.component, rejectedCategory, denied),
+                  restyleMessage(
+                    token,
+                    site.component,
+                    rejectedCategory,
+                    denied,
+                    owner.theme,
+                    nuxtUi?.themeConfig ?? "",
+                  ),
                   token,
                   rejectedCategory,
                   [],
-                  target!.via ? { component: target!.component, via: target!.via } : undefined,
+                  owner.theme,
                 )
               continue
             }
@@ -656,15 +563,9 @@ export async function createLinter(options: LinterOptions) {
             const permitted = (candidate: string) => {
               const replacement = tailwind.inspect(candidate)
               return effective.every(({ name: rule, severity, policy }) => {
-                if (
-                  severity === "off" ||
-                  rule === "no-inline-styles" ||
-                  rule === "require-static-classes" ||
-                  rule === "no-restricted-components"
-                )
-                  return true
-                if (rule === "no-restyle" && !target) return true
-                const selected = policy(rule === "no-restyle" ? target!.component : site.component)
+                if (severity === "off" || !classRules.has(rule)) return true
+                if (rule === "no-restyle" && !owner.protected) return true
+                const selected = policy(owner.name)
                 if (matches(selected.deny, candidate, replacement.categories)) return false
                 if (rule === "no-restyle")
                   return replacement.categories.every((category) =>
@@ -689,14 +590,16 @@ export async function createLinter(options: LinterOptions) {
                 canonical && permitted(canonical) ? [canonical] : [],
               )
             }
-            if (name === "no-raw-colors" && info.rawColor)
+            if (name === "no-raw-colors" && info.rawColor) {
+              const colors = tailwind.themeColors(token).slice(0, 8)
               report(
                 site,
                 selected,
-                `Replace "${token}" with a semantic theme color${tailwind.colors.length ? ` (${tailwind.colors.slice(0, 8).join(", ")})` : ""}.`,
+                `Replace "${token}" with a theme color${colors.length ? ` such as ${colors.join(", ")}` : ""}.`,
                 token,
                 category,
               )
+            }
             if (name === "no-unknown-classes" && !info.known) {
               const candidates = tailwind.suggest(token).filter(permitted)
               report(
@@ -734,7 +637,7 @@ export async function createLinter(options: LinterOptions) {
 
 export async function lintSource(
   source: string,
-  options: LinterOptions & { filename?: string },
+  options: LinterOptions & { filename?: string } = {},
 ): Promise<Diagnostic[]> {
   const linter = await createLinter(options)
   return linter.lint(source, options.filename)

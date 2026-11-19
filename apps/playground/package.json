@@ -7,14 +7,14 @@
     "build": "vite build",
     "typecheck": "vue-tsc --noEmit",
     "lint:design": "selfix src",
-    "check": "pnpm typecheck && pnpm lint:design && pnpm build",
+    "check": "pnpm build && pnpm typecheck && pnpm lint:design",
     "test": "pnpm --filter selfix build && vitest run --root ../.. apps/playground/test"
   },
   "dependencies": {
+    "@nuxt/ui": "^4.13.0",
     "vue": "^3.5.42"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-vue": "^6.0.9",
     "selfix": "workspace:*",
     "tailwindcss": "^4.3.3",

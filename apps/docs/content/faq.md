@@ -3,13 +3,21 @@ title: FAQ
 description: Short answers about requirements, scope, and what selfix does not do.
 ---
 
-## Do I need shadcn-vue, a UI kit, or ESLint?
+## Do I need Nuxt, ESLint, or a config file?
 
-No. selfix needs Vue 3 and Tailwind CSS 4. It works with your own components and runs as its own command. See [shadcn-vue](shadcn-vue.md) if you use it.
+No. selfix needs Nuxt UI 4, Vue 3, and Tailwind CSS 4. It works in Nuxt and in [Vue with Vite](vue.md), runs as its own command, and needs no config.
+
+## Does it work without Nuxt UI?
+
+It runs, but that is not what it is for. Without Nuxt UI, only the components you name in `components` are protected, and selfix says so. For a Tailwind project without Nuxt UI, use [shadcn/lint](https://github.com/shadcn-ui/lint).
 
 ## Does selfix support Tailwind CSS 3, React, or JSX?
 
 No. selfix checks Vue single-file component templates against Tailwind CSS 4. It does not read JSX, TSX, or class calls that appear only in script. See [What selfix can read](analysis.md).
+
+## Why is a class on UIcon not reported?
+
+`UIcon` and `UApp` have no theme, so `class` is how you style them. selfix protects the components that have one. See [protected components](configuration.md#protected-components).
 
 ## Does selfix fix findings for me?
 

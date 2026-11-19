@@ -3,7 +3,7 @@
 const { id, kind } = Astro.props
 const commands = {
   install: { pnpm: "pnpm add -D selfix", npm: "npm install -D selfix", yarn: "yarn add -D selfix", bun: "bun add -d selfix" },
-  run: { pnpm: "pnpm exec selfix src", npm: "npx selfix src", yarn: "yarn selfix src", bun: "bunx selfix src" },
+  run: { pnpm: "pnpm exec selfix", npm: "npx selfix", yarn: "yarn selfix", bun: "bunx selfix" },
 }[kind as "install" | "run"]
 ---
 <div class="command">

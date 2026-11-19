@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from "vitest"
-import { createLinter, defineConfig, ruleNames, type Config, type RuleName } from "../src/index.js"
+import {
+  createLinter as create,
+  defineConfig,
+  ruleNames,
+  type Config,
+  type LinterOptions,
+  type RuleName,
+} from "../src/index.js"
+
+// These tests protect a local Button unless a test names its own components.
+const createLinter = (options: LinterOptions) =>
+  create({ ...options, config: { components: ["^Button$"], ...options.config } })
 
 const css = '@import "tailwindcss"; @theme { --color-primary: #124578; }'
 function only(name: RuleName, options = {}) {
@@ -21,10 +32,10 @@ describe("design-system rules", () => {
     const linter = await createLinter({ css, config: { rules: only("no-restyle") } })
     const findings = linter.lint(button(`class="${token}"`))
     expect(findings).toHaveLength(1)
-    expect(findings[0].message).toContain(category)
-    expect(findings[0].message).toMatch(/remove/i)
-    expect(findings[0].message).toMatch(/documented.*props/)
-    expect(findings[0].message).not.toMatch(/margin|parent gap|variant=/)
+    expect(findings[0].message).toBe(
+      `"${token}" is not allowed on <Button>: the component owns its ${category}. ` +
+        "Use the component's props, or widen its contract if callers need this control.",
+    )
   })
 
   it.each(["p-4", "mt-4", "truncate"])(
@@ -35,8 +46,7 @@ describe("design-system rules", () => {
         config: { rules: only("no-restyle", { contracts: [{ pattern: "^Button$", allow: [] }] }) },
       })
       const [finding] = linter.lint(button(`class="${token}"`))
-      expect(finding.message).toMatch(/contract/)
-      expect(finding.message).toMatch(/remove/i)
+      expect(finding.message).toMatch(/widen its contract/)
       expect(finding.message).not.toMatch(/use margin|use.*parent gap|Use a component variant/)
     },
   )
@@ -47,9 +57,9 @@ describe("design-system rules", () => {
       config: { rules: only("no-restyle", { allow: ["layout"], deny: ["mt-*"] }) },
     })
     const [finding] = linter.lint(button('class="mt-4"'))
-    expect(finding.message).toContain("denied")
-    expect(finding.message).toMatch(/contract permits/)
-    expect(finding.message).not.toContain("Use an approved theme utility")
+    expect(finding.message).toBe(
+      '"mt-4" is denied by the design-system policy for <Button>. Remove this class.',
+    )
   })
 
   it.each([
@@ -122,17 +132,17 @@ describe("design-system rules", () => {
     ])
   })
 
-  it("applies recognition, contracts, and class props only to resolved component identities", async () => {
+  it("protects components by resolved name and reads ui only on components", async () => {
     const source = `<script setup lang="ts">
 import { Button, Button as BaseButton, UIButton, Base_Button, type SpecifierType } from '@/components/ui/button';
 import type DefaultType from '@/components/ui/types';
 import type { WholeType } from '@/components/ui/types';
 </script>
 <template>
-<Button class="flex" content-class="flex" />
-<button class="flex" content-class="flex" />
-<Button v-pre class="flex" content-class="flex" />
-<div v-pre><Button class="flex" content-class="flex" /></div>
+<Button class="flex" :ui="{ base: 'flex' }" />
+<button class="flex" :ui="{ base: 'flex' }" />
+<Button v-pre class="flex" :ui="{ base: 'flex' }" />
+<div v-pre><Button class="flex" :ui="{ base: 'flex' }" /></div>
 <base-button class="flex" />
 <u-i-button class="flex" />
 <ui-button class="flex" />
@@ -146,11 +156,8 @@ import type { WholeType } from '@/components/ui/types';
     const linter = await createLinter({
       css,
       config: {
-        components: ["^GlobalButton$"],
-        classProps: [{ pattern: "^Button$", props: { contentClass: "class" } }],
-        rules: only("no-restyle", {
-          contracts: [{ pattern: "^(Button|BaseButton|UIButton|GlobalButton)$", deny: ["flex"] }],
-        }),
+        components: ["^(Button|BaseButton|UIButton|GlobalButton)$"],
+        rules: only("no-restyle", { deny: ["flex"] }),
       },
     })
     const diagnostics = linter.lint(source, "identity.vue")
@@ -178,10 +185,10 @@ import type { WholeType } from '@/components/ui/types';
         rule: "no-restyle",
         component: "Button",
         className: "flex",
-        prop: "content-class",
+        prop: "ui",
         line: 7,
         column: 22,
-        offset: source.indexOf('content-class="flex"'),
+        offset: source.indexOf(":ui="),
       },
       {
         rule: "no-restyle",
@@ -219,15 +226,15 @@ import { Button } from '@/components/ui/button'
 import * as UI from '@/components/ui/button'
 </script>
 <template>
-<Button class="p-4" content-class="p-4" />
-<component :is="Button" class="p-4" content-class="p-4" />
-<UI.Button class="p-4" content-class="p-4" />
+<Button class="p-4" :ui="{ base: 'p-4' }" />
+<component :is="Button" class="p-4" :ui="{ base: 'p-4' }" />
+<UI.Button class="p-4" :ui="{ base: 'p-4' }" />
 <component :is="choice" class="p-4" />
 </template>`
     const linter = await createLinter({
       css,
       config: {
-        classProps: [{ pattern: "^Button$", props: { contentClass: "class" } }],
+        components: ["^(Button|UI\\.Button)$"],
         rules: only("no-restyle"),
       },
     })
@@ -251,8 +258,8 @@ import * as UI from '@/components/ui/button'
         rule: "no-restyle",
         component: "Button",
         className: "p-4",
-        prop: "content-class",
-        offset: source.indexOf('content-class="p-4"'),
+        prop: "ui",
+        offset: source.indexOf(":ui="),
       },
       {
         rule: "no-restyle",
@@ -265,8 +272,8 @@ import * as UI from '@/components/ui/button'
         rule: "no-restyle",
         component: "Button",
         className: "p-4",
-        prop: "content-class",
-        offset: source.indexOf('content-class="p-4"', source.indexOf(":is")),
+        prop: "ui",
+        offset: source.indexOf(":ui=", source.indexOf(":is")),
       },
       {
         rule: "no-restyle",
@@ -274,6 +281,13 @@ import * as UI from '@/components/ui/button'
         className: "p-4",
         prop: undefined,
         offset: source.indexOf('class="p-4"', source.indexOf("<UI.Button")),
+      },
+      {
+        rule: "no-restyle",
+        component: "UI.Button",
+        className: "p-4",
+        prop: "ui",
+        offset: source.indexOf(":ui=", source.indexOf("<UI.Button")),
       },
     ])
   })
@@ -292,10 +306,7 @@ import * as UI from '@/components/ui/button'
       const linter = await createLinter({
         css,
         config: {
-          ui: [],
-          components: ["^GlobalButton$"],
-          componentImports: ["^@policy/ui$"],
-          ignoreImports: ["^@policy/ignored$"],
+          components: ["^(Button|GlobalButton)$"],
           rules: only("no-restyle", {
             allow: ["layout"],
             deny: ["px-*"],
@@ -338,9 +349,6 @@ import Ignored from '@policy/ignored'
       }
       // Observe only policy regexes; Vue and Tailwind may construct their own.
       const policyPatterns = [
-        "^GlobalButton$",
-        "^@policy/ui$",
-        "^@policy/ignored$",
         "^(Button|GlobalButton)$",
         ".*",
         "^p-.*$",
@@ -524,14 +532,14 @@ import Ignored from '@policy/ignored'
       config: {
         rules: only("no-restyle", {
           ...options,
-          message: { typography: "blocked {{category}}", unknown: "unclassified {{category}}" },
+          message: "blocked {{category}}",
         }),
       },
     })
     expect(linter.lint(button('class="mixed"'))).toEqual([
       expect.objectContaining({
         className: "mixed",
-        message: expected === "unknown" ? "unclassified unknown" : "blocked typography",
+        message: `blocked ${expected}`,
       }),
     ])
   })
@@ -860,19 +868,20 @@ function cn() { throw new Error('never run') }
     ])
   })
 
-  it("enforces all seven rules on Vue", async () => {
+  it("enforces all eight rules on Vue", async () => {
     const linter = await createLinter({
       css,
       config: {
         rules: {
           "no-restricted-components": ["error", { components: [{ name: "Button" }] }],
+          "prefer-ui-components": ["error", { elements: { hr: "Divider" } }],
         },
       },
     })
     const result = linter.lint(
       button(
         'class="p-[13px] bg-red-500 rounded-huge" :class="`text-${size}`" style="padding: 1px"',
-      ),
+      ).replace("</template>", "<hr /></template>"),
       "Page.vue",
     )
     expect(new Set(result.map((item) => item.rule))).toEqual(new Set(ruleNames))
@@ -978,27 +987,18 @@ function cn() { throw new Error('never run') }
     expect(result.map((item) => item.className)).toEqual(["px-2", "mt-4"])
     expect(result[0].message).toBe("px-2 violates Button spacing in Page.vue. See DESIGN.md.")
   })
-  it("recognizes configured imports and global components and honors exclusions", async () => {
+  it("protects configured component names however the tag is written", async () => {
     const linter = await createLinter({
       css,
-      config: {
-        ui: ["@acme/ui"],
-        components: ["^GlobalButton$"],
-        ignoreImports: ["/internal$"],
-        rules: only("no-restyle"),
-      },
+      config: { components: ["^GlobalButton$"], rules: only("no-restyle") },
     })
-    expect(linter.lint('<template><GlobalButton class="p-4" /></template>')).toHaveLength(1)
-    expect(
-      linter.lint(
-        '<script setup>import Button from "@acme/uix"</script><template><Button class="p-4" /></template>',
-      ),
-    ).toEqual([])
-    expect(
-      linter.lint(
-        '<script setup>import Button from "@acme/ui/internal"</script><template><Button class="p-4" /></template>',
-      ),
-    ).toEqual([])
+    for (const tag of ["GlobalButton", "global-button"])
+      expect(linter.lint(`<template><${tag} class="p-4" /></template>`)).toEqual([
+        expect.objectContaining({ rule: "no-restyle", component: tag, className: "p-4" }),
+      ])
+    expect(linter.lint('<template><Button class="p-4" /><div class="p-4" /></template>')).toEqual(
+      [],
+    )
   })
   it("exempts vocabulary classes but deny still wins", async () => {
     const linter = await createLinter({
@@ -1048,7 +1048,9 @@ function cn() { throw new Error('never run') }
     expect(() =>
       defineConfig({ rules: only("no-restyle", { message: "{{sizes|none}} {{variants}}" }) }),
     ).not.toThrow()
-    expect(() => defineConfig({ ui: "invalid" } as unknown as Config)).toThrow("array")
+    expect(() => defineConfig({ ui: ["@/ui"] } as unknown as Config)).toThrow("was removed")
+    expect(() => defineConfig({ components: "invalid" } as unknown as Config)).toThrow("array")
+    expect(() => defineConfig({ prefix: "u-" })).toThrow("PascalCase")
     expect(() => defineConfig({ rules: only("require-static-classes", { allow: ["*"] }) })).toThrow(
       "not allow/deny",
     )
@@ -1095,46 +1097,6 @@ describe("v-bind spreads", () => {
         column: 11,
         offset: objectSpread,
       }),
-    ])
-  })
-
-  it("keeps doctor coverage gaps for opaque spreads only", async () => {
-    const linter = await createLinter({
-      css,
-      config: { rules: { "require-static-classes": "off" } },
-    })
-    const { issues, usages } = linter.doctor(source, "Spread.vue")
-    expect(issues).toEqual([
-      {
-        message: "Dynamic v-bind attrs may contain class or style",
-        offset: plainSpread,
-        line: 5,
-        column: 8,
-      },
-      {
-        message:
-          "Cannot statically inspect class input on <div>; enforcement coverage is incomplete.",
-        offset: plainSpread,
-        line: 5,
-        column: 8,
-      },
-      {
-        message: "Dynamic v-bind attrs may contain class or style",
-        offset: objectSpread,
-        line: 6,
-        column: 11,
-      },
-      {
-        message:
-          "Cannot statically inspect class input on <Button>; enforcement coverage is incomplete.",
-        offset: objectSpread,
-        line: 6,
-        column: 11,
-      },
-    ])
-    expect(usages.map(({ component, recognized }) => ({ component, recognized }))).toEqual([
-      { component: "Button", recognized: true },
-      { component: "Button", recognized: true },
     ])
   })
 

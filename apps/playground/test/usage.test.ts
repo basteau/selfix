@@ -1,12 +1,20 @@
 import { spawnSync } from "node:child_process"
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { afterEach, expect, it } from "vitest"
+import { afterEach, beforeAll, expect, it } from "vitest"
 
 const playground = fileURLToPath(new URL("../", import.meta.url))
 const bin = path.join(playground, "node_modules/.bin/selfix")
+const generated = "node_modules/.nuxt-ui"
 const projects: string[] = []
+
+beforeAll(() => {
+  // Nuxt UI's Vite plugin writes the generated theme; one build provides it.
+  if (existsSync(path.join(playground, generated, "ui.css"))) return
+  const build = spawnSync("pnpm", ["build"], { cwd: playground, encoding: "utf8" })
+  expect(build.status, build.stderr).toBe(0)
+}, 120_000)
 
 afterEach(() => {
   for (const project of projects.splice(0)) rmSync(project, { recursive: true, force: true })
@@ -19,33 +27,35 @@ function lint(cwd: string) {
   return { status: result.status, diagnostics: JSON.parse(result.stdout).diagnostics }
 }
 
+/** A copy of the playground; the real @nuxt/ui resolves from the parent directory. */
 function fixture() {
   const project = mkdtempSync(path.join(playground, ".selfix-test-"))
   projects.push(project)
-  for (const entry of ["src", "selfix.config.ts", "package.json"])
+  for (const entry of ["src", "selfix.config.ts", "package.json", generated])
     cpSync(path.join(playground, entry), path.join(project, entry), { recursive: true })
   return project
 }
 
-it("accepts the actual playground with its theme, variants, and TypeScript config", () => {
+it("accepts the actual playground with the real Nuxt UI theme and components", () => {
   expect(lint(playground)).toEqual({ status: 0, diagnostics: [] })
 })
 
 it.each([
-  ["no-restyle", '<Button class="p-8">Invalid</Button>'],
+  ["no-restyle", '<UButton class="font-bold">Invalid</UButton>'],
+  ["no-restyle", "<UButton :ui=\"{ label: 'font-bold' }\">Invalid</UButton>"],
+  ["prefer-ui-components", '<button type="button">Invalid</button>'],
   ["no-raw-colors", '<div class="text-red-500">Invalid</div>'],
   ["no-arbitrary-values", '<div class="p-[13px]">Invalid</div>'],
   ["no-inline-styles", '<div style="padding: 13px">Invalid</div>'],
-  ["no-unknown-classes", '<div class="not-a-tailwind-class">Invalid</div>'],
+  ["no-unknown-classes", '<div class="text-mutd">Invalid</div>'],
   ["require-static-classes", '<div :class="runtimeClass">Invalid</div>'],
-])("reports %s through the installed CLI and playground config", (rule, template) => {
+])("reports %s through the installed CLI: %s", (rule, template) => {
   const project = fixture()
   const file = path.join(project, "src/App.vue")
   writeFileSync(
     file,
     `<script setup lang="ts">
 import { ref } from "vue"
-import Button from "./components/ui/Button.vue"
 const runtimeClass = ref("text-primary")
 </script>
 <template>${template}</template>
@@ -55,56 +65,37 @@ const runtimeClass = ref("text-primary")
   const result = lint(project)
   expect(result.status).toBe(1)
   expect(result.diagnostics).toEqual([
-    expect.objectContaining({ rule, severity: "error", file, line: 6, column: expect.any(Number) }),
+    expect.objectContaining({ rule, severity: "error", file, line: 5, column: expect.any(Number) }),
   ])
-  if (rule === "no-restyle") {
-    const definition = path.join(project, "src/components/ui/Button.vue")
-    expect(result.diagnostics[0].message).toBe(
-      "Button owns its appearance. Use its variant prop; keep only layout classes here." +
-        ` Definition: ${definition}. Accepted variant values: "primary", "secondary".` +
-        " These choices do not guarantee a visual replacement for this class.",
+  const [{ message, suggestions }] = result.diagnostics
+  if (rule === "no-restyle")
+    expect(message).toMatch(
+      /^"font-bold" is not allowed on <UButton>: the component owns its typography\. Use size \(xs, sm, md, lg, xl\), or restyle it for the whole app under ui\.button in vite\.config\.ts\.( In ui\.label\.)?$/,
     )
-    expect(result.diagnostics[0].definition).toEqual({
-      file: definition,
-      props: { variant: ["primary", "secondary"] },
-    })
-  }
+  if (rule === "no-raw-colors") expect(message).toContain("such as text-dimmed, text-muted")
+  if (rule === "no-unknown-classes") expect(suggestions).toEqual(["text-muted"])
 })
 
-it("keeps author vocabulary and consumer policy checks active through a corrected adoption workflow", () => {
+it("applies the playground contract and Nuxt UI's own colors", () => {
   const project = fixture()
-  const author = path.join(project, "src/components/ui/Authored.vue")
-  const consumer = path.join(project, "src/App.vue")
-  const component = (classes: string) => `<script setup lang="ts">
-import Button from './Button.vue'
-</script>
-<template><Button class="p-8" /><div class="${classes}" /></template>
-<style scoped>div { padding: 1rem; }</style>\n`
-  writeFileSync(author, component("text-red-500 missing-token"))
+  const file = path.join(project, "src/App.vue")
   writeFileSync(
-    consumer,
-    `<script setup lang="ts">
-import Button from './components/ui/Button.vue'
-</script>
-<template><Button class="p-8" /><div :style="{ '--progress': 0.5 }" /></template>\n`,
+    file,
+    `<template>
+  <UCard class="p-2 shadow-lg" :ui="{ body: 'p-0' }" />
+  <LazyUModal class="rounded-xl" />
+  <div class="bg-elevated text-neutral-500 border-default ring-primary/50" />
+</template>
+`,
   )
-  const failing = lint(project)
-  expect(failing.status).toBe(1)
   expect(
-    failing.diagnostics.map(({ rule, file }: { rule: string; file: string }) => ({ rule, file })),
+    lint(project).diagnostics.map(({ rule, component, className }: Record<string, string>) => [
+      rule,
+      component,
+      className,
+    ]),
   ).toEqual([
-    { rule: "no-restyle", file: consumer },
-    { rule: "no-inline-styles", file: consumer },
-    { rule: "no-raw-colors", file: author },
-    { rule: "no-unknown-classes", file: author },
+    ["no-restyle", "UCard", "shadow-lg"],
+    ["no-restyle", "LazyUModal", "rounded-xl"],
   ])
-  // Corrections use known tokens and the component API; keep author styling in place.
-  writeFileSync(author, component("text-primary p-4"))
-  writeFileSync(
-    consumer,
-    `<script setup lang="ts">
-import Button from './components/ui/Button.vue'
-</script><template><Button variant="secondary" class="mt-4" /><div class="w-full" /></template>`,
-  )
-  expect(lint(project)).toEqual({ status: 0, diagnostics: [] })
 })

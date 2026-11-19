@@ -447,17 +447,13 @@ import { CustomButton as LegacyButton } from "some-ui"
   ).toEqual([])
 })
 
-it("enforces import restrictions independently of styling recognition", async () => {
+it("enforces import restrictions independently of styling protection", async () => {
   const source = `<script setup>import { CustomButton as LegacyButton } from "kit"</script><template><LegacyButton class="p-4"/></template>`
   for (const recognized of [false, true]) {
     const linter = await createLinter({
       css,
       config: {
-        ui: [],
         components: recognized ? ["^LegacyButton$"] : [],
-        componentImports: [],
-        ignoreImports: recognized ? [] : [".*"],
-        project: false,
         rules: {
           "no-restricted-components": [
             "error",
@@ -644,18 +640,14 @@ it("reports unsupported coverage as errors even when restrictions are warnings",
   }
 })
 
-it("enforces restrictions independently of styling recognition and discovery", async () => {
+it("enforces restrictions independently of styling protection", async () => {
   const source = `<script setup>import CustomButton from 'kit'</script><template><CustomButton class="p-4"/></template>`
   const restriction = ["error", { components: [{ name: "CustomButton" }] }] as const
   for (const recognized of [false, true]) {
     const linter = await createLinter({
       css,
       config: {
-        ui: [],
         components: recognized ? ["^CustomButton$"] : [],
-        componentImports: [],
-        ignoreImports: recognized ? [] : [".*"],
-        project: false,
         rules: {
           "no-restricted-components": [
             restriction[0],

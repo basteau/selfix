@@ -1219,7 +1219,7 @@ describe("createTailwind", () => {
     const base = await tempProject("utilities")
     const tailwind = await createTailwind('@import "tailwindcss";', base)
 
-    expect(tailwind.colors).not.toContain("red-500")
+    expect(tailwind.themeColors("bg-red-500")).toEqual([])
     expect(tailwind.inspect("p-4")).toEqual({
       known: true,
       categories: ["spacing"],
@@ -1320,7 +1320,7 @@ describe("createTailwind", () => {
       base,
     )
 
-    expect(tailwind.colors).toContain("brand")
+    expect(tailwind.themeColors("bg-red-500")).toContain("bg-brand")
     expect(tailwind.inspect("text-brand")).toEqual({
       known: true,
       categories: ["color"],
@@ -1403,7 +1403,7 @@ describe("createTailwind", () => {
       base,
     )
 
-    expect(tailwind.colors).toContain("accent")
+    expect(tailwind.themeColors("hover:text-red-500")).toContain("text-accent")
     expect(tailwind.inspect("text-accent")).toEqual({
       known: true,
       categories: ["color"],

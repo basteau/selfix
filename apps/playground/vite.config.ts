@@ -1,5 +1,7 @@
 import { defineConfig } from "vite"
 import vue from "@vitejs/plugin-vue"
-import tailwindcss from "@tailwindcss/vite"
+import ui from "@nuxt/ui/vite"
 
-export default defineConfig({ plugins: [vue(), tailwindcss()] })
+// The Nuxt UI plugin brings Tailwind CSS and writes the generated theme that
+// selfix reads to node_modules/.nuxt-ui.
+export default defineConfig({ plugins: [vue(), ui({ router: false })] })

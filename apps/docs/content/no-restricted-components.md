@@ -11,7 +11,7 @@ rules: {
     components: [{
       name: "CustomButton",
       replacement: "UButton",
-      message: "Use our standard button for consistent behavior.",
+      message: "CustomButton ignores the theme.",
     }],
   }],
 },
@@ -20,7 +20,7 @@ rules: {
 `<CustomButton />` then reports the following, plus the global `note` when you set one:
 
 ```text
-<CustomButton> is restricted. Use <UButton> instead. Use our standard button for consistent behavior.
+<CustomButton> is restricted. Use <UButton> instead. CustomButton ignores the theme.
 ```
 
 selfix names the replacement. It never rewrites imports, props, or templates.
@@ -56,7 +56,7 @@ To ban an export from a module, match the import:
 - `imports` compares the import string written in the SFC. It does not resolve aliases or follow re-exports, so `some-ui` does not match `some-ui/button` or `@/some-ui`.
 - A static `<component :is="Button">` resolves to the `Button` import only when `Button` is an unshadowed runtime import. The lookup is exact, so `:is="button"` does not resolve. A `v-for` or slot binding with the same name leaves `:is` unresolved.
 - A namespace tag such as `<UI.Button>` keeps the name `UI.Button`. A ban on `Button` or `UI` does not match it, and it is not the named export `Button` for `imports` entries.
-- Type-only imports, native elements, and `v-pre` content never match.
+- Type-only imports, native elements, and `v-pre` content never match. For native elements, use [prefer-ui-components](prefer-ui-components.md).
 
 ## Coverage errors
 

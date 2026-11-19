@@ -1,4 +1,4 @@
-// `sizes` and `variants` are filled only for no-restyle findings with a discovered definition.
+// `sizes` and `variants` are filled for no-restyle findings on a themed Nuxt UI component.
 const placeholders = [
   "component",
   "className",
@@ -10,6 +10,16 @@ const placeholders = [
   "sizes",
   "variants",
 ]
+
+/** Directories that never hold application source. The CLI and stylesheet detection skip them. */
+export const ignoredDirectories = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "coverage",
+  ".nuxt",
+  ".output",
+])
 
 export const categories = [
   "layout",
@@ -26,6 +36,7 @@ export type Category = (typeof categories)[number]
 
 export const ruleNames = [
   "no-restricted-components",
+  "prefer-ui-components",
   "no-restyle",
   "no-raw-colors",
   "no-arbitrary-values",
@@ -67,11 +78,19 @@ export interface RestrictedComponentOptions {
   components?: ComponentRestriction[]
   imports?: ImportRestriction[]
 }
+export interface PreferUiComponentsOptions {
+  /** Native tags mapped to their replacement; merged over the defaults, false exempts a tag. */
+  elements?: Record<string, string | false>
+}
 /** File overrides preserve omitted options; supplied lists/maps replace as units. */
 export type RuleSetting<Options = RuleOptions> = Severity | [Severity, Options]
 export type Rules = {
   [Name in RuleName]?: RuleSetting<
-    Name extends "no-restricted-components" ? RestrictedComponentOptions : RuleOptions
+    Name extends "no-restricted-components"
+      ? RestrictedComponentOptions
+      : Name extends "prefer-ui-components"
+        ? PreferUiComponentsOptions
+        : RuleOptions
   >
 }
 export interface FileOverride {
@@ -85,66 +104,25 @@ export interface ClassHelper {
   /** Exported name, or "default" for a default import. */
   import: string
 }
-export interface ClassProps {
-  /** Regular expression matching the collected component name. First match wins. */
-  pattern: string
-  props: Record<string, "class" | "slot-map">
-}
-
-export function normalizePropName(name: string): string {
-  return name.replace(/\B([A-Z])/g, "-$1").toLowerCase()
-}
-
-export interface ProjectOptions {
-  /** Project metadata/source root; CLI resolves this relative to its config. */
-  root?: string
-  /** Import patterns (at most one *) mapped to local source paths. */
-  aliases?: Record<string, string>
-  /** Exact local/global component names mapped to Vue definitions. */
-  components?: Record<string, string>
-  /** Explicit tsconfig/jsconfig file, relative to root. */
-  tsconfig?: string
-  /** Detect Nuxt from package metadata by default; false disables it. */
-  nuxt?: boolean
-  /** Generated GlobalComponents declarations relative to root; Nuxt defaults to .nuxt/components.d.ts. */
-  componentDeclarations?: string
-}
-
 export interface Config {
-  /** Optional filesystem discovery; the CLI enables it by default. */
-  project?: ProjectOptions | false
-  /** Additional props containing classes, scoped by component name. */
-  classProps?: ClassProps[]
+  /** Tailwind CSS entry, relative to the project root. Detected when omitted. */
+  css?: string
+  /** Directory of Nuxt UI's generated files. Defaults to .nuxt, then node_modules/.nuxt-ui. */
+  buildDir?: string
+  /** Nuxt UI component prefix. Defaults to "U". */
+  prefix?: string
+  /** Regexes naming your own components to protect alongside Nuxt UI's. */
+  components?: string[]
   /** Additional imported class helpers; built-in recognition remains enabled. */
   classHelpers?: ClassHelper[]
-  /** CSS entry relative to the configuration file. The CLI requires it unless --css or components.json `tailwind.css` provides it. */
-  css?: string
-  /** Exact CSS imports mapped to local files, relative to the config directory (API: root). */
-  cssAliases?: Record<string, string>
-  /** Import prefixes identifying design-system components. */
-  ui?: string[]
-  /** Regexes for additional design-system import sources. */
-  componentImports?: string[]
-  ignoreImports?: string[]
-  /** Regexes for globally registered components without a local import. */
-  components?: string[]
-  /** Config-relative file globs excluded by the CLI. */
+  /** Root-relative file globs the CLI skips. */
   exclude?: string[]
+  /** Text appended to every finding. */
   note?: string
   rules?: Rules
   overrides?: FileOverride[]
   /** Severity for exception comments that suppress nothing; defaults to error. */
   unusedExceptions?: Severity
-}
-
-/** Programmatic linting policy; file selection and CSS loading belong to the caller. */
-export type LinterConfig = Omit<Config, "css" | "exclude">
-
-export function validateLinterConfig(config: unknown): asserts config is LinterConfig {
-  const obj = record(config, "config")
-  for (const field of ["css", "exclude"])
-    if (field in obj) throw new Error(`config.${field} is only supported by the CLI.`)
-  validateConfig(config)
 }
 
 export function defineConfig(config: Config): Config {
@@ -247,20 +225,30 @@ function options(value: unknown, label: string, contract = false) {
   }
 }
 
+const removedKeys = [
+  "ui",
+  "componentImports",
+  "ignoreImports",
+  "classProps",
+  "cssAliases",
+  "project",
+]
+
 export function validateConfig(config: unknown): asserts config is Config {
   const obj = record(config, "config")
+  for (const key of removedKeys)
+    if (key in obj)
+      throw new Error(
+        `The ${key} option was removed. selfix recognizes Nuxt UI components, reads their ui prop, and loads the generated theme on its own; name your own components with the components option.`,
+      )
   keys(
     obj,
     [
       "css",
-      "project",
-      "classProps",
-      "classHelpers",
-      "cssAliases",
-      "ui",
-      "componentImports",
-      "ignoreImports",
+      "buildDir",
+      "prefix",
       "components",
+      "classHelpers",
       "exclude",
       "note",
       "rules",
@@ -269,52 +257,14 @@ export function validateConfig(config: unknown): asserts config is Config {
     ],
     "config",
   )
-  if (obj.project !== undefined && obj.project !== false) {
-    const project = record(obj.project, "project")
-    if (project.nuxtComponents !== undefined)
-      throw new Error(
-        "project.nuxtComponents was removed. Use project.componentDeclarations with the same path.",
-      )
-    keys(
-      project,
-      ["root", "aliases", "components", "tsconfig", "nuxt", "componentDeclarations"],
-      "project",
-    )
-    const localPath = (value: unknown, label: string) => {
-      if (
-        typeof value !== "string" ||
-        !value.trim() ||
-        (/^[a-z][a-z\d+.-]*:/i.test(value) && !/^[a-z]:[\\/]/i.test(value))
-      )
-        throw new Error(`${label} must be a non-empty local path.`)
-    }
-    for (const key of ["root", "tsconfig", "componentDeclarations"])
-      if (project[key] !== undefined) localPath(project[key], `project.${key}`)
-    if (project.nuxt !== undefined && typeof project.nuxt !== "boolean")
-      throw new Error("project.nuxt must be a boolean.")
-    for (const key of ["aliases", "components"])
-      if (project[key] !== undefined) {
-        for (const [name, target] of Object.entries(record(project[key], `project.${key}`))) {
-          if (!name.trim() || name.split("*").length > 2)
-            throw new Error(`Invalid project.${key} name: ${name}`)
-          localPath(target, `project.${key}.${name}`)
-          if (typeof target !== "string") continue
-          if (
-            key === "components" &&
-            (!target.endsWith(".vue") || target.includes("*") || name.includes("*"))
-          )
-            throw new Error("project.components must map exact names to .vue paths.")
-          if (
-            key === "aliases" &&
-            (target.split("*").length > 2 || (target.includes("*") && !name.includes("*")))
-          )
-            throw new Error("project.aliases supports at most one matching wildcard.")
-        }
-      }
-  }
-  for (const key of ["css", "note"])
-    if (obj[key] !== undefined && typeof obj[key] !== "string")
-      throw new Error(`${key} must be a string.`)
+  for (const key of ["css", "buildDir", "note"])
+    if (obj[key] !== undefined && (typeof obj[key] !== "string" || !obj[key].trim()))
+      throw new Error(`${key} must be a non-empty string.`)
+  if (
+    obj.prefix !== undefined &&
+    (typeof obj.prefix !== "string" || !/^[A-Z][A-Za-z\d]*$/.test(obj.prefix))
+  )
+    throw new Error('prefix must be a PascalCase component prefix such as "U".')
   if (obj.classHelpers !== undefined) {
     if (!Array.isArray(obj.classHelpers)) throw new Error("classHelpers must be an array.")
     obj.classHelpers.forEach((value, index) => {
@@ -327,44 +277,10 @@ export function validateConfig(config: unknown): asserts config is Config {
       }
     })
   }
-  if (obj.classProps !== undefined) {
-    if (!Array.isArray(obj.classProps)) throw new Error("classProps must be an array.")
-    obj.classProps.forEach((value, index) => {
-      const label = `classProps[${index}]`
-      const entry = record(value, label)
-      keys(entry, ["pattern", "props"], label)
-      pattern(entry.pattern, `${label}.pattern`)
-      const names = new Set<string>()
-      for (const [name, mode] of Object.entries(record(entry.props, `${label}.props`))) {
-        const normalized = normalizePropName(name)
-        if (!/^[a-zA-Z][\w-]*$/.test(name) || ["class", "style"].includes(normalized))
-          throw new Error(`${label}.props: ${name} must name an additional component prop.`)
-        if (names.has(normalized))
-          throw new Error(`${label}.props contains duplicate prop: ${normalized}.`)
-        names.add(normalized)
-        if (mode !== "class" && mode !== "slot-map")
-          throw new Error(`${label}.props.${name} must be class or slot-map.`)
-      }
-    })
-  }
-  if (obj.cssAliases !== undefined) {
-    for (const [id, target] of Object.entries(record(obj.cssAliases, "cssAliases"))) {
-      if (!id.trim() || id.includes("*"))
-        throw new Error("cssAliases keys must be non-empty exact import names without wildcards.")
-      if (
-        typeof target !== "string" ||
-        !target.endsWith(".css") ||
-        target.includes("*") ||
-        (/^[a-z][a-z\d+.-]*:/i.test(target) && !/^[a-z]:[\\/]/i.test(target))
-      )
-        throw new Error(`cssAliases["${id}"] must be a local .css file path without wildcards.`)
-    }
-  }
-  for (const key of ["ui", "componentImports", "ignoreImports", "components", "exclude"]) {
+  for (const key of ["components", "exclude"]) {
     if (obj[key] === undefined) continue
     strings(obj[key], key)
-    if (["componentImports", "ignoreImports", "components"].includes(key))
-      (obj[key] as string[]).forEach((item) => pattern(item, key))
+    if (key === "components") (obj[key] as string[]).forEach((item) => pattern(item, key))
   }
   for (const entry of (obj.exclude ?? []) as string[]) {
     filePattern(entry)
@@ -426,6 +342,19 @@ function validateRules(value: unknown) {
           validateRestrictionEntries(obj.components, `${name}.components`, ["name"])
         if (obj.imports !== undefined)
           validateRestrictionEntries(obj.imports, `${name}.imports`, ["source", "name"])
+      } else if (name === "prefer-ui-components") {
+        const obj = record(setting[1], name)
+        keys(obj, ["elements"], name)
+        for (const [tag, replacement] of Object.entries(
+          obj.elements === undefined ? {} : record(obj.elements, `${name}.elements`),
+        ))
+          if (
+            !/^[a-z][a-z\d-]*$/.test(tag) ||
+            (replacement !== false && (typeof replacement !== "string" || !replacement.trim()))
+          )
+            throw new Error(
+              `${name}.elements must map lowercase native tags to a component name or false.`,
+            )
       } else options(setting[1], name)
     }
   }

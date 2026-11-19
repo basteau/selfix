@@ -1,11 +1,11 @@
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs"
 import { readFile } from "node:fs/promises"
 import { dirname, extname, isAbsolute, join, resolve } from "node:path"
 import { pathToFileURL } from "node:url"
 import { createRequire } from "node:module"
 import { __unstable__loadDesignSystem } from "tailwindcss"
 
-import { categories, type Category } from "./config.js"
+import { categories, ignoredDirectories, type Category } from "./config.js"
 
 export type { Category } from "./config.js"
 
@@ -116,7 +116,8 @@ export async function createTailwind(
   isRawColor(value: string): boolean
   suggest(token: string): string[]
   themeMatch(token: string): string | undefined
-  colors: string[]
+  /** Theme color utilities that could replace a raw color, most specific first. */
+  themeColors(token: string): string[]
 }> {
   const loadedStylesheets: string[] = []
   const resolvedBase = resolve(base)
@@ -130,18 +131,29 @@ export async function createTailwind(
   // INLINE (1) and REFERENCE (2) options otherwise replace references with literals
   // or literal fallbacks, making semantic tokens indistinguishable from authored colors.
   // This design system is used only for inspection; application CSS is never emitted.
+  // Unshaded theme color names by namespace: "text" for --text-color-muted, and ""
+  // for the --color namespace every color utility shares.
+  const colorNames = new Map<string, string[]>()
   for (const [key, value] of designSystem.theme.entries()) {
     if (/^--(?:[a-z]+-)?color-/.test(key)) value.options &= ~(1 | 2)
+    const match = /^--(?:([a-z-]+)-)?color-(.+)$/.exec(key)
+    if (!match) continue
+    const name = match[2]!
+    // Nuxt UI points its color aliases, neutral included, at runtime variables.
+    // They are the design system's colors even where a name matches the stock palette.
+    if (!match[1] && value.value?.startsWith("var(--ui-")) stockColors.delete(name)
+    if (/-\d+$/.test(name)) continue
+    const namespace = match[1] ?? ""
+    colorNames.set(namespace, [...(colorNames.get(namespace) ?? []), name])
   }
-  const themeColors = designSystem.theme.keysInNamespaces(["--color"])
+  const namedColors = designSystem.theme.keysInNamespaces(["--color"])
   for (const name of colorReferences) {
-    if (!themeColors.includes(name)) {
+    if (!namedColors.includes(name)) {
       throw new Error(
         `Unable to inspect CSS: --theme() references unknown color "${name}". Check the loaded Tailwind theme.`,
       )
     }
   }
-  const colors = themeColors.filter((color) => !stockColors.has(color)).sort()
   const chunks = [css, ...loadedStylesheets]
   // Named CSS utilities can author raw literals too. Keep that evidence separate
   // from compiler-generated defaults (for example transparent in opacity modifiers).
@@ -224,8 +236,44 @@ export async function createTailwind(
   let classList: string[] | undefined
   let themeValues: Map<string, string> | undefined
   const signatures = new Map<string, string | undefined>()
+  const inspect = (token: string): InspectResult => {
+    const cached = cache.get(token)
+    if (cached) return cached
+
+    const result = inspectToken(token, designSystem, customClasses, stockColors, inspectGenerated)
+    cache.set(token, result)
+    return result
+  }
+  const rootColors = new Map<string, string[]>()
   return {
-    colors,
+    inspect,
+    themeColors(token) {
+      const root = designSystem.parseCandidate(token)[0]?.root
+      if (!root) return []
+      let found = rootColors.get(root)
+      if (!found) {
+        // With a prefix, every utility is written `prefix:utility`.
+        const prefix = designSystem.theme.prefix ? `${designSystem.theme.prefix}:` : ""
+        // Let the compiler decide which theme colors this utility accepts. A namespace
+        // it accepts whole is its own (text-muted for text), so those names lead;
+        // the shared colors come last.
+        const groups = [...colorNames].map(([namespace, names]) => {
+          const accepted = names
+            .filter((name) => !stockColors.has(name))
+            .map((name) => `${prefix}${root}-${name}`)
+            .filter((candidate) => {
+              const info = inspect(candidate)
+              return info.known && !info.rawColor && info.categories.includes("color")
+            })
+          return { accepted, rank: !namespace ? 2 : accepted.length === names.length ? 0 : 1 }
+        })
+        found = [
+          ...new Set(groups.sort((a, b) => a.rank - b.rank).flatMap(({ accepted }) => accepted)),
+        ]
+        rootColors.set(root, found)
+      }
+      return found
+    },
     isRawColor(value) {
       return hasRawColor([{ property: "fill", value }], stockColors, true)
     },
@@ -296,14 +344,6 @@ export async function createTailwind(
         return signatures.get(utility)
       }
       return themeUtility(token, sameRoot, signature)
-    },
-    inspect(token: string): InspectResult {
-      const cached = cache.get(token)
-      if (cached) return cached
-
-      const result = inspectToken(token, designSystem, customClasses, stockColors, inspectGenerated)
-      cache.set(token, result)
-      return result
     },
   }
 }
@@ -445,7 +485,7 @@ function createLoadOptions(
           path = stylesheetFile(target)
         } catch (error) {
           throw new Error(
-            `Unable to load CSS alias "${id}" from "${from}" at "${target}". Check cssAliases and generate the target before running selfix (for Nuxt UI, run nuxt prepare).`,
+            `Unable to load "${id}" from "${from}" at "${target}". Run "nuxt prepare" (Nuxt) or build once with Vite (Vue) to generate it, or set buildDir.`,
             { cause: error },
           )
         }
@@ -483,6 +523,34 @@ async function loadStockColors(base: string): Promise<Set<string>> {
   const themeCss = await readFile(path, "utf8")
   const designSystem = await loadDesignSystem(themeCss, createLoadOptions(dirname(path), []))
   return new Set(designSystem.theme.keysInNamespaces(["--color"]))
+}
+
+/** The project's Tailwind entry: its one stylesheet that imports "tailwindcss". */
+export function findEntry(root: string): string {
+  const entries: string[] = []
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name.startsWith(".") || ignoredDirectories.has(entry.name)) continue
+      const file = join(directory, entry.name)
+      if (entry.isDirectory()) visit(file)
+      else if (
+        entry.isFile() &&
+        entry.name.endsWith(".css") &&
+        // Tailwind itself or one of its parts, such as "tailwindcss/theme.css", outside comments.
+        /@import\s*(?:url\(\s*)?["']tailwindcss(?:\/[\w.-]+)?["']/.test(
+          readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, ""),
+        )
+      )
+        entries.push(file)
+    }
+  }
+  visit(root)
+  if (entries.length === 1) return entries[0]!
+  throw new Error(
+    entries.length
+      ? `Several stylesheets import "tailwindcss" (${entries.sort().join(", ")}). Choose one with css in selfix.config.ts.`
+      : `No stylesheet importing "tailwindcss" was found in ${root}. Set css in selfix.config.ts.`,
+  )
 }
 
 function resolveStylesheet(id: string, base: string): string {

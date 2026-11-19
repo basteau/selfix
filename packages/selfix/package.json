@@ -1,7 +1,16 @@
 {
   "name": "selfix",
   "version": "3.0.0",
-  "description": "Design-system lint rules for Vue 3 and Tailwind CSS 4.",
+  "description": "A design-system linter for Nuxt UI: keep Vue components on your theme, tokens, and component props.",
+  "keywords": [
+    "design-system",
+    "lint",
+    "linter",
+    "nuxt",
+    "nuxt-ui",
+    "tailwindcss",
+    "vue"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -33,8 +42,14 @@
     "prepack": "pnpm build && node scripts/package.mjs"
   },
   "peerDependencies": {
+    "@nuxt/ui": ">=4.0.0 <5",
     "tailwindcss": ">=4.0.0 <5",
     "vue": ">=3.2.13 <4"
+  },
+  "peerDependenciesMeta": {
+    "@nuxt/ui": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22.18.0"

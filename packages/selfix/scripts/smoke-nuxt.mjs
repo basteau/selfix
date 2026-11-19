@@ -44,56 +44,46 @@ try {
   mkdirSync(path.join(consumer, "app/components"), { recursive: true })
   writeFileSync(
     path.join(consumer, "app/components/Choice.vue"),
-    `<script setup lang="ts">defineProps<{size?: 'sm' | 'lg'; variant?: 'solid' | 'outline'}>()</script><template><button /></template>`,
+    "<template><UButton /></template>",
   )
   const css = '@import "tailwindcss";\n@import "@nuxt/ui";\n'
-  const source = '<template><div class="bg-selfixbrand" /></template>\n'
+  const source =
+    '<template><div class="bg-selfixbrand text-muted border-neutral-200" /></template>\n'
+  const page = path.join(consumer, "app/app.vue")
   writeFileSync(path.join(consumer, "app/assets/css/main.css"), css)
-  writeFileSync(path.join(consumer, "app/app.vue"), source)
-  writeFileSync(
-    path.join(consumer, "selfix.config.ts"),
-    'export default { css: "app/assets/css/main.css", cssAliases: { "#build/ui.css": ".nuxt/ui.css" }, components: ["^U", "^LocalChoice$"], classProps: [{ pattern: "^UButton$", props: { ui: "slot-map" } }] }',
-  )
+  writeFileSync(page, source)
   run(process.execPath, ["node_modules/nuxt/bin/nuxt.mjs", "prepare"])
   const generated = path.join(consumer, ".nuxt/ui.css")
-  const fallback = path.join(consumer, "node_modules/@nuxt/ui/.nuxt/ui.static.css")
+  // The application's theme, not the package fallback, declares the custom color.
   assert.match(readFileSync(generated, "utf8"), /--color-selfixbrand:/)
-  assert.doesNotMatch(readFileSync(fallback, "utf8"), /--color-selfixbrand:/)
-  const base = path.join(consumer, "app/assets/css")
-  const appLinter = await createLinter({
-    css,
-    root: consumer,
-    cssBase: base,
-    config: { cssAliases: { "#build/ui.css": generated } },
-  })
-  assert.deepEqual(appLinter.lint(source), [])
-  const fallbackLinter = await createLinter({
-    css,
-    root: consumer,
-    cssBase: base,
-    config: { cssAliases: { "#build/ui.css": fallback } },
-  })
-  assert.deepEqual(
-    fallbackLinter.lint(source).map(({ rule, className }) => ({ rule, className })),
-    [{ rule: "no-unknown-classes", className: "bg-selfixbrand" }],
-  )
+
+  // No configuration: the stylesheet, the generated theme, and the components are found.
+  const linter = await createLinter({ root: consumer })
+  assert.equal(linter.nuxtUi, true)
+  assert.deepEqual(linter.lint(source), [])
   const cli = fileURLToPath(new URL("../bin/selfix.mjs", import.meta.url))
-  const args = [cli, "--config", "../selfix.config.ts", "--format", "json", "app.vue"]
-  const cwd = path.join(consumer, "app")
-  assert.deepEqual(JSON.parse(run(process.execPath, args, 0, cwd).stdout).diagnostics, [])
-  const failing = `<template>
+  const args = [cli, "app", "--format", "json"]
+  const clean = run(process.execPath, args)
+  assert.equal(clean.stderr, "")
+  assert.deepEqual(JSON.parse(clean.stdout).diagnostics, [])
+
+  writeFileSync(
+    page,
+    `<template>
   <UButton class="bg-red-500" :ui="{ leadingIcon: 'p-4' }" />
+  <LazyUCard class="mt-4" :ui="{ body: 'font-bold' }" />
   <LocalChoice class="rounded-lg" />
-  <div class="bg-selfixbrand" />
-</template>\n`
-  const page = path.join(consumer, "app/app.vue")
-  writeFileSync(page, failing)
-  const findings = JSON.parse(run(process.execPath, args, 1, cwd).stdout).diagnostics
-  assert.equal(findings.length, 4)
-  const buttonFile = path.join(consumer, "node_modules/@nuxt/ui/dist/runtime/components/Button.vue")
-  const localFile = path.join(consumer, "app/components/Choice.vue")
+  <button type="button">Native</button>
+  <div class="text-gray-500 bg-prmary" />
+</template>\n`,
+  )
+  writeFileSync(
+    path.join(consumer, "selfix.config.ts"),
+    'export default { components: ["^LocalChoice$"] }\n',
+  )
+  const findings = JSON.parse(run(process.execPath, args, 1).stdout).diagnostics
   assert.deepEqual(
-    findings.map(({ rule, component, className, file, line, column, prop, slot, definition }) => ({
+    findings.map(({ rule, component, className, file, line, column, prop, slot }) => ({
       rule,
       component,
       className,
@@ -102,71 +92,46 @@ try {
       column,
       prop,
       slot,
-      definition,
     })),
     [
-      {
-        rule: "no-raw-colors",
-        component: "UButton",
-        className: "bg-red-500",
-        file: page,
-        line: 2,
-        column: 12,
-        prop: undefined,
-        slot: undefined,
-        definition: undefined,
-      },
-      {
-        rule: "no-restyle",
-        component: "UButton",
-        className: "bg-red-500",
-        file: page,
-        line: 2,
-        column: 12,
-        prop: undefined,
-        slot: undefined,
-        definition: { file: buttonFile },
-      },
-      {
-        rule: "no-restyle",
-        component: "UButton",
-        className: "p-4",
-        file: page,
-        line: 2,
-        column: 31,
-        prop: "ui",
-        slot: "leadingIcon",
-        definition: { file: buttonFile },
-      },
-      {
-        rule: "no-restyle",
-        component: "LocalChoice",
-        className: "rounded-lg",
-        file: page,
-        line: 3,
-        column: 16,
-        prop: undefined,
-        slot: undefined,
-        definition: {
-          file: localFile,
-          props: { size: ["sm", "lg"], variant: ["solid", "outline"] },
-        },
-      },
-    ],
+      ["no-raw-colors", "UButton", "bg-red-500", 2, 12],
+      ["no-restyle", "UButton", "bg-red-500", 2, 12],
+      ["no-restyle", "UButton", "p-4", 2, 31, "ui", "leadingIcon"],
+      ["no-restyle", "LazyUCard", "font-bold", 3, 27, "ui", "body"],
+      ["no-restyle", "LocalChoice", "rounded-lg", 4, 16],
+      ["prefer-ui-components", "button", undefined, 5, 3],
+      ["no-raw-colors", "div", "text-gray-500", 6, 8],
+      ["no-unknown-classes", "div", "bg-prmary", 6, 8],
+    ].map(([rule, component, className, line, column, prop, slot]) => ({
+      rule,
+      component,
+      className,
+      file: page,
+      line,
+      column,
+      prop,
+      slot,
+    })),
   )
-  assert.match(findings[3].message, /Accepted size values: "sm", "lg"/)
-  assert.doesNotMatch(findings[1].message, /Accepted (size|variant) values/)
+  const message = (index) => findings[index].message
+  assert.match(message(1), /Use color \(primary, .*selfixbrand.*\) or variant \(solid, /)
+  assert.match(message(1), /under ui\.button in app\.config\.ts/)
+  assert.match(message(2), /In ui\.leadingIcon\.$/)
+  assert.match(message(5), /^Use <UButton> instead of a native <button>/)
+  assert.match(message(6), /such as text-dimmed, text-muted, text-toned, text-default/)
+  assert.deepEqual(findings[7].suggestions, ["bg-primary"])
+
   writeFileSync(
     page,
-    `<template><UButton :ui="{ leadingIcon: 'mr-2' }" /><LocalChoice size="sm" variant="solid" /><div class="bg-selfixbrand" /></template>`,
+    `<template><UButton color="error" :ui="{ leadingIcon: 'me-2' }" /><LocalChoice class="mt-4" /><div class="bg-selfixbrand" /></template>`,
   )
-  assert.deepEqual(JSON.parse(run(process.execPath, args, 0, cwd).stdout).diagnostics, [])
+  assert.deepEqual(JSON.parse(run(process.execPath, args).stdout).diagnostics, [])
   rmSync(generated)
-  const missing = run(process.execPath, args, 2, cwd)
-  assert.ok(missing.stderr.includes(generated))
+  const missing = run(process.execPath, args, 2)
+  assert.ok(missing.stderr.includes(consumer))
   assert.match(missing.stderr, /nuxt prepare/)
   console.log(
-    "Nuxt generated theme, prepared component discovery, slot findings, corrected source, CLI paths, and missing-file checks passed.",
+    "Zero-config Nuxt UI discovery, the generated theme, slot findings, guidance, corrected source, and the unprepared-project failure passed.",
   )
 } finally {
   rmSync(consumer, { recursive: true, force: true })

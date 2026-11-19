@@ -8,6 +8,7 @@ Every rule starts at `"error"`. Set each one to `"off"`, `"warn"`, or `"error"`,
 | Rule                                                    | Reports                                                | `allow` / `deny` |
 | ------------------------------------------------------- | ------------------------------------------------------ | ---------------- |
 | [no-restyle](no-restyle.md)                             | Classes that change a protected component's appearance | Yes              |
+| [prefer-ui-components](prefer-ui-components.md)         | Native elements Nuxt UI has a component for            | No               |
 | [no-raw-colors](no-raw-colors.md)                       | Palette colors, literal colors, and raw SVG paints     | Yes              |
 | [no-unknown-classes](no-unknown-classes.md)             | Classes your Tailwind CSS cannot generate              | Yes              |
 | [no-arbitrary-values](no-arbitrary-values.md)           | Bracket values such as `p-[13px]`                      | Yes              |

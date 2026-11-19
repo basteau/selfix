@@ -151,7 +151,7 @@ import { Button as LegacyButton } from './legacy.vue';
 import * as UI from '@/components/ui/button';
 </script>
 <template>
-<UI.Button class="p-4" content-class="mt-2" />
+<UI.Button class="p-4" :ui="{ base: 'mt-2' }" />
 <component :is="UI.Button" class="p-4" />
 </template>`
       const { descriptor } = parse(source)
@@ -165,10 +165,7 @@ import * as UI from '@/components/ui/button';
       expect(compiled.errors).toEqual([])
       expect(compiled.code).toContain('$setup["UI"].Button')
       expect(compiled.code).toContain("_resolveDynamicComponent($setup.UI.Button)")
-      const result = collectVue(source, "namespace.vue", {
-        forceCompileTemplateAst,
-        classProps: [{ pattern: "^UI\\.Button$", props: { contentClass: "class" } }],
-      })
+      const result = collectVue(source, "namespace.vue", { forceCompileTemplateAst })
       expect(result.errors).toEqual([])
       expect(result.usages.every((usage) => usage.unsupported === undefined)).toBe(true)
       expect(
@@ -206,7 +203,7 @@ import * as UI from '@/components/ui/button';
         {
           component: "UI.Button",
           importSource: "@/components/ui/button",
-          prop: "content-class",
+          prop: "ui",
           tokens: ["mt-2"],
         },
         {
@@ -316,12 +313,9 @@ const Alias = Button;
     "keeps native and v-pre elements separate from imports (fallback: %s)",
     (forceCompileTemplateAst) => {
       const source = `<script setup>import Button from './ui/Button.vue'</script>
-<template><Button class="p-2" content-class="p-4" /><button class="p-2" content-class="p-4" />
-<Button v-pre class="p-2" content-class="p-4" /><div v-pre><Button class="p-2" content-class="p-4" /></div></template>`
-      const result = collectVue(source, "identity.vue", {
-        forceCompileTemplateAst,
-        classProps: [{ pattern: "^Button$", props: { contentClass: "class" } }],
-      })
+<template><Button class="p-2" :ui="{ base: 'p-4' }" /><button class="p-2" :ui="{ base: 'p-4' }" />
+<Button v-pre class="p-2" :ui="{ base: 'p-4' }" /><div v-pre><Button class="p-2" :ui="{ base: 'p-4' }" /></div></template>`
+      const result = collectVue(source, "identity.vue", { forceCompileTemplateAst })
       expect(result.errors).toEqual([])
       expect(
         result.sites.map(({ component, importSource, prop }) => ({
@@ -331,7 +325,7 @@ const Alias = Button;
         })),
       ).toEqual([
         { component: "Button", importSource: "./ui/Button.vue", prop: undefined },
-        { component: "Button", importSource: "./ui/Button.vue", prop: "content-class" },
+        { component: "Button", importSource: "./ui/Button.vue", prop: "ui" },
         { component: "button", importSource: undefined, prop: undefined },
         { component: "button", importSource: undefined, prop: undefined },
         { component: "button", importSource: undefined, prop: undefined },
@@ -635,8 +629,12 @@ const panel = ["rounded-md", { "border-red-500": danger }];
       },
     ])
     expect(result.styles).toEqual([
-      { component: "BaseButton", offset: source.indexOf(':style="') },
-      { component: "BaseButton", offset: source.indexOf('style="display') },
+      { component: "BaseButton", offset: source.indexOf(':style="'), importSource: "./button.vue" },
+      {
+        component: "BaseButton",
+        offset: source.indexOf('style="display'),
+        importSource: "./button.vue",
+      },
       { component: "style", offset: source.indexOf("<style scoped>") },
     ])
   })

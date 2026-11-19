@@ -50,12 +50,14 @@ try {
     path.join(consumer, "package.json"),
     JSON.stringify({ private: true, type: "module", dependencies: versions }),
   )
-  // Network access is intentional. Install only the tarball and the two consumer peers.
+  // Network access is intentional. Install only the tarball and the two required peers;
+  // the Nuxt UI path is covered by smoke-nuxt.mjs.
   run("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", archive])
   const installed = path.join(consumer, "node_modules/selfix")
   assert.equal(realpathSync(installed), installed, "selfix must be installed, not workspace-linked")
   const pkg = JSON.parse(readFileSync(path.join(installed, "package.json"), "utf8"))
-  assert.deepEqual(Object.keys(pkg.peerDependencies).sort(), ["tailwindcss", "vue"])
+  assert.deepEqual(Object.keys(pkg.peerDependencies).sort(), ["@nuxt/ui", "tailwindcss", "vue"])
+  assert.deepEqual(pkg.peerDependenciesMeta, { "@nuxt/ui": { optional: true } })
   assert.deepEqual(Object.keys(pkg.dependencies ?? {}), [])
   for (const file of [pkg.bin.selfix, pkg.exports["."].import, pkg.exports["."].types]) {
     assert.ok(readFileSync(path.join(installed, file)).length, `Missing compiled artifact: ${file}`)
@@ -96,16 +98,12 @@ try {
   writeFileSync(path.join(consumer, "Page.vue"), '<template><div class="p-4" /></template>\n')
   assert.deepEqual(JSON.parse(run(cli, ["Page.vue", "--format", "json"])).diagnostics, [])
   writeFileSync(
-    path.join(consumer, "Button.vue"),
-    `<script setup lang="ts">type Size = 'sm' | 'lg'; defineProps<{size?: Size}>()</script><template><button /></template>`,
-  )
-  writeFileSync(
     path.join(consumer, "api.mjs"),
     `import assert from "node:assert/strict";
 import { createLinter } from "selfix";
 const linter = await createLinter({ css: '@import "tailwindcss";', root: process.cwd(), cssBase: '.' });
-await assert.rejects(createLinter({ css: '', config: { exclude: [] } }), /only supported by the CLI/);
-await assert.rejects(createLinter({ css: '', base: '.' }), /Use cssBase/);
+assert.equal(linter.nuxtUi, false);
+await assert.rejects(createLinter({ css: '', config: { ui: [] } }), /was removed/);
 assert.deepEqual(linter.lint('<template><div class="p-4" /></template>', 'Valid.vue'), []);
 const source = '<script setup>const classes = "p-[13px]"</script>\\n<template><div :class="classes" /></template>';
 const diagnostics = linter.lint(source, 'Bound.vue');
@@ -117,17 +115,17 @@ assert.equal(diagnostics[0].column, 16);
 assert.equal(diagnostics[0].offset, source.indexOf(':class'));
 const shorthand = linter.lint('<template><div :class /></template>', 'Shorthand.vue');
 assert.ok(shorthand.some(d => d.rule === ${Number(versions.vue.split(".")[1]) >= 4 ? '"require-static-classes"' : '"parse-error"'}));
-const projectLinter = await createLinter({ css: '@import "tailwindcss";', config: { components: ['^Button$'], project: {} } });
-const projectSource = '<script setup>import Button from "./Button.vue"</script><template><Button class="p-4" /></template>';
-const finding = projectLinter.lint(projectSource, 'Page.vue')[0];
-assert.equal(finding.rule, 'no-restyle');
-assert.equal(finding.file, 'Page.vue');
-assert.deepEqual(finding.definition.props, { size: ['sm', 'lg'] });
-assert.ok(finding.definition.file.endsWith('/Button.vue'));
 // Exception comments come from Vue's own template parser in every supported Vue version.
 const excepted = linter.check('<template><!-- selfix-disable-next-line no-arbitrary-values -- print -->\\n<div class="p-[13px]" />\\n</template>', 'Excepted.vue');
 assert.deepEqual(excepted.diagnostics, []);
 assert.equal(excepted.suppressed[0].reason, 'print');
+// Without a css option, the linter finds theme.css itself.
+const projectLinter = await createLinter({ config: { components: ['^Button$'] } });
+const projectSource = '<script setup>import Button from "./Button.vue"</script><template><Button class="p-4" /></template>';
+const finding = projectLinter.lint(projectSource, 'Page.vue')[0];
+assert.equal(finding.rule, 'no-restyle');
+assert.equal(finding.file, 'Page.vue');
+assert.equal(finding.component, 'Button');
 `,
   )
   run(process.execPath, ["api.mjs"])

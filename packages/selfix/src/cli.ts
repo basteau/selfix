@@ -13,16 +13,14 @@ import {
   type Baseline,
   type UnusedEntry,
 } from "./baseline.js"
-import { filePattern, ruleNames, validateConfig } from "./config.js"
+import { filePattern, ignoredDirectories, ruleNames, validateConfig } from "./config.js"
 
 const help = `Usage: selfix [files, directories, or quoted globs] [options]
 
-Check Vue single-file components against your Tailwind design system.
-Defaults to the current directory and requires selfix.config.ts.
+Check Vue single-file components against your Nuxt UI design system.
+Defaults to the current directory. selfix.config.ts is optional.
 
-  --doctor              Explain component recognition and protection
-  --config <file.ts>     TypeScript configuration (default: selfix.config.ts)
-  --css <file>           Tailwind CSS entry (overrides config.css)
+  --config <file.ts>    TypeScript configuration (default: selfix.config.ts)
   --format text|json|gitlab
                         Output format (default: text); gitlab prints Code Quality JSON
   --max-warnings <n>    Fail when warnings exceed n
@@ -73,10 +71,8 @@ export async function run(
   try {
     const inputs: string[] = []
     let configPath: string | undefined
-    let cssPath: string | undefined
     let format = "text"
     let maxWarnings = Infinity
-    let doctor = false
     let hasMaxWarnings = false
     let baselineMode: BaselineMode | undefined
     let baselinePath = ""
@@ -94,10 +90,6 @@ export async function run(
         io.out(`${pkg.version}\n`)
         return 0
       }
-      if (arg === "--doctor") {
-        doctor = true
-        continue
-      }
       if (arg === "--") {
         inputs.push(...args.slice(index + 1))
         break
@@ -109,13 +101,10 @@ export async function run(
           throw new Error("Use only one of --baseline, --update-baseline, or --prune-baseline.")
         baselineMode = baselineOptions[arg]
         baselinePath = path.resolve(cwd, value)
-      } else if (
-        ["--config", "--css", "--format", "--max-warnings", "--unused-exceptions"].includes(arg)
-      ) {
+      } else if (["--config", "--format", "--max-warnings", "--unused-exceptions"].includes(arg)) {
         const value = args[++index]
         if (!value || value.startsWith("--")) throw new Error(`Missing value for ${arg}.`)
         if (arg === "--config") configPath = path.resolve(cwd, value)
-        if (arg === "--css") cssPath = path.resolve(cwd, value)
         if (arg === "--format") format = value
         if (arg === "--max-warnings") {
           if (!/^\d+$/.test(value))
@@ -133,14 +122,6 @@ export async function run(
     }
     if (!["text", "json", "gitlab"].includes(format))
       throw new Error("--format must be text, json, or gitlab.")
-    if (doctor && (format !== "text" || hasMaxWarnings))
-      throw new Error(
-        "--doctor supports text setup reports only. Remove --format json or gitlab and --max-warnings, or run ordinary lint without --doctor.",
-      )
-    if (doctor && baselineMode)
-      throw new Error("--doctor does not use a baseline. Remove the baseline option.")
-    if (doctor && unusedExceptions)
-      throw new Error("--doctor does not check exception comments. Remove --unused-exceptions.")
     if (baselineMode === "update" && (format !== "text" || hasMaxWarnings))
       throw new Error(
         "--update-baseline writes a baseline and reports no findings. Remove --format json or gitlab and --max-warnings.",
@@ -148,30 +129,25 @@ export async function run(
     let baseline: Baseline | undefined
     if (baselineMode === "check" || baselineMode === "prune")
       baseline = await readBaseline(baselinePath)
-    configPath ??= path.join(cwd, "selfix.config.ts")
-    if (!configPath.endsWith(".ts"))
-      throw new Error("Configuration must be a .ts file exporting a default config object.")
-    if (!(await exists(configPath)))
-      throw new Error(
-        `Configuration not found: ${configPath}. Create selfix.config.ts or use --config <file.ts>.`,
-      )
-    const config: Config = (await import(pathToFileURL(configPath).href)).default
-    validateConfig(config)
-    const configDir = path.dirname(configPath)
-    const shadcn = (!cssPath && !config.css) || !config.ui ? await shadcnDefaults(configDir) : {}
-    const fromShadcn: string[] = []
-    if (!cssPath && config.css) cssPath = path.resolve(configDir, config.css)
-    if (!cssPath && shadcn.css) {
-      cssPath = path.resolve(configDir, shadcn.css)
-      fromShadcn.push("css")
+    // Without a configuration file, the defaults apply and cwd is the project root.
+    let config: Config = {}
+    const found = configPath !== undefined || (await exists(path.join(cwd, "selfix.config.ts")))
+    // A config in another module format would otherwise be ignored without a word.
+    const misnamed = found
+      ? undefined
+      : (await readdir(cwd)).find((name) => /^selfix\.config\.(?:[cm]?js|[cm]ts|json)$/.test(name))
+    if (misnamed)
+      throw new Error(`Found ${misnamed}. Configuration must be named selfix.config.ts.`)
+    if (found) {
+      configPath ??= path.join(cwd, "selfix.config.ts")
+      if (!configPath.endsWith(".ts"))
+        throw new Error("Configuration must be a .ts file exporting a default config object.")
+      if (!(await exists(configPath))) throw new Error(`Configuration not found: ${configPath}.`)
+      config = (await import(pathToFileURL(configPath).href)).default
+      validateConfig(config)
     }
-    if (!cssPath)
-      throw new Error(
-        "Set css in selfix.config.ts, set tailwind.css in components.json, or provide --css <file>.",
-      )
-    const ui = config.ui ?? (shadcn.ui ? [shadcn.ui] : undefined)
-    if (!config.ui && shadcn.ui) fromShadcn.push("ui")
-    const ignored = new Set(["node_modules", ".git", "dist", "coverage", ".nuxt", ".output"])
+    const configDir = configPath ? path.dirname(configPath) : cwd
+    const ignored = ignoredDirectories
     const exclusions = (config.exclude ?? []).map(filePattern)
     // Config-relative POSIX path, used by exclusions and baseline keys.
     const keyOf = (file: string) => path.relative(configDir, file).split(path.sep).join("/")
@@ -222,64 +198,14 @@ export async function run(
       }
     }
     if (!files.size) throw new Error("No Vue files found. Check the paths and exclude settings.")
-    const { css: _css, exclude: _exclude, ...linterConfig } = config
-    if (fromShadcn.includes("css") && !(await exists(cssPath)))
-      throw new Error(`components.json tailwind.css not found: ${cssPath}`)
     const linter = await createLinter({
-      css: await readFile(cssPath, "utf8"),
-      cssBase: path.dirname(cssPath),
       root: configDir,
-      config: {
-        ...linterConfig,
-        ...(ui ? { ui } : {}),
-        ...(unusedExceptions ? { unusedExceptions } : {}),
-        project: config.project === false ? false : (config.project ?? {}),
-      },
+      config: unusedExceptions ? { ...config, unusedExceptions } : config,
     })
-    if (doctor) {
-      const reports = []
-      for (const file of [...files].sort())
-        reports.push({ file, ...linter.doctor(await readFile(file, "utf8"), file) })
-      io.out(`Configuration: ${configPath}\nTailwind CSS loaded: ${cssPath}\n`)
-      if (fromShadcn.length) io.out(`From components.json: ${fromShadcn.join(", ")}\n`)
-      const usages = reports.flatMap((report) => report.usages)
-      const active = usages.filter((usage) => usage.active).length
-      for (const report of reports) {
-        const file = path.relative(cwd, report.file)
-        for (const usage of report.usages)
-          io.out(
-            `${file}:${usage.line}:${usage.column} <${usage.component}>: ${usage.reason}; no-restyle: ${usage.severity}; active protection: ${usage.active ? "yes" : "no"}; definition: ${usage.definition}\n`,
-          )
-        for (const issue of report.issues)
-          io.out(
-            `${file}:${issue.line}:${issue.column} error unsupported analysis: ${issue.message}\n`,
-          )
-      }
-      io.out(
-        `Scanned ${files.size} Vue file${files.size === 1 ? "" : "s"}; ${usages.length} component usage${usages.length === 1 ? "" : "s"}; ${active} actively protected.\n`,
+    if (!linter.nuxtUi)
+      io.err(
+        `selfix: Nuxt UI was not found in ${configDir}; only components named in the config are protected.\n`,
       )
-      if (!active) {
-        const reasons = []
-        if (!usages.length) reasons.push("no component usages collected")
-        if (usages.some((usage) => !usage.recognized))
-          reasons.push("usages are unrecognized or ignored")
-        if (usages.some((usage) => usage.recognized && usage.severity === "off"))
-          reasons.push("no-restyle is disabled for recognized usages")
-        if (reports.some((report) => report.issues.length))
-          reasons.push("analysis is incomplete; see errors above")
-        io.out(`Advisory: zero actively protected matches: ${reasons.join("; ")}.\n`)
-      }
-      for (const suggestion of new Set(
-        usages.flatMap((usage) => (usage.suggestion ? [usage.suggestion] : [])),
-      ))
-        io.out(
-          `If you intend to protect components from this import, add this exact import pattern to your config: ${suggestion}\n`,
-        )
-      io.out(
-        "Active protection describes the configured no-restyle policy; allowed classes depend on its contract. Definition discovery is separate: unavailable metadata does not disable protection. Unresolved dynamic or namespace components and wrapper tracing are unsupported; this report does not prove comprehensive coverage.\n",
-      )
-      return reports.some((report) => report.issues.length) ? 1 : 0
-    }
     const diagnostics: Diagnostic[] = []
     let excepted = 0
     for (const file of [...files].sort()) {
@@ -407,34 +333,4 @@ function codeQuality(diagnostics: Diagnostic[], cwd: string) {
       location: { path: file, lines: { begin: item.line } },
     }
   })
-}
-
-// shadcn-vue projects describe their Tailwind entry and UI import alias in components.json.
-// selfix uses them only for settings the config leaves out.
-async function shadcnDefaults(dir: string): Promise<{ css?: string; ui?: string }> {
-  const file = path.join(dir, "components.json")
-  if (!(await exists(file))) return {}
-  let data: unknown
-  try {
-    data = JSON.parse(await readFile(file, "utf8"))
-  } catch (error) {
-    throw new Error(`Invalid components.json: ${(error as Error).message}`)
-  }
-  const object = (value: unknown, key: string) => {
-    if (value === undefined) return {}
-    if (!value || typeof value !== "object" || Array.isArray(value))
-      throw new Error(`Invalid components.json: ${key} must be an object.`)
-    return value as Record<string, unknown>
-  }
-  const text = (value: unknown, key: string) => {
-    if (value === undefined) return undefined
-    if (typeof value !== "string" || !value)
-      throw new Error(`Invalid components.json: ${key} must be a non-empty string.`)
-    return value
-  }
-  const root = object(data, "the root")
-  return {
-    css: text(object(root.tailwind, "tailwind").css, "tailwind.css"),
-    ui: text(object(root.aliases, "aliases").ui, "aliases.ui")?.replace(/\/+$/, ""),
-  }
 }
